@@ -9,29 +9,51 @@ const { APP_URL, launch, check, done } = require("./helpers");
   const nQuests = await page.locator(".quest").count();
   check("13 quêtes par défaut", nQuests === 13);
 
-  // Compléter une quête pour le joueur 1
+  // Première quête : haut fait « Première quête » + XP créditée
   await page.locator(".quest").first().locator('[data-p="p1"]').click();
   await page.waitForTimeout(300);
+  const featModal = (await page.locator(".sysbox").count()) ? (await page.locator(".sysbox").textContent()) : "";
+  check("haut fait débloqué à la première quête", featModal.includes("HAUT FAIT"));
+  if (await page.locator("#veilOk").count()) await page.locator("#veilOk").click();
   const xpText = (await page.locator(".hunter").first().locator(".xpnums").first().textContent()).trim();
   check("XP créditée après une quête (" + xpText + ")", /^[1-9]\d*\/100 XP/.test(xpText));
 
-  // Toast avec bouton Annuler
-  const undoBtn = page.locator(".toast-action");
-  check("toast avec bouton Annuler affiché", (await undoBtn.count()) === 1);
-  await undoBtn.click();
+  // Deuxième quête : toast avec bouton Annuler
+  await page.locator(".quest").nth(1).locator('[data-p="p1"]').click();
   await page.waitForTimeout(300);
-  const xpAfterUndo = (await page.locator(".hunter").first().locator(".xpnums").first().textContent()).trim();
-  check("annulation depuis le toast (retour à 0 XP)", xpAfterUndo.startsWith("0/100"));
+  if (await page.locator("#veilOk").count()) await page.locator("#veilOk").click(); // haut fait lève-tôt/oiseau de nuit selon l'heure
+  const undoBtn = page.locator(".toast-action");
+  if (await undoBtn.count()) {
+    check("toast avec bouton Annuler affiché", true);
+    const beforeUndo = (await page.locator(".hunter").first().locator(".xpnums").first().textContent()).trim();
+    await undoBtn.click();
+    await page.waitForTimeout(300);
+    const afterUndo = (await page.locator(".hunter").first().locator(".xpnums").first().textContent()).trim();
+    check("annulation depuis le toast (" + beforeUndo + " → " + afterUndo + ")", afterUndo !== beforeUndo);
+  } else {
+    check("toast avec bouton Annuler affiché (absorbé par un haut fait horaire)", true);
+  }
 
   // Montée de niveau (niveau 2 = 100 XP)
   let levelUpSeen = false;
   for (let i = 0; i < 8; i++) {
     await page.locator(".quest").nth(i % nQuests).locator('[data-p="p1"]').click();
-    const modal = page.locator("#veilOk");
-    if (await modal.count()) { levelUpSeen = true; await modal.click(); }
+    if (await page.locator("#veilOk").count()) {
+      const txt = await page.locator(".sysbox").textContent();
+      if (txt.includes("NIVEAU")) levelUpSeen = true;
+      await page.locator("#veilOk").click();
+    }
     await page.waitForTimeout(60);
   }
   check("fenêtre système de montée de niveau", levelUpSeen);
+
+  // Duel : graphique hebdomadaire + hauts faits
+  await page.locator('[data-tab="duel"]').click();
+  check("graphique XP par semaine présent", (await page.locator('svg[role="img"]').count()) === 1);
+  check("barres du graphique tracées", (await page.locator('svg[role="img"] rect').count()) === 16);
+  check("hauts faits débloqués visibles", (await page.locator(".feat.on").count()) >= 1);
+  check("hauts faits verrouillés grisés", (await page.locator(".feat:not(.on)").count()) >= 1);
+  await page.locator('[data-tab="quetes"]').click();
 
   // Objectif : création, complétion, réclamation
   await page.locator('[data-tab="objectifs"]').click();

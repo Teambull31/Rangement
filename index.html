@@ -207,6 +207,22 @@
   .statgrid .r2 { font-family: var(--display); font-weight: 700; color: var(--mana); }
   .winbadge { text-align: center; margin-top: 14px; font-size: 15px; color: var(--gold); font-weight: 600; letter-spacing: .04em; }
 
+  /* ---------- Graphique & hauts faits ---------- */
+  .legend { display: flex; gap: 18px; font-size: 13.5px; color: var(--ink-dim); margin-bottom: 8px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
+  .feathead { display: flex; align-items: center; gap: 7px; font-weight: 700; font-size: 15px; margin: 10px 0 7px; }
+  .featgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .feat {
+    display: flex; align-items: center; gap: 7px;
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 3px;
+    padding: 6px 8px; font-size: 12.5px; color: var(--ink-dim);
+    opacity: .38; filter: grayscale(.9);
+  }
+  .feat.on { opacity: 1; filter: none; border-color: var(--line-glow); color: var(--ink); }
+  .feat .fi { font-size: 17px; }
+  .feat small { line-height: 1.15; }
+
   /* ---------- Objectives ---------- */
   .obj { border: 1px solid var(--line); border-radius: 3px; background: var(--panel-2); padding: 12px; margin-bottom: 10px; }
   .obj .oname { font-weight: 700; font-size: 16.5px; }
@@ -230,7 +246,7 @@
   .logline { display: flex; align-items: center; gap: 10px; padding: 7px 2px; border-bottom: 1px dashed var(--line); font-size: 15.5px; }
   .logline:last-child { border-bottom: none; }
   .logline .lxp { margin-left: auto; font-family: var(--display); font-size: 12px; font-weight: 700; color: var(--sys); white-space: nowrap; }
-  .undo { background: none; border: 1px solid var(--line); color: var(--ink-dim); border-radius: 3px; font-size: 12px; padding: 2px 8px; }
+  .undo { background: none; border: 1px solid var(--line); color: var(--ink-dim); border-radius: 3px; font-size: 13px; padding: 7px 12px; }
 
   /* ---------- Forms ---------- */
   .frow { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
@@ -320,7 +336,7 @@
 </nav>
 
 <div id="modal"></div>
-<div id="toastZone"></div>
+<div id="toastZone" aria-live="polite"></div>
 
 <script>
 "use strict";
@@ -568,6 +584,53 @@ function bonusTaskId() {
   return S.tasks[h % S.tasks.length].id;
 }
 
+/* --- Hauts faits (badges), calculés à partir du journal --- */
+const FEATS = [
+  { id: "q1",   icon: "🗡️", name: "Première quête",              test: st => st.count >= 1 },
+  { id: "q10",  icon: "⚔️", name: "10 quêtes",                    test: st => st.count >= 10 },
+  { id: "q50",  icon: "🛡️", name: "50 quêtes",                    test: st => st.count >= 50 },
+  { id: "q100", icon: "👑", name: "100 quêtes",                   test: st => st.count >= 100 },
+  { id: "s3",   icon: "🔥", name: "Série de 3 jours",             test: st => st.bestStreak >= 3 },
+  { id: "s7",   icon: "🌋", name: "Série de 7 jours",             test: st => st.bestStreak >= 7 },
+  { id: "s14",  icon: "☄️", name: "Série de 14 jours",            test: st => st.bestStreak >= 14 },
+  { id: "rd",   icon: "🥉", name: "Rang D (niveau 5)",            test: st => st.lvl >= 5 },
+  { id: "rc",   icon: "🥈", name: "Rang C (niveau 10)",           test: st => st.lvl >= 10 },
+  { id: "ra",   icon: "🥇", name: "Rang A (niveau 20)",           test: st => st.lvl >= 20 },
+  { id: "rs",   icon: "🌟", name: "Rang S (niveau 30)",           test: st => st.lvl >= 30 },
+  { id: "xp1k", icon: "💎", name: "1 000 XP au total",            test: st => st.xp >= 1000 },
+  { id: "big5", icon: "💥", name: "5 grosses quêtes (50+ XP)",    test: st => st.big >= 5 },
+  { id: "sun",  icon: "🌅", name: "Lève-tôt (quête avant 8 h)",   test: st => st.early },
+  { id: "moon", icon: "🌙", name: "Oiseau de nuit (après 22 h)",  test: st => st.night },
+];
+function bestStreakOf(pid) {
+  const days = [...new Set(S.log.filter(l => l.playerId === pid).map(l => dayKey(l.ts)))].sort();
+  let best = 0, run = 0, prev = null;
+  for (const d of days) {
+    if (prev) {
+      const nd = new Date(prev + "T12:00"); nd.setDate(nd.getDate() + 1);
+      run = dayKey(nd.getTime()) === d ? run + 1 : 1;
+    } else run = 1;
+    best = Math.max(best, run); prev = d;
+  }
+  return best;
+}
+function featStats(pid) {
+  const mine = S.log.filter(l => l.playerId === pid);
+  const xp = mine.reduce((a, l) => a + l.xp, 0);
+  return {
+    count: mine.length, xp,
+    lvl: levelInfo(xp).lvl,
+    bestStreak: bestStreakOf(pid),
+    big: mine.filter(l => l.xp >= 50).length,
+    early: mine.some(l => new Date(l.ts).getHours() < 8),
+    night: mine.some(l => new Date(l.ts).getHours() >= 22),
+  };
+}
+function unlockedFeats(pid) {
+  const st = featStats(pid);
+  return FEATS.filter(f => f.test(st));
+}
+
 function objProgress(o) {
   const f = l => l.ts >= o.createdAt;
   return o.type === "xp"
@@ -670,6 +733,55 @@ function vQuetes() {
 }
 
 /* ---------- Duel ---------- */
+function weekChart() {
+  const [a, b] = S.players;
+  const monday = new Date(); monday.setHours(0, 0, 0, 0);
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  const weeks = [];
+  for (let i = 7; i >= 0; i--) {
+    const w = new Date(monday); w.setDate(monday.getDate() - i * 7);
+    weeks.push(weekKey(w.getTime()));
+  }
+  const sum = (pid, wk) => S.log.reduce((acc, l) => acc + ((l.playerId === pid && weekKey(l.ts) === wk) ? l.xp : 0), 0);
+  const data = weeks.map(wk => ({ a: sum(a.id, wk), b: sum(b.id, wk) }));
+  const max = Math.max(20, ...data.map(x => Math.max(x.a, x.b)));
+  const W = 320, H = 112, base = H - 14, plot = H - 22, gw = W / 8, bw = 13;
+  const grid = [0.5, 1].map(f => {
+    const y = (base - plot * f).toFixed(1);
+    return `<line x1="0" x2="${W}" y1="${y}" y2="${y}" stroke="#1C3252" stroke-width="1"/>` +
+      `<text x="2" y="${y - 3}" font-size="8" fill="#8AA3C2">${Math.round(max * f)}</text>`;
+  }).join("");
+  let bars = "", labels = "";
+  data.forEach((x, i) => {
+    const cx = i * gw + gw / 2;
+    const ha = Math.max(1, Math.round(plot * x.a / max)), hb = Math.max(1, Math.round(plot * x.b / max));
+    bars += `<rect x="${(cx - bw - 1).toFixed(1)}" y="${base - ha}" width="${bw}" height="${ha}" rx="2" fill="${esc(a.color)}"><title>${esc(a.name)} · ${x.a} XP</title></rect>` +
+            `<rect x="${(cx + 1).toFixed(1)}" y="${base - hb}" width="${bw}" height="${hb}" rx="2" fill="${esc(b.color)}"><title>${esc(b.name)} · ${x.b} XP</title></rect>`;
+    labels += `<text x="${cx}" y="${H - 2}" text-anchor="middle" font-size="8" fill="#8AA3C2">${i === 7 ? "cette sem." : "S−" + (7 - i)}</text>`;
+  });
+  return `
+  <div class="legend">
+    <span><i class="dot" style="background:${esc(a.color)}"></i>${esc(a.name)}</span>
+    <span><i class="dot" style="background:${esc(b.color)}"></i>${esc(b.name)}</span>
+  </div>
+  <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="XP gagnés par semaine, huit dernières semaines" style="width:100%;height:auto;display:block">
+    <line x1="0" x2="${W}" y1="${base}" y2="${base}" stroke="#2B5A8F" stroke-width="1"/>
+    ${grid}${bars}${labels}
+  </svg>`;
+}
+
+function featSection() {
+  return S.players.map(p => {
+    const st = featStats(p.id);
+    const n = FEATS.filter(f => f.test(st)).length;
+    return `
+    <div class="feathead"><i class="dot" style="background:${esc(p.color)}"></i>${esc(p.emoji)} ${esc(p.name)} — ${n}/${FEATS.length}</div>
+    <div class="featgrid">
+      ${FEATS.map(f => `<span class="feat ${f.test(st) ? "on" : ""}"><span class="fi">${f.icon}</span><small>${esc(f.name)}</small></span>`).join("")}
+    </div>`;
+  }).join("");
+}
+
 function vDuel() {
   const [a, b] = S.players;
   const rows = [
@@ -694,10 +806,18 @@ function vDuel() {
     <div class="winbadge">${lead ? "👑 " + esc(lead.name) + " domine le donjon cette semaine" : "⚡ Égalité — tout se joue maintenant"}</div>
   </section>
   <section class="panel">
+    <h2>XP par semaine</h2>
+    ${weekChart()}
+  </section>
+  <section class="panel">
     <h2>Statistiques</h2>
     <div class="statgrid">
       ${rows.map(([l, va, vb, u]) => `<span class="l">${va}${u}</span><span class="c">${l}</span><span class="r2">${vb}${u}</span>`).join("")}
     </div>
+  </section>
+  <section class="panel">
+    <h2>Hauts faits</h2>
+    ${featSection()}
   </section>`;
 }
 
@@ -862,6 +982,7 @@ function doTask(taskId, playerId) {
   if (!t || !p) return;
   const before = levelInfo(totalXp(playerId)).lvl;
   const objsBefore = S.objectives.filter(o => !o.claimed && objProgress(o) >= o.target).length;
+  const featsBefore = new Set(unlockedFeats(playerId).map(f => f.id));
 
   let xp = PRIOS[t.prio].xp;
   const notes = [];
@@ -877,6 +998,7 @@ function doTask(taskId, playerId) {
 
   const after = levelInfo(totalXp(playerId)).lvl;
   const objsAfter = S.objectives.filter(o => !o.claimed && objProgress(o) >= o.target).length;
+  const newFeat = unlockedFeats(playerId).find(f => !featsBefore.has(f.id));
   render();
 
   if (after > before) {
@@ -888,6 +1010,10 @@ function doTask(taskId, playerId) {
     sysModal(`
       <div class="big gold">OBJECTIF ATTEINT</div>
       <div class="sub">Un défi commun est terminé.<br>Allez le réclamer dans l'onglet <b>Objectifs</b> 🎁</div>`);
+  } else if (newFeat) {
+    sysModal(`
+      <div class="big gold">HAUT FAIT</div>
+      <div class="sub">${esc(p.emoji)} <b>${esc(p.name)}</b> débloque :<br><span style="font-size:26px">${newFeat.icon}</span><br><b>${esc(newFeat.name)}</b></div>`);
   } else {
     toast(`${p.emoji} ${p.name} +${xp} XP`, "Annuler", () => {
       S.log = S.log.filter(l => l.id !== entry.id);

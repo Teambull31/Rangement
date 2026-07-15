@@ -25,6 +25,7 @@ const { APP_URL, launch, check, done } = require("./helpers");
   // 2. Compléter une quête écrit dans la base
   await page.locator(".quest").first().locator('[data-p="p1"]').click();
   await page.waitForTimeout(600);
+  if (await page.locator("#veilOk").count()) await page.locator("#veilOk").click(); // haut fait « Première quête »
   const dbLog = await page.evaluate(() => window.__DB.log);
   check("action envoyée à la base (xp=" + (dbLog[0] && dbLog[0].xp) + ")", dbLog.length === 1 && dbLog[0].player_id === "p1");
 

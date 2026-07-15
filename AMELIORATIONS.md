@@ -19,10 +19,28 @@ de saisie trop loin (Journal), tests hors du dépôt, pas de CI.
   local + couche de synchro face à un faux backend Supabase.
 - 🤖 **CI GitHub Actions** : les deux suites tournent à chaque push.
 
-**Pistes notées pour les prochaines itérations** (à réévaluer à chaque audit) :
-- Statistiques : graphique d'XP par semaine (dataviz) dans l'onglet Duel.
-- Succès/hauts faits (badges : 7 jours de série, 50 quêtes, premier rang S…).
+## Itération 2 — 2026-07-15 (18h)
+
+**Audit** : pas de célébration des jalons (rétention), onglet Duel purement numérique,
+boutons Annuler du journal < 44 px, toasts invisibles pour les lecteurs d'écran.
+
+**Améliorations livrées :**
+- 🏅 **Hauts faits** : 15 badges par chasseur (quêtes cumulées, séries, rangs,
+  1 000 XP, grosses quêtes, lève-tôt/oiseau de nuit), grille dans l'onglet Duel
+  (débloqués en surbrillance, verrouillés grisés), fenêtre système « HAUT FAIT »
+  au déblocage. Calculés depuis le journal — aucun changement de schéma.
+- 📊 **Graphique XP par semaine** (8 dernières semaines) dans Duel : barres
+  groupées aux couleurs des joueurs, légende, grille discrète, libellés de
+  semaines, infobulles. Palette par défaut validée (CVD ΔE 14,1 ; contraste OK).
+- ♿ **Accessibilité** : boutons Annuler du journal agrandis (44 px), zone de
+  toasts en `aria-live="polite"`, graphique avec `role="img"` + libellé.
+- ✅ Tests enrichis : haut fait à la première quête, graphique (16 barres),
+  grilles de badges, annulation depuis le toast robuste aux hauts faits horaires.
+
+**Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
 - Récompense « surprise » : tirage au sort parmi les récompenses au lieu d'un choix fixe.
 - Choix du thème visuel global (autres ambiances que le bleu système).
 - Notifications de rappel (nécessite une décision : push web ou rappels locaux).
-- Accessibilité : contraste des chips de priorité, tailles de touche < 44 px à vérifier.
+- Accessibilité : contraste des chips de priorité (haute/critique sur fond sombre).
+- Onboarding première ouverture (mini-tutoriel 3 écrans).
+- Historique des duels : vainqueur de chaque semaine passée (mur des trophées).
