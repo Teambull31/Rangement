@@ -286,6 +286,12 @@
     box-shadow: 0 0 14px rgba(77,195,255,.3);
     animation: toastin .25s ease;
     white-space: nowrap;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .toast-action {
+    background: none; border: 1px solid var(--line-glow); color: var(--sys);
+    border-radius: 3px; font-size: 13px; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; padding: 3px 10px;
   }
   @keyframes toastin { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
@@ -332,8 +338,8 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 function defaultState() {
   return {
     players: [
-      { id: "p1", name: "Chasseur", emoji: "⚔️" },
-      { id: "p2", name: "Chasseuse", emoji: "🏹" },
+      { id: "p1", name: "Chasseur", emoji: "⚔️", color: "#4DC3FF" },
+      { id: "p2", name: "Chasseuse", emoji: "🏹", color: "#8B7BFF" },
     ],
     tasks: [
       { id: uid(), name: "Vaisselle / lave-vaisselle", icon: "🍽️", prio: "normale" },
@@ -394,7 +400,7 @@ function save() { localStorage.setItem(KEY, JSON.stringify({ S, pending: PENDING
 
 /* --- correspondance lignes SQL <-> état de l'appli --- */
 const fromRow = {
-  players: r => ({ id: r.id, name: r.name, emoji: r.emoji }),
+  players: r => ({ id: r.id, name: r.name, emoji: r.emoji, color: r.color || "#4DC3FF" }),
   tasks: r => ({ id: r.id, name: r.name, icon: r.icon, prio: r.prio, createdAt: Number(r.created_at) }),
   rewards: r => ({ id: r.id, name: r.name, icon: r.icon }),
   objectives: r => ({ id: r.id, name: r.name, type: r.type, target: r.target, rewardId: r.reward_id, createdAt: Number(r.created_at), claimed: r.claimed }),
@@ -402,7 +408,7 @@ const fromRow = {
   won: r => ({ id: r.id, name: r.name, icon: r.icon, ts: Number(r.ts) }),
 };
 const toRow = {
-  players: p => ({ id: p.id, name: p.name, emoji: p.emoji }),
+  players: p => ({ id: p.id, name: p.name, emoji: p.emoji, color: p.color || "#4DC3FF" }),
   tasks: t => ({ id: t.id, name: t.name, icon: t.icon, prio: t.prio, created_at: t.createdAt || Date.now() }),
   rewards: r => ({ id: r.id, name: r.name, icon: r.icon }),
   objectives: o => ({ id: o.id, name: o.name, type: o.type, target: o.target, reward_id: o.rewardId, created_at: o.createdAt, claimed: o.claimed }),
@@ -609,7 +615,7 @@ function renderDuo() {
   $("#duo").innerHTML = S.players.map(p => {
     const xp = totalXp(p.id), li = levelInfo(xp), rk = rankOf(li.lvl), st = streakOf(p.id);
     return `
-    <div class="hunter ${p.id === leadId ? "leader" : ""}">
+    <div class="hunter ${p.id === leadId ? "leader" : ""}" style="border-top-color:${p.id === leadId ? "var(--gold)" : esc(p.color)}">
       ${p.id === leadId ? '<span class="crown">👑</span>' : ""}
       <div class="face">${esc(p.emoji)}</div>
       <div class="name">${esc(p.name)}</div>
@@ -651,7 +657,7 @@ function vQuetes() {
         </div>
       </div>
       <div class="qbtns">
-        ${S.players.map(pl => `<button class="doer" data-do="${t.id}" data-p="${pl.id}" title="Fait par ${esc(pl.name)}" aria-label="Fait par ${esc(pl.name)}">${esc(pl.emoji)}</button>`).join("")}
+        ${S.players.map(pl => `<button class="doer" style="border-color:${esc(pl.color)}" data-do="${t.id}" data-p="${pl.id}" title="Fait par ${esc(pl.name)}" aria-label="Fait par ${esc(pl.name)}">${esc(pl.emoji)}</button>`).join("")}
       </div>
     </div>`;
   }).join("");
@@ -684,7 +690,7 @@ function vDuel() {
       <div class="vs" style="flex:1;text-align:center">VS</div>
       <div class="vsname r">${esc(b.name)} ${esc(b.emoji)}</div>
     </div>
-    <div class="duelbar"><span class="a" style="width:${pa}%"></span><span class="b" style="width:${100 - pa}%"></span></div>
+    <div class="duelbar"><span class="a" style="width:${pa}%;background:${esc(a.color)}"></span><span class="b" style="width:${100 - pa}%;background:${esc(b.color)}"></span></div>
     <div class="winbadge">${lead ? "👑 " + esc(lead.name) + " domine le donjon cette semaine" : "⚡ Égalité — tout se joue maintenant"}</div>
   </section>
   <section class="panel">
@@ -785,8 +791,10 @@ function vReglages() {
     <div class="frow">
       <input type="text" data-pemoji="${p.id}" value="${esc(p.emoji)}" maxlength="4" style="flex:0 0 64px" aria-label="Emoji">
       <input type="text" data-pname="${p.id}" value="${esc(p.name)}" maxlength="20" aria-label="Nom">
+      <input type="color" data-pcolor="${p.id}" value="${esc(p.color || "#4DC3FF")}" style="flex:0 0 52px;height:44px;padding:2px;background:#0A1120;border:1px solid var(--line);border-radius:3px" aria-label="Couleur">
     </div>`).join("")}
-    <button class="btn" id="savePlayers">Enregistrer les noms</button>
+    <button class="btn" id="savePlayers">Enregistrer</button>
+    <p class="hint" style="margin-top:6px">La couleur personnalise ta carte, tes boutons de quête et la barre de duel — elle se synchronise sur les deux téléphones.</p>
   </section>
   <section class="panel">
     <h2>Tâches ménagères</h2>
@@ -821,11 +829,19 @@ function vReglages() {
 }
 
 /* ================= Actions ================= */
-function toast(msg) {
+function toast(msg, actionLabel, actionFn) {
   const t = document.createElement("div");
-  t.className = "toast"; t.textContent = msg;
+  t.className = "toast";
+  t.textContent = msg;
+  if (actionLabel && actionFn) {
+    const b = document.createElement("button");
+    b.className = "toast-action";
+    b.textContent = actionLabel;
+    b.onclick = () => { t.remove(); actionFn(); };
+    t.appendChild(b);
+  }
   $("#toastZone").appendChild(t);
-  setTimeout(() => t.remove(), 2200);
+  setTimeout(() => t.remove(), actionLabel ? 5000 : 2200);
 }
 
 function sysModal(html) {
@@ -857,6 +873,7 @@ function doTask(taskId, playerId) {
   S.log.push(entry);
   save();
   queueOp({ table: "log", type: "upsert", row: toRow.log(entry) });
+  try { if (navigator.vibrate) navigator.vibrate(35); } catch (e) {}
 
   const after = levelInfo(totalXp(playerId)).lvl;
   const objsAfter = S.objectives.filter(o => !o.claimed && objProgress(o) >= o.target).length;
@@ -872,7 +889,11 @@ function doTask(taskId, playerId) {
       <div class="big gold">OBJECTIF ATTEINT</div>
       <div class="sub">Un défi commun est terminé.<br>Allez le réclamer dans l'onglet <b>Objectifs</b> 🎁</div>`);
   } else {
-    toast(`${p.emoji} ${p.name} +${xp} XP`);
+    toast(`${p.emoji} ${p.name} +${xp} XP`, "Annuler", () => {
+      S.log = S.log.filter(l => l.id !== entry.id);
+      save(); queueOp({ table: "log", type: "delete", id: entry.id });
+      render();
+    });
   }
 }
 
@@ -946,8 +967,10 @@ function bindView() {
     S.players.forEach(p => {
       const n = document.querySelector(`[data-pname="${p.id}"]`).value.trim();
       const e = document.querySelector(`[data-pemoji="${p.id}"]`).value.trim();
+      const c = document.querySelector(`[data-pcolor="${p.id}"]`).value;
       if (n) p.name = n;
       if (e) p.emoji = e;
+      if (c) p.color = c;
       queueOp({ table: "players", type: "upsert", row: toRow.players(p) });
     });
     save(); render(); toast("Chasseurs mis à jour");
