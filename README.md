@@ -6,14 +6,26 @@ et de rang (E → D → C → B → A → S → Monarque), et vous vous affronte
 hebdomadaire pendant que vos objectifs communs débloquent de vraies récompenses
 (ciné, Uber Eats, Calicéo…).
 
-## 🚀 Lancer l'application
+## 🚀 Application en ligne
 
-Aucune installation : ouvrez simplement **`index.html`** dans un navigateur
-(téléphone ou ordinateur).
+**➡️ https://project-75qv6.vercel.app**
 
-Pour y accéder à deux depuis vos téléphones, le plus simple est d'activer
-**GitHub Pages** sur ce dépôt (Settings → Pages → branche `main`, dossier `/`) :
-l'appli sera disponible à une URL du type `https://<pseudo>.github.io/Rangement/`.
+L'appli est une **PWA** : installez-la sur l'écran d'accueil comme une vraie application.
+
+- **Android (Chrome)** : ouvrez l'URL → menu ⋮ → **« Ajouter à l'écran d'accueil »**
+  (ou « Installer l'application »).
+- **iPhone (Safari)** : ouvrez l'URL → bouton **Partager** (carré avec flèche) →
+  **« Sur l'écran d'accueil »**.
+
+Elle s'ouvre ensuite en plein écran avec sa propre icône, et fonctionne même hors ligne.
+
+### Déploiement (Vercel)
+
+Le projet Vercel récupère les fichiers depuis ce dépôt GitHub au moment du build
+(`build.sh`). Après un push, relancez un déploiement (bouton *Redeploy* dans le
+tableau de bord Vercel, ou demandez à Claude de redéployer).
+
+En local, il suffit d'ouvrir **`index.html`** dans un navigateur.
 
 > ℹ️ Les données sont enregistrées dans le navigateur (localStorage), donc chaque
 > appareil a sa propre sauvegarde. Utilisez un téléphone « officiel » commun pour
