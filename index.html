@@ -16,6 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="supabase.js"></script>
 <style>
   :root {
     --abyss: #060A13;
@@ -86,6 +87,7 @@
     letter-spacing: .06em; margin-top: 2px;
   }
   .week-lead b { color: var(--gold); font-weight: 700; }
+  .syncline { font-size: 12px; color: var(--ink-dim); letter-spacing: .08em; margin-top: 4px; text-transform: uppercase; }
 
   /* ---------- Player cards ---------- */
   .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 0; }
@@ -299,6 +301,7 @@
     <span class="sys-tag">Système</span>
     <h1>Rangement</h1>
     <div class="week-lead" id="weekLead"></div>
+    <div class="syncline" id="sync"></div>
   </header>
 
   <div class="duo" id="duo"></div>
@@ -317,7 +320,7 @@
 "use strict";
 
 /* ================= State ================= */
-const KEY = "rangement-sl-v1";
+const KEY = "rangement-sl-v2";
 const PRIOS = {
   basse:    { label: "Basse",    xp: 10, col: "#8AA3C2" },
   normale:  { label: "Normale",  xp: 20, col: "#4DC3FF" },
@@ -360,21 +363,151 @@ function defaultState() {
   };
 }
 
-let S = load();
-function load() {
+/* ================= Synchronisation (Supabase) =================
+   L'état de référence vit dans la base partagée ; chaque téléphone garde
+   une copie locale (cache) et une file d'actions à envoyer (mode hors ligne). */
+const SUPA_URL = "https://vnisnfjfnxrjuxwgwibs.supabase.co";
+const SUPA_KEY = "sb_publishable_X9VC-plIXr3Xs26wYtVA0g_YhYW_WoG";
+const sb = (typeof window.supabase !== "undefined")
+  ? window.supabase.createClient(SUPA_URL, SUPA_KEY)
+  : null;
+
+let S, PENDING = [];
+(function initFromCache() {
   try {
-    const raw = localStorage.getItem(KEY);
-    if (raw) return Object.assign(defaultState(), JSON.parse(raw));
-  } catch (e) { /* corrupted -> fresh */ }
-  const s = defaultState();
-  // premier objectif d'exemple
-  s.objectives.push({
-    id: uid(), name: "Semaine de choc", type: "xp", target: 300,
-    rewardId: s.rewards[0].id, createdAt: Date.now(), claimed: false,
-  });
-  return s;
+    const raw = JSON.parse(localStorage.getItem(KEY));
+    if (raw && raw.S) {
+      S = Object.assign(defaultState(), raw.S);
+      PENDING = raw.pending || [];
+      return;
+    }
+  } catch (e) { /* cache corrompu -> repart de zéro */ }
+  S = defaultState();
+  if (!sb) {
+    S.objectives.push({
+      id: uid(), name: "Semaine de choc", type: "xp", target: 300,
+      rewardId: S.rewards[0].id, createdAt: Date.now(), claimed: false,
+    });
+  }
+})();
+function save() { localStorage.setItem(KEY, JSON.stringify({ S, pending: PENDING })); }
+
+/* --- correspondance lignes SQL <-> état de l'appli --- */
+const fromRow = {
+  players: r => ({ id: r.id, name: r.name, emoji: r.emoji }),
+  tasks: r => ({ id: r.id, name: r.name, icon: r.icon, prio: r.prio, createdAt: Number(r.created_at) }),
+  rewards: r => ({ id: r.id, name: r.name, icon: r.icon }),
+  objectives: r => ({ id: r.id, name: r.name, type: r.type, target: r.target, rewardId: r.reward_id, createdAt: Number(r.created_at), claimed: r.claimed }),
+  log: r => ({ id: r.id, ts: Number(r.ts), playerId: r.player_id, taskName: r.task_name, icon: r.icon, xp: r.xp, note: r.note || "" }),
+  won: r => ({ id: r.id, name: r.name, icon: r.icon, ts: Number(r.ts) }),
+};
+const toRow = {
+  players: p => ({ id: p.id, name: p.name, emoji: p.emoji }),
+  tasks: t => ({ id: t.id, name: t.name, icon: t.icon, prio: t.prio, created_at: t.createdAt || Date.now() }),
+  rewards: r => ({ id: r.id, name: r.name, icon: r.icon }),
+  objectives: o => ({ id: o.id, name: o.name, type: o.type, target: o.target, reward_id: o.rewardId, created_at: o.createdAt, claimed: o.claimed }),
+  log: l => ({ id: l.id, ts: l.ts, player_id: l.playerId, task_name: l.taskName, icon: l.icon, xp: l.xp, note: l.note || "" }),
+  won: w => ({ id: w.id, name: w.name, icon: w.icon, ts: w.ts }),
+};
+const TABLES = ["players", "tasks", "rewards", "objectives", "log", "won"];
+
+/* --- file d'actions : envoyées tout de suite si possible, sinon plus tard --- */
+let FLUSHING = false;
+function queueOp(op) { PENDING.push(op); save(); flushOps(); renderSync(); }
+async function flushOps() {
+  if (!sb || FLUSHING) return;
+  FLUSHING = true;
+  while (PENDING.length) {
+    const op = PENDING[0];
+    try {
+      let res;
+      if (op.type === "upsert") res = await sb.from(op.table).upsert(op.row);
+      else if (op.type === "delete") res = await sb.from(op.table).delete().eq("id", op.id);
+      else if (op.type === "clear") res = await sb.from(op.table).delete().neq("id", "");
+      if (res && res.error) throw res.error;
+      PENDING.shift(); save();
+    } catch (e) { break; /* hors ligne : on réessaiera */ }
+  }
+  FLUSHING = false;
+  renderSync();
 }
-function save() { localStorage.setItem(KEY, JSON.stringify(S)); }
+function applyPending(state) {
+  for (const op of PENDING) {
+    const coll = state[op.table];
+    if (!coll) continue;
+    if (op.type === "upsert") {
+      const item = fromRow[op.table](op.row);
+      const i = coll.findIndex(x => x.id === item.id);
+      if (i >= 0) coll[i] = item; else coll.push(item);
+    } else if (op.type === "delete") {
+      state[op.table] = coll.filter(x => x.id !== op.id);
+    } else if (op.type === "clear") {
+      state[op.table] = [];
+    }
+  }
+  return state;
+}
+
+let SYNCED = false;
+async function loadRemote() {
+  if (!sb) return;
+  try {
+    const res = await Promise.all([
+      sb.from("players").select("*").order("id"),
+      sb.from("tasks").select("*").order("created_at").order("id"),
+      sb.from("rewards").select("*").order("id"),
+      sb.from("objectives").select("*").order("created_at"),
+      sb.from("log").select("*").order("ts"),
+      sb.from("won").select("*").order("ts"),
+    ]);
+    for (const r of res) if (r.error) throw r.error;
+    const fresh = { players: [], tasks: [], rewards: [], objectives: [], log: [], won: [] };
+    TABLES.forEach((n, i) => { fresh[n] = res[i].data.map(fromRow[n]); });
+    if (fresh.players.length < 2) fresh.players = defaultState().players;
+    S = applyPending(fresh);
+    SYNCED = true;
+    save(); scheduleRender();
+  } catch (e) { SYNCED = false; }
+  renderSync();
+}
+
+/* --- rendu différé si l'utilisateur est en train de taper --- */
+let RENDER_DIRTY = false;
+function isTyping() {
+  const a = document.activeElement;
+  return a && (a.tagName === "INPUT" || a.tagName === "SELECT" || a.tagName === "TEXTAREA");
+}
+function scheduleRender() {
+  if (isTyping()) { RENDER_DIRTY = true; return; }
+  render();
+}
+document.addEventListener("focusout", () => {
+  setTimeout(() => {
+    if (RENDER_DIRTY && !isTyping()) { RENDER_DIRTY = false; render(); }
+  }, 50);
+});
+
+function renderSync() {
+  const el = $("#sync");
+  if (!el) return;
+  if (!sb) { el.textContent = "⛔ mode local — synchro indisponible"; return; }
+  if (PENDING.length) el.textContent = "⏳ " + PENDING.length + " action(s) à synchroniser";
+  else if (SYNCED) el.textContent = "☁️ synchronisé";
+  else el.textContent = "📴 hors ligne — synchro à la reconnexion";
+}
+
+/* --- temps réel : toute action de l'autre téléphone rafraîchit l'écran --- */
+let rtTimer = null;
+if (sb) {
+  sb.channel("rangement-sync")
+    .on("postgres_changes", { event: "*", schema: "public" }, () => {
+      clearTimeout(rtTimer);
+      rtTimer = setTimeout(loadRemote, 400);
+    })
+    .subscribe();
+  window.addEventListener("online", () => { flushOps(); loadRemote(); });
+  setInterval(flushOps, 15000);
+}
 
 /* ================= Time helpers ================= */
 const dayKey = ts => { const d = new Date(ts); return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); };
@@ -451,6 +584,7 @@ const TABS = [
 
 function render() {
   renderHeader();
+  renderSync();
   renderDuo();
   renderTabs();
   const v = $("#view");
@@ -681,8 +815,8 @@ function vReglages() {
       <button class="btn ghost" id="importBtn">Importer</button>
       <input type="file" id="importFile" accept="application/json" hidden>
     </div>
-    <div class="frow"><button class="btn danger" id="resetBtn">Tout réinitialiser</button></div>
-    <p class="hint">Les données vivent dans ce navigateur. Exportez régulièrement pour garder une sauvegarde ou passer sur un autre téléphone.</p>
+    <div class="frow"><button class="btn danger" id="resetBtn">Remettre l'aventure à zéro</button></div>
+    <p class="hint">Les scores sont synchronisés en temps réel entre vos téléphones. Hors ligne, vos actions sont gardées en attente et envoyées à la reconnexion. L'export sert de sauvegarde de secours.</p>
   </section>`;
 }
 
@@ -719,8 +853,10 @@ function doTask(taskId, playerId) {
   const mult = streakMult(playerId);
   if (mult > 1) { xp = Math.round(xp * mult); notes.push("🔥+" + Math.round((mult - 1) * 100) + "%"); }
 
-  S.log.push({ id: uid(), ts: NOW(), playerId, taskName: t.name, icon: t.icon, xp, note: notes.join(" ") });
+  const entry = { id: uid(), ts: NOW(), playerId, taskName: t.name, icon: t.icon, xp, note: notes.join(" ") };
+  S.log.push(entry);
   save();
+  queueOp({ table: "log", type: "upsert", row: toRow.log(entry) });
 
   const after = levelInfo(totalXp(playerId)).lvl;
   const objsAfter = S.objectives.filter(o => !o.claimed && objProgress(o) >= o.target).length;
@@ -747,7 +883,11 @@ function bindView() {
 
   // Journal
   document.querySelectorAll("[data-undo]").forEach(b =>
-    b.onclick = () => { S.log = S.log.filter(l => l.id !== b.dataset.undo); save(); render(); toast("Entrée annulée"); });
+    b.onclick = () => {
+      S.log = S.log.filter(l => l.id !== b.dataset.undo);
+      save(); queueOp({ table: "log", type: "delete", id: b.dataset.undo });
+      render(); toast("Entrée annulée");
+    });
 
   // Objectifs
   const objAdd = $("#objAdd");
@@ -755,8 +895,10 @@ function bindView() {
     const name = $("#objName").value.trim();
     const target = parseInt($("#objTarget").value, 10);
     if (!name || !target || target < 1) { toast("Nom et cible requis"); return; }
-    S.objectives.push({ id: uid(), name, type: $("#objType").value, target, rewardId: $("#objReward").value, createdAt: NOW(), claimed: false });
-    save(); render(); toast("Défi lancé ⚔️");
+    const o = { id: uid(), name, type: $("#objType").value, target, rewardId: $("#objReward").value, createdAt: NOW(), claimed: false };
+    S.objectives.push(o);
+    save(); queueOp({ table: "objectives", type: "upsert", row: toRow.objectives(o) });
+    render(); toast("Défi lancé ⚔️");
   };
   document.querySelectorAll("[data-claim]").forEach(b =>
     b.onclick = () => {
@@ -764,25 +906,39 @@ function bindView() {
       if (!o) return;
       const rw = S.rewards.find(r => r.id === o.rewardId) || { name: "Récompense au choix", icon: "🎁" };
       o.claimed = true;
-      S.won.push({ id: uid(), name: rw.name, icon: rw.icon, ts: NOW() });
-      save(); render();
+      const w = { id: uid(), name: rw.name, icon: rw.icon, ts: NOW() };
+      S.won.push(w);
+      save();
+      queueOp({ table: "objectives", type: "upsert", row: toRow.objectives(o) });
+      queueOp({ table: "won", type: "upsert", row: toRow.won(w) });
+      render();
       sysModal(`
         <div class="big gold">RÉCOMPENSE</div>
         <div class="sub">Vous avez gagné :<br><b>${esc(rw.icon)} ${esc(rw.name)}</b><br>Profitez-en bien, vous l'avez mérité 💙</div>`);
     });
   document.querySelectorAll("[data-delobj]").forEach(b =>
-    b.onclick = () => { S.objectives = S.objectives.filter(o => o.id !== b.dataset.delobj); save(); render(); });
+    b.onclick = () => {
+      S.objectives = S.objectives.filter(o => o.id !== b.dataset.delobj);
+      save(); queueOp({ table: "objectives", type: "delete", id: b.dataset.delobj });
+      render();
+    });
 
   // Récompenses
   const rwAdd = $("#rwAdd");
   if (rwAdd) rwAdd.onclick = () => {
     const name = $("#rwName").value.trim();
     if (!name) return;
-    S.rewards.push({ id: uid(), name, icon: $("#rwIcon").value.trim() || "🎁" });
-    save(); render();
+    const r = { id: uid(), name, icon: $("#rwIcon").value.trim() || "🎁" };
+    S.rewards.push(r);
+    save(); queueOp({ table: "rewards", type: "upsert", row: toRow.rewards(r) });
+    render();
   };
   document.querySelectorAll("[data-delrw]").forEach(b =>
-    b.onclick = () => { S.rewards = S.rewards.filter(r => r.id !== b.dataset.delrw); save(); render(); });
+    b.onclick = () => {
+      S.rewards = S.rewards.filter(r => r.id !== b.dataset.delrw);
+      save(); queueOp({ table: "rewards", type: "delete", id: b.dataset.delrw });
+      render();
+    });
 
   // Réglages
   const sp = $("#savePlayers");
@@ -792,6 +948,7 @@ function bindView() {
       const e = document.querySelector(`[data-pemoji="${p.id}"]`).value.trim();
       if (n) p.name = n;
       if (e) p.emoji = e;
+      queueOp({ table: "players", type: "upsert", row: toRow.players(p) });
     });
     save(); render(); toast("Chasseurs mis à jour");
   };
@@ -799,15 +956,25 @@ function bindView() {
   if (tAdd) tAdd.onclick = () => {
     const name = $("#tName").value.trim();
     if (!name) return;
-    S.tasks.push({ id: uid(), name, icon: $("#tIcon").value.trim() || "🧼", prio: $("#tPrio").value });
-    save(); render(); toast("Quête ajoutée");
+    const t = { id: uid(), name, icon: $("#tIcon").value.trim() || "🧼", prio: $("#tPrio").value, createdAt: NOW() };
+    S.tasks.push(t);
+    save(); queueOp({ table: "tasks", type: "upsert", row: toRow.tasks(t) });
+    render(); toast("Quête ajoutée");
   };
   document.querySelectorAll("[data-deltask]").forEach(b =>
-    b.onclick = () => { S.tasks = S.tasks.filter(t => t.id !== b.dataset.deltask); save(); render(); });
+    b.onclick = () => {
+      S.tasks = S.tasks.filter(t => t.id !== b.dataset.deltask);
+      save(); queueOp({ table: "tasks", type: "delete", id: b.dataset.deltask });
+      render();
+    });
   document.querySelectorAll("[data-tprio]").forEach(sel =>
     sel.onchange = () => {
       const t = S.tasks.find(x => x.id === sel.dataset.tprio);
-      if (t) { t.prio = sel.value; save(); render(); }
+      if (t) {
+        t.prio = sel.value;
+        save(); queueOp({ table: "tasks", type: "upsert", row: toRow.tasks(t) });
+        render();
+      }
     });
 
   // Données
@@ -830,23 +997,28 @@ function bindView() {
     r.onload = () => {
       try {
         const data = JSON.parse(r.result);
-        if (!data.players || !data.log) throw new Error("format");
-        S = Object.assign(defaultState(), data);
-        save(); render(); toast("Sauvegarde importée ✅");
+        const src = data.S || data; // accepte les sauvegardes v1 et v2
+        if (!src.players || !src.log) throw new Error("format");
+        S = Object.assign(defaultState(), src);
+        TABLES.forEach(t => (S[t] || []).forEach(x => PENDING.push({ table: t, type: "upsert", row: toRow[t](x) })));
+        save(); flushOps(); render(); toast("Sauvegarde importée ✅");
       } catch (e) { toast("Fichier invalide"); }
     };
     r.readAsText(f);
   };
   const rst = $("#resetBtn");
   if (rst) rst.onclick = () => {
-    if (confirm("Tout effacer ? Niveaux, journal, objectifs et récompenses gagnées seront perdus.")) {
-      localStorage.removeItem(KEY);
-      S = load(); save(); render();
+    if (confirm("Remettre l'aventure à zéro pour vous deux ? Journal, niveaux, objectifs et récompenses gagnées seront effacés (les tâches et idées de récompenses sont conservées).")) {
+      S.log = []; S.won = []; S.objectives = [];
+      ["log", "won", "objectives"].forEach(t => queueOp({ table: t, type: "clear" }));
+      save(); render();
     }
   };
 }
 
 render();
+loadRemote();
+flushOps();
 
 if ("serviceWorker" in navigator && location.protocol === "https:") {
   navigator.serviceWorker.register("sw.js");

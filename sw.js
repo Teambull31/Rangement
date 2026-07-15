@@ -1,9 +1,10 @@
 /* Service worker : l'appli fonctionne hors ligne, mise à jour en arrière-plan. */
-const CACHE = "rangement-v1";
+const CACHE = "rangement-v2";
 const ASSETS = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
+  "./supabase.js",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
   "./icons/icon-180.png",
@@ -22,8 +23,11 @@ self.addEventListener("activate", e => {
 });
 
 // Réseau d'abord (pour récupérer les mises à jour), cache en secours (hors ligne).
+// Seuls les fichiers de l'appli sont mis en cache — jamais les requêtes Supabase.
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
+  const url = new URL(e.request.url);
+  if (url.origin !== location.origin) return;
   e.respondWith(
     fetch(e.request)
       .then(res => {
