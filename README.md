@@ -27,9 +27,19 @@ tableau de bord Vercel, ou demandez à Claude de redéployer).
 
 En local, il suffit d'ouvrir **`index.html`** dans un navigateur.
 
-> ℹ️ Les données sont enregistrées dans le navigateur (localStorage), donc chaque
-> appareil a sa propre sauvegarde. Utilisez un téléphone « officiel » commun pour
-> le score, ou l'export/import JSON dans **Réglages** pour transférer les données.
+### Synchronisation entre les deux téléphones ☁️
+
+Les scores, quêtes, objectifs et récompenses sont **synchronisés en temps réel**
+via une base Supabase (projet `rangement`, région Paris, offre gratuite) :
+chacun valide ses quêtes sur son propre téléphone et voit instantanément le
+score de l'autre.
+
+- **Hors ligne** : l'appli reste utilisable ; les actions sont mises en file
+  d'attente et envoyées automatiquement à la reconnexion (badge d'état dans
+  l'en-tête).
+- Si la bibliothèque de synchro ne charge pas, l'appli bascule en mode local
+  (données du navigateur uniquement).
+- L'export JSON dans **Réglages** reste disponible comme sauvegarde de secours.
 
 ## 🎮 Comment ça marche
 
