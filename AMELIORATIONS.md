@@ -69,10 +69,25 @@ mécaniques à deviner), un seul thème visuel.
 - ✅ Tests : 34 assertions (parcours d'onboarding complet, application et
   persistance du thème) ; le test de synchro saute l'onboarding via initScript.
 
+## Itération 5 — 2026-07-16 (12h, finalisée à 18h après panne d'infra)
+
+**Audit** : la compétition et les récompenses vivaient côte à côte sans se toucher ;
+aucun moyen de voir qui avait fait une corvée en dernier.
+
+**Améliorations livrées :**
+- ⚔️ **Pari de duel** (onglet Duel) : miser une récompense (ou la surprise 🎲) sur
+  la semaine en cours — bandeau doré « Enjeu de la semaine », synchronisé (table
+  `bets`). À la semaine suivante, le vainqueur réclame l'enjeu (« PARI REMPORTÉ »),
+  qui rejoint les récompenses gagnées ; en cas d'égalité l'enjeu est retiré.
+- 👀 **Indicateur d'équité** : chaque quête affiche « dernier : ⚔️/🏹 » (qui l'a
+  faite en dernier), calculé depuis le journal.
+- ✅ Tests : 40 assertions — cycle complet du pari (mise → résolution → réclamation
+  → récompense créditée) et indicateur « dernier ».
+
 **Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
 - Notifications de rappel (nécessite une décision : push web ou rappels locaux).
-- Pari de duel : miser une récompense sur la victoire de la semaine.
 - Répartition des tâches : suggérer une tâche « équitable » selon l'historique.
 - Mode saison : remise à zéro rituelle avec palmarès archivé.
 - Sons/effets optionnels sur montée de niveau (avec réglage on/off).
 - Widget récapitulatif hebdo le dimanche soir (dans l'appli).
+- Rappel visuel de l'enjeu de pari sur l'onglet Quêtes (bandeau discret).

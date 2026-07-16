@@ -181,6 +181,7 @@
     background: color-mix(in srgb, var(--pcol, #4DC3FF) 14%, transparent);
   }
   .chip.gold { color: var(--gold); border-color: var(--gold); background: rgba(240,197,80,.1); }
+  .lastdone { font-size: 12px; color: var(--ink-dim); letter-spacing: .03em; }
   .qbtns { display: flex; gap: 7px; }
   .doer {
     border: 1px solid var(--line-glow); background: rgba(77,195,255,.08);
@@ -236,6 +237,9 @@
   }
   .themebtn i { width: 12px; height: 12px; border-radius: 50%; }
   .themebtn.on { border-color: var(--sys); color: var(--ink); background: rgba(255,255,255,.04); }
+  .betline { font-size: 15px; padding: 4px 0 10px; border-bottom: 1px dashed var(--line); margin-bottom: 8px; }
+  .betline:last-child { border-bottom: none; margin-bottom: 0; }
+  .betline.hot { border: 1px solid var(--gold); border-radius: 3px; padding: 10px 12px; background: rgba(240,197,80,.07); }
 
   /* ---------- Objectives ---------- */
   .obj { border: 1px solid var(--line); border-radius: 3px; background: var(--panel-2); padding: 12px; margin-bottom: 10px; }
@@ -396,6 +400,7 @@ function defaultState() {
     objectives: [],
     won: [],   // { id, name, icon, ts }
     log: [],   // { id, ts, playerId, taskName, icon, xp, note }
+    bets: [],  // { id, week, rewardId, createdAt, claimed }
   };
 }
 
@@ -436,6 +441,7 @@ const fromRow = {
   objectives: r => ({ id: r.id, name: r.name, type: r.type, target: r.target, rewardId: r.reward_id, createdAt: Number(r.created_at), claimed: r.claimed }),
   log: r => ({ id: r.id, ts: Number(r.ts), playerId: r.player_id, taskName: r.task_name, icon: r.icon, xp: r.xp, note: r.note || "" }),
   won: r => ({ id: r.id, name: r.name, icon: r.icon, ts: Number(r.ts) }),
+  bets: r => ({ id: r.id, week: r.week, rewardId: r.reward_id, createdAt: Number(r.created_at), claimed: r.claimed }),
 };
 const toRow = {
   players: p => ({ id: p.id, name: p.name, emoji: p.emoji, color: p.color || "#4DC3FF" }),
@@ -444,8 +450,9 @@ const toRow = {
   objectives: o => ({ id: o.id, name: o.name, type: o.type, target: o.target, reward_id: o.rewardId, created_at: o.createdAt, claimed: o.claimed }),
   log: l => ({ id: l.id, ts: l.ts, player_id: l.playerId, task_name: l.taskName, icon: l.icon, xp: l.xp, note: l.note || "" }),
   won: w => ({ id: w.id, name: w.name, icon: w.icon, ts: w.ts }),
+  bets: b => ({ id: b.id, week: b.week, reward_id: b.rewardId, created_at: b.createdAt, claimed: b.claimed }),
 };
-const TABLES = ["players", "tasks", "rewards", "objectives", "log", "won"];
+const TABLES = ["players", "tasks", "rewards", "objectives", "log", "won", "bets"];
 
 /* --- file d'actions : envoyées tout de suite si possible, sinon plus tard --- */
 let FLUSHING = false;
@@ -495,9 +502,10 @@ async function loadRemote() {
       sb.from("objectives").select("*").order("created_at"),
       sb.from("log").select("*").order("ts"),
       sb.from("won").select("*").order("ts"),
+      sb.from("bets").select("*").order("created_at"),
     ]);
     for (const r of res) if (r.error) throw r.error;
-    const fresh = { players: [], tasks: [], rewards: [], objectives: [], log: [], won: [] };
+    const fresh = { players: [], tasks: [], rewards: [], objectives: [], log: [], won: [], bets: [] };
     TABLES.forEach((n, i) => { fresh[n] = res[i].data.map(fromRow[n]); });
     if (fresh.players.length < 2) fresh.players = defaultState().players;
     S = applyPending(fresh);
@@ -723,6 +731,8 @@ function vQuetes() {
   const bId = bonusTaskId();
   const rows = S.tasks.map(t => {
     const p = PRIOS[t.prio], isB = t.id === bId;
+    const last = [...S.log].reverse().find(l => l.taskName === t.name);
+    const lastP = last && S.players.find(pl => pl.id === last.playerId);
     return `
     <div class="quest ${isB ? "bonus" : ""}" style="--pcol:${p.col}">
       <span class="qi">${esc(t.icon)}</span>
@@ -731,6 +741,7 @@ function vQuetes() {
         <div class="qmeta">
           <span class="chip">${p.label} · ${p.xp} XP</span>
           ${isB ? '<span class="chip gold">×2 aujourd’hui</span>' : ""}
+          ${lastP ? `<span class="lastdone">dernier : ${esc(lastP.emoji)}</span>` : ""}
         </div>
       </div>
       <div class="qbtns">
@@ -778,6 +789,43 @@ function trophyWall(byWeek) {
       <span class="tscore">${x.a} – ${x.b}</span>
     </div>`;
   }).join("");
+}
+
+function betSection() {
+  const cur = weekKey(NOW());
+  const bets = S.bets || [];
+  const active = bets.find(b => b.week === cur && !b.claimed);
+  const pending = bets.filter(b => !b.claimed && b.week < cur);
+  const { byWeek } = trophyData();
+  const rwOf = b => b.rewardId === "__random__"
+    ? { icon: "🎲", name: "Récompense surprise" }
+    : (S.rewards.find(r => r.id === b.rewardId) || { icon: "🎁", name: "Récompense" });
+
+  const pendingRows = pending.map(b => {
+    const x = byWeek[b.week] || { a: 0, b: 0 };
+    const win = x.a === x.b ? null : (x.a > x.b ? S.players[0] : S.players[1]);
+    const d = new Date(b.week + "T12:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+    const rw = rwOf(b);
+    return win
+      ? `<div class="betline">👑 <b>${esc(win.name)}</b> a remporté l'enjeu de la sem. du ${d} : ${esc(rw.icon)} ${esc(rw.name)}
+         <button class="claim" data-claimbet="${b.id}">Réclamer l'enjeu</button></div>`
+      : `<div class="betline">⚡ Égalité sur la sem. du ${d} — l'enjeu ${esc(rw.icon)} est retiré
+         <button class="undo" style="margin-top:8px" data-tiebet="${b.id}">Retirer l'enjeu</button></div>`;
+  }).join("");
+
+  const activeHtml = active
+    ? `<div class="betline hot">⚔️ Enjeu de la semaine : <b>${esc(rwOf(active).icon)} ${esc(rwOf(active).name)}</b><br>
+       <span class="hint">Le vainqueur du duel dimanche soir l'emporte. Bonne chasse !</span></div>`
+    : `<div class="frow" style="margin-top:4px">
+        <select id="betReward">
+          ${S.rewards.map(r => `<option value="${r.id}">${esc(r.icon)} ${esc(r.name)}</option>`).join("")}
+          <option value="__random__">🎲 Surprise (tirage au sort)</option>
+        </select>
+        <button class="btn" id="betAdd">Miser</button>
+      </div>
+      <p class="hint">Misez une récompense sur le duel : celui ou celle qui gagne la semaine l'emporte.</p>`;
+
+  return `<section class="panel"><h2>Pari de duel</h2>${pendingRows}${activeHtml}</section>`;
 }
 
 function weekChart() {
@@ -854,6 +902,7 @@ function vDuel() {
     <div class="duelbar"><span class="a" style="width:${pa}%;background:${esc(a.color)}"></span><span class="b" style="width:${100 - pa}%;background:${esc(b.color)}"></span></div>
     <div class="winbadge">${lead ? "👑 " + esc(lead.name) + " domine le donjon cette semaine" : "⚡ Égalité — tout se joue maintenant"}</div>
   </section>
+  ${betSection()}
   <section class="panel">
     <h2>XP par semaine</h2>
     ${weekChart()}
@@ -1137,6 +1186,45 @@ function bindView() {
       S.objectives = S.objectives.filter(o => o.id !== b.dataset.delobj);
       save(); queueOp({ table: "objectives", type: "delete", id: b.dataset.delobj });
       render();
+    });
+
+  // Pari de duel
+  const betAdd = $("#betAdd");
+  if (betAdd) betAdd.onclick = () => {
+    const b = { id: uid(), week: weekKey(NOW()), rewardId: $("#betReward").value, createdAt: NOW(), claimed: false };
+    (S.bets ??= []).push(b);
+    save(); queueOp({ table: "bets", type: "upsert", row: toRow.bets(b) });
+    render(); toast("Enjeu misé ⚔️");
+  };
+  document.querySelectorAll("[data-claimbet]").forEach(btn =>
+    btn.onclick = () => {
+      const b = S.bets.find(x => x.id === btn.dataset.claimbet);
+      if (!b) return;
+      const { byWeek } = trophyData();
+      const x = byWeek[b.week] || { a: 0, b: 0 };
+      const win = x.a === x.b ? null : (x.a > x.b ? S.players[0] : S.players[1]);
+      const surprise = b.rewardId === "__random__";
+      const rw = (surprise
+        ? S.rewards[Math.floor(Math.random() * S.rewards.length)]
+        : S.rewards.find(r => r.id === b.rewardId)) || { icon: "🎁", name: "Récompense" };
+      b.claimed = true;
+      const w = { id: uid(), name: rw.name, icon: rw.icon, ts: NOW() };
+      S.won.push(w);
+      save();
+      queueOp({ table: "bets", type: "upsert", row: toRow.bets(b) });
+      queueOp({ table: "won", type: "upsert", row: toRow.won(w) });
+      render();
+      sysModal(`
+        <div class="big gold">PARI REMPORTÉ</div>
+        <div class="sub">👑 <b>${esc(win ? win.name : "?")}</b> gagne l'enjeu :<br><b>${esc(rw.icon)} ${esc(rw.name)}</b>${surprise ? "<br>🎲 désigné par le sort" : ""}</div>`);
+    });
+  document.querySelectorAll("[data-tiebet]").forEach(btn =>
+    btn.onclick = () => {
+      const b = S.bets.find(x => x.id === btn.dataset.tiebet);
+      if (!b) return;
+      b.claimed = true;
+      save(); queueOp({ table: "bets", type: "upsert", row: toRow.bets(b) });
+      render(); toast("Enjeu retiré (égalité)");
     });
 
   // Récompenses

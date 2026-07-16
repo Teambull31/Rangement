@@ -14,6 +14,7 @@
     objectives: [{ id: "seed-o1", name: "Objectif Sync", type: "xp", target: 100, reward_id: "seed-r1", created_at: 1, claimed: false }],
     log: [],
     won: [],
+    bets: [],
   };
   window.__DB = DB;
   window.__rtCallbacks = [];

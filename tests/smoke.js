@@ -57,6 +57,8 @@ const { APP_URL, launch, check, done } = require("./helpers");
   }
   check("fenêtre système de montée de niveau", levelUpSeen);
 
+  check("indicateur « dernier » affiché sur les quêtes", (await page.locator(".lastdone").count()) >= 1);
+
   // Duel : graphique hebdomadaire + hauts faits
   await page.locator('[data-tab="duel"]').click();
   check("graphique XP par semaine présent", (await page.locator('svg[role="img"]').count()) === 1);
@@ -133,6 +135,32 @@ const { APP_URL, launch, check, done } = require("./helpers");
   const trophyTxt = (await page.locator(".trophyline").count()) ? await page.locator(".trophyline").first().textContent() : "";
   check("trophée décerné pour la semaine passée (" + trophyTxt.trim().replace(/\s+/g, " ") + ")", trophyTxt.includes("👑"));
   check("compteur de trophées dans les stats", (await page.locator(".statgrid").textContent()).includes("Trophées"));
+
+  // Pari de duel : mise, résolution sur une semaine passée, réclamation
+  check("formulaire de mise affiché", (await page.locator("#betAdd").count()) === 1);
+  await page.locator("#betAdd").click();
+  await page.waitForTimeout(200);
+  check("enjeu actif affiché", (await page.locator(".betline.hot").count()) === 1);
+  await page.evaluate(() => {
+    const raw = JSON.parse(localStorage.getItem("rangement-sl-v2"));
+    const past = new Date(Date.now() - 8 * 864e5);
+    past.setHours(0, 0, 0, 0);
+    past.setDate(past.getDate() - ((past.getDay() + 6) % 7)); // lundi de la semaine passée
+    const k = past.getFullYear() + "-" + String(past.getMonth() + 1).padStart(2, "0") + "-" + String(past.getDate()).padStart(2, "0");
+    raw.S.bets[0].week = k;
+    localStorage.setItem("rangement-sl-v2", JSON.stringify(raw));
+  });
+  await page.reload();
+  await page.waitForSelector(".hunter");
+  await page.locator('[data-tab="duel"]').click();
+  check("pari résolu avec vainqueur", (await page.locator("[data-claimbet]").count()) === 1);
+  await page.locator("[data-claimbet]").click();
+  await page.waitForTimeout(200);
+  const betModal = (await page.locator(".sysbox").count()) ? await page.locator(".sysbox").textContent() : "";
+  check("« PARI REMPORTÉ » annoncé", betModal.includes("PARI REMPORTÉ"));
+  if (await page.locator("#veilOk").count()) await page.locator("#veilOk").click();
+  await page.locator('[data-tab="objectifs"]').click();
+  check("enjeu ajouté aux récompenses gagnées", (await page.locator(".wonline").count()) === 2);
 
   const realErrors = errors.filter(e => !e.includes("ERR_FILE_NOT_FOUND") && !e.includes("ERR_CONNECTION"));
   check("aucune erreur JavaScript", realErrors.length === 0);
