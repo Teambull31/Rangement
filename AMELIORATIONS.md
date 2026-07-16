@@ -104,9 +104,26 @@ suggérait quoi faire ; aucun retour sonore, aucun moyen de désactiver un nudge
   collision avec la quête bonus), et persistance des deux interrupteurs après
   rechargement.
 
+## Itération 7 — 2026-07-16 (à la demande)
+
+**Audit** : les réclamations (récompense, pari) manquaient de célébration visuelle ;
+l'équité des tâches était suggérée (itération 6) mais jamais mesurée dans la durée.
+
+**Améliorations livrées :**
+- 🎉 **Confettis** (canvas, ~1,6 s, aucune image externe) à la réclamation d'une
+  récompense ou d'un pari — respecte `prefers-reduced-motion` (aucune animation
+  créée si le réglage système est actif).
+- ⚖️ **Répartition des tâches** (onglet Duel, nouveau panneau) : pour chaque tâche
+  déjà accomplie, le nombre de fois par chacun avec une barre de proportion aux
+  couleurs des joueurs, et un badge ⚖️ quand c'est nettement déséquilibré (≥3
+  fois faite, et l'un des deux en fait ≥80 % ou 0 %).
+- ✅ Tests : 46 assertions — confettis sur les deux points de réclamation,
+  absence de confettis en mouvement réduit (contexte Playwright dédié), badge de
+  déséquilibre sur une tâche injectée délibérément à sens unique.
+
 **Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
 - Notifications de rappel (nécessite une décision : push web ou rappels locaux).
 - Mode saison : remise à zéro rituelle avec palmarès archivé.
 - Widget récapitulatif hebdo le dimanche soir (dans l'appli).
-- Historique/statistiques par tâche (laquelle rapporte le plus, laquelle traîne).
-- Mini-animation de confettis à la réclamation d'une récompense.
+- Vue « table » accessible des données du graphique XP par semaine (alternative texte).
+- Export du mur des trophées / répartition en image partageable.

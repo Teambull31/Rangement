@@ -261,6 +261,10 @@
   .betline { font-size: 15px; padding: 4px 0 10px; border-bottom: 1px dashed var(--line); margin-bottom: 8px; }
   .betline:last-child { border-bottom: none; margin-bottom: 0; }
   .betline.hot { border: 1px solid var(--gold); border-radius: 3px; padding: 10px 12px; background: rgba(240,197,80,.07); }
+  .splitline { display: flex; align-items: center; gap: 9px; padding: 7px 0 4px; font-size: 14.5px; }
+  .splitcounts { font-family: var(--display); font-size: 12px; font-weight: 700; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+  .splitbar { display: flex; height: 5px; border-radius: 99px; overflow: hidden; background: #0A1120; margin-bottom: 9px; }
+  .splitbar i { display: block; height: 100%; }
 
   /* ---------- Objectives ---------- */
   .obj { border: 1px solid var(--line); border-radius: 3px; background: var(--panel-2); padding: 12px; margin-bottom: 10px; }
@@ -910,6 +914,28 @@ function weekChart() {
   </svg>`;
 }
 
+function taskSplit() {
+  const [a, b] = S.players;
+  const counts = S.tasks.map(t => {
+    const countFor = pid => S.log.filter(l => l.taskName === t.name && l.playerId === pid).length;
+    const ca = countFor(a.id), cb = countFor(b.id), total = ca + cb;
+    return { t, ca, cb, total };
+  }).filter(x => x.total > 0).sort((x, y) => y.total - x.total);
+  if (!counts.length) return '<p class="hint">Accomplissez quelques quêtes pour voir la répartition apparaître ici.</p>';
+  return counts.map(({ t, ca, cb, total }) => {
+    const pa = Math.round(100 * ca / total);
+    const unfair = total >= 3 && (ca === 0 || cb === 0 || pa >= 80 || pa <= 20);
+    return `
+    <div class="splitline">
+      <span class="qi" style="font-size:18px">${esc(t.icon)}</span>
+      <span class="grow">${esc(t.name)}</span>
+      <span class="splitcounts">${ca} – ${cb}</span>
+      ${unfair ? '<span class="chip gold" title="Nettement déséquilibré">⚖️</span>' : ""}
+    </div>
+    <div class="splitbar"><i style="width:${pa}%;background:${esc(a.color)}"></i><i style="width:${100 - pa}%;background:${esc(b.color)}"></i></div>`;
+  }).join("");
+}
+
 function featSection() {
   return S.players.map(p => {
     const st = featStats(p.id);
@@ -961,6 +987,10 @@ function vDuel() {
   <section class="panel">
     <h2>Mur des trophées</h2>
     ${trophyWall(trophies.byWeek)}
+  </section>
+  <section class="panel">
+    <h2>Répartition des tâches</h2>
+    ${taskSplit()}
   </section>
   <section class="panel">
     <h2>Hauts faits</h2>
@@ -1133,6 +1163,54 @@ function toast(msg, actionLabel, actionFn) {
   setTimeout(() => t.remove(), actionLabel ? 5000 : 2200);
 }
 
+/* ---------- Confettis (canvas, sobre, respecte le mouvement réduit) ---------- */
+const REDUCE_MOTION = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+function confettiBurst() {
+  if (REDUCE_MOTION) return;
+  const canvas = document.createElement("canvas");
+  canvas.id = "confetti";
+  canvas.style.cssText = "position:fixed;inset:0;z-index:70;pointer-events:none;width:100%;height:100%";
+  document.body.appendChild(canvas);
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const W = canvas.width = innerWidth * dpr, H = canvas.height = innerHeight * dpr;
+  const ctx = canvas.getContext("2d");
+  const colors = ["#F0C550", "#4DC3FF", "#8B7BFF", "#5CE0A5", "#FF9D5C"];
+  const N = 90;
+  const parts = Array.from({ length: N }, () => ({
+    x: W / 2 + (Math.random() - 0.5) * W * 0.3,
+    y: H * 0.28,
+    vx: (Math.random() - 0.5) * 9 * dpr,
+    vy: (-Math.random() * 7 - 3) * dpr,
+    g: 0.22 * dpr,
+    size: (Math.random() * 5 + 3) * dpr,
+    rot: Math.random() * Math.PI,
+    vr: (Math.random() - 0.5) * 0.3,
+    color: colors[Math.floor(Math.random() * colors.length)],
+  }));
+  const t0 = performance.now();
+  function frame(t) {
+    const dt = Math.min((t - t0) / 1000, 1.6);
+    ctx.clearRect(0, 0, W, H);
+    let alive = false;
+    for (const p of parts) {
+      p.x += p.vx; p.y += p.vy; p.vy += p.g; p.rot += p.vr;
+      const fade = Math.max(0, 1 - dt / 1.6);
+      if (fade <= 0 || p.y > H + 40) continue;
+      alive = true;
+      ctx.save();
+      ctx.globalAlpha = fade;
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.size / 2, -p.size / 3, p.size, p.size * 0.66);
+      ctx.restore();
+    }
+    if (alive) requestAnimationFrame(frame);
+    else canvas.remove();
+  }
+  requestAnimationFrame(frame);
+}
+
 function sysModal(html) {
   $("#modal").innerHTML = `
   <div class="veil" id="veil">
@@ -1234,6 +1312,7 @@ function bindView() {
       queueOp({ table: "objectives", type: "upsert", row: toRow.objectives(o) });
       queueOp({ table: "won", type: "upsert", row: toRow.won(w) });
       render();
+      confettiBurst();
       sysModal(`
         <div class="big gold">RÉCOMPENSE</div>
         <div class="sub">${surprise ? "🎲 Le sort a désigné :" : "Vous avez gagné :"}<br><b>${esc(rw.icon)} ${esc(rw.name)}</b><br>Profitez-en bien, vous l'avez mérité 💙</div>`);
@@ -1271,6 +1350,7 @@ function bindView() {
       queueOp({ table: "bets", type: "upsert", row: toRow.bets(b) });
       queueOp({ table: "won", type: "upsert", row: toRow.won(w) });
       render();
+      confettiBurst();
       sysModal(`
         <div class="big gold">PARI REMPORTÉ</div>
         <div class="sub">👑 <b>${esc(win ? win.name : "?")}</b> gagne l'enjeu :<br><b>${esc(rw.icon)} ${esc(rw.name)}</b>${surprise ? "<br>🎲 désigné par le sort" : ""}</div>`);

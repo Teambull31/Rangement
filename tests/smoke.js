@@ -68,6 +68,20 @@ const { APP_URL, launch, check, done } = require("./helpers");
   check("barres du graphique tracées", (await page.locator('svg[role="img"] rect').count()) === 16);
   check("hauts faits débloqués visibles", (await page.locator(".feat.on").count()) >= 1);
   check("hauts faits verrouillés grisés", (await page.locator(".feat:not(.on)").count()) >= 1);
+  check("répartition des tâches affichée", (await page.locator(".splitline").count()) >= 1);
+
+  // Répartition : injecte une tâche faite uniquement par p1 -> badge ⚖️ attendu
+  await page.evaluate(() => {
+    const raw = JSON.parse(localStorage.getItem("rangement-sl-v2"));
+    for (let i = 0; i < 4; i++) {
+      raw.S.log.push({ id: "unfair" + i, ts: Date.now() - i * 1000, playerId: "p1", taskName: "Vitres", icon: "🪟", xp: 50, note: "" });
+    }
+    localStorage.setItem("rangement-sl-v2", JSON.stringify(raw));
+  });
+  await page.reload();
+  await page.waitForSelector(".hunter");
+  await page.locator('[data-tab="duel"]').click();
+  check("badge de déséquilibre affiché pour une tâche à sens unique", (await page.locator(".splitline:has-text('Vitres') .chip.gold").count()) === 1);
   await page.locator('[data-tab="quetes"]').click();
 
   // Objectif : création (récompense surprise 🎲), complétion, réclamation
@@ -86,6 +100,7 @@ const { APP_URL, launch, check, done } = require("./helpers");
   check("objectif surprise affiché 🎲", (await page.locator(".obj .oreward").last().textContent()).includes("surprise"));
   check("bouton de réclamation présent", (await page.locator("[data-claim]").count()) > 0);
   await page.locator("[data-claim]").last().click();
+  check("confettis affichés à la réclamation d'une récompense", (await page.locator("#confetti").count()) === 1);
   await page.waitForTimeout(200);
   const claimModal = (await page.locator(".sysbox").count()) ? await page.locator(".sysbox").textContent() : "";
   check("tirage au sort annoncé", claimModal.includes("Le sort a désigné"));
@@ -161,6 +176,7 @@ const { APP_URL, launch, check, done } = require("./helpers");
   await page.locator('[data-tab="duel"]').click();
   check("pari résolu avec vainqueur", (await page.locator("[data-claimbet]").count()) === 1);
   await page.locator("[data-claimbet]").click();
+  check("confettis affichés à la réclamation d'un pari", (await page.locator("#confetti").count()) === 1);
   await page.waitForTimeout(200);
   const betModal = (await page.locator(".sysbox").count()) ? await page.locator(".sysbox").textContent() : "";
   check("« PARI REMPORTÉ » annoncé", betModal.includes("PARI REMPORTÉ"));
@@ -187,6 +203,27 @@ const { APP_URL, launch, check, done } = require("./helpers");
   const realErrors = errors.filter(e => !e.includes("ERR_FILE_NOT_FOUND") && !e.includes("ERR_CONNECTION"));
   check("aucune erreur JavaScript", realErrors.length === 0);
   if (realErrors.length) console.error(realErrors);
+
+  // Mouvement réduit : aucune animation de confettis ne doit être créée
+  const rmContext = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
+  const rmPage = await rmContext.newPage();
+  await rmPage.goto(APP_URL);
+  await rmPage.waitForSelector("#obNext");
+  await rmPage.locator("#obNext").click();
+  await rmPage.locator("#obNext").click();
+  await rmPage.locator("#obNext").click();
+  await rmPage.locator('[data-tab="objectifs"]').click();
+  await rmPage.fill("#objName", "Défi rapide");
+  await rmPage.fill("#objTarget", "1");
+  await rmPage.locator("#objAdd").click();
+  await rmPage.waitForTimeout(150);
+  await rmPage.locator('[data-tab="quetes"]').click();
+  await rmPage.locator(".quest").first().locator('[data-p="p1"]').click();
+  if (await rmPage.locator("#veilOk").count()) await rmPage.locator("#veilOk").click();
+  await rmPage.locator('[data-tab="objectifs"]').click();
+  await rmPage.locator("[data-claim]").last().click();
+  check("aucun confetti créé avec le mouvement réduit", (await rmPage.locator("#confetti").count()) === 0);
+  await rmContext.close();
 
   await browser.close();
   done();
