@@ -175,9 +175,10 @@
   .quest .qname { font-weight: 700; font-size: 16.5px; letter-spacing: .02em; }
   .qmeta { display: flex; gap: 8px; align-items: center; margin-top: 2px; flex-wrap: wrap; }
   .chip {
-    font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
-    padding: 1px 8px; border-radius: 2px; border: 1px solid var(--pcol, var(--sys-dim));
+    font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    padding: 2px 8px; border-radius: 2px; border: 1px solid var(--pcol, var(--sys-dim));
     color: var(--pcol, var(--sys));
+    background: color-mix(in srgb, var(--pcol, #4DC3FF) 14%, transparent);
   }
   .chip.gold { color: var(--gold); border-color: var(--gold); background: rgba(240,197,80,.1); }
   .qbtns { display: flex; gap: 7px; }
@@ -222,6 +223,11 @@
   .feat.on { opacity: 1; filter: none; border-color: var(--line-glow); color: var(--ink); }
   .feat .fi { font-size: 17px; }
   .feat small { line-height: 1.15; }
+  .trophyline { display: flex; align-items: center; gap: 10px; padding: 7px 2px; border-bottom: 1px dashed var(--line); font-size: 15px; }
+  .trophyline:last-child { border-bottom: none; }
+  .trophyline .tw { color: var(--ink-dim); font-size: 13px; flex: 0 0 92px; }
+  .trophyline .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .trophyline .tscore { font-family: var(--display); font-size: 12px; font-weight: 700; color: var(--sys); font-variant-numeric: tabular-nums; }
 
   /* ---------- Objectives ---------- */
   .obj { border: 1px solid var(--line); border-radius: 3px; background: var(--panel-2); padding: 12px; margin-bottom: 10px; }
@@ -733,6 +739,39 @@ function vQuetes() {
 }
 
 /* ---------- Duel ---------- */
+function trophyData() {
+  const [a, b] = S.players;
+  const cur = weekKey(NOW());
+  const byWeek = {};
+  for (const l of S.log) {
+    const wk = weekKey(l.ts);
+    if (wk === cur) continue;
+    (byWeek[wk] ??= { a: 0, b: 0 })[l.playerId === a.id ? "a" : "b"] += l.xp;
+  }
+  let winsA = 0, winsB = 0;
+  for (const wk in byWeek) {
+    if (byWeek[wk].a > byWeek[wk].b) winsA++;
+    else if (byWeek[wk].b > byWeek[wk].a) winsB++;
+  }
+  return { byWeek, winsA, winsB };
+}
+
+function trophyWall(byWeek) {
+  const [a, b] = S.players;
+  const weeks = Object.keys(byWeek).sort().reverse().slice(0, 12);
+  if (!weeks.length) return '<p class="hint">Le premier trophée sera décerné à la fin de cette semaine. Que la chasse commence ! 👑</p>';
+  return weeks.map(wk => {
+    const x = byWeek[wk];
+    const d = new Date(wk + "T12:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+    const win = x.a === x.b ? null : (x.a > x.b ? a : b);
+    return `<div class="trophyline">
+      <span class="tw">Sem. du ${d}</span>
+      <span class="grow">${win ? "👑 " + esc(win.emoji + " " + win.name) : "⚡ Égalité"}</span>
+      <span class="tscore">${x.a} – ${x.b}</span>
+    </div>`;
+  }).join("");
+}
+
 function weekChart() {
   const [a, b] = S.players;
   const monday = new Date(); monday.setHours(0, 0, 0, 0);
@@ -784,12 +823,14 @@ function featSection() {
 
 function vDuel() {
   const [a, b] = S.players;
+  const trophies = trophyData();
   const rows = [
     ["Cette semaine", weekXp(a.id), weekXp(b.id), " XP"],
     ["Ce mois-ci", monthXp(a.id), monthXp(b.id), " XP"],
     ["XP total", totalXp(a.id), totalXp(b.id), " XP"],
     ["Quêtes accomplies", taskCount(a.id), taskCount(b.id), ""],
     ["Série en cours", streakOf(a.id), streakOf(b.id), " j"],
+    ["Trophées 👑", trophies.winsA, trophies.winsB, ""],
   ];
   const wa = weekXp(a.id), wb = weekXp(b.id), tot = wa + wb;
   const pa = tot ? Math.round(100 * wa / tot) : 50;
@@ -816,6 +857,10 @@ function vDuel() {
     </div>
   </section>
   <section class="panel">
+    <h2>Mur des trophées</h2>
+    ${trophyWall(trophies.byWeek)}
+  </section>
+  <section class="panel">
     <h2>Hauts faits</h2>
     ${featSection()}
   </section>`;
@@ -826,7 +871,9 @@ function vObjectifs() {
   const active = S.objectives.filter(o => !o.claimed);
   const objRows = active.map(o => {
     const prog = objProgress(o), pct = Math.min(100, Math.round(100 * prog / o.target));
-    const rw = S.rewards.find(r => r.id === o.rewardId);
+    const rw = o.rewardId === "__random__"
+      ? { icon: "🎲", name: "Récompense surprise (tirage au sort)" }
+      : S.rewards.find(r => r.id === o.rewardId);
     const done = prog >= o.target;
     return `
     <div class="obj ${done ? "done" : ""}">
@@ -865,6 +912,7 @@ function vObjectifs() {
     <div class="frow">
       <select id="objReward">
         ${S.rewards.map(r => `<option value="${r.id}">${esc(r.icon)} ${esc(r.name)}</option>`).join("")}
+        <option value="__random__">🎲 Surprise (tirage au sort)</option>
       </select>
       <button class="btn" id="objAdd">Lancer le défi</button>
     </div>
@@ -1051,7 +1099,10 @@ function bindView() {
     b.onclick = () => {
       const o = S.objectives.find(x => x.id === b.dataset.claim);
       if (!o) return;
-      const rw = S.rewards.find(r => r.id === o.rewardId) || { name: "Récompense au choix", icon: "🎁" };
+      const surprise = o.rewardId === "__random__";
+      const rw = (surprise
+        ? S.rewards[Math.floor(Math.random() * S.rewards.length)]
+        : S.rewards.find(r => r.id === o.rewardId)) || { name: "Récompense au choix", icon: "🎁" };
       o.claimed = true;
       const w = { id: uid(), name: rw.name, icon: rw.icon, ts: NOW() };
       S.won.push(w);
@@ -1061,7 +1112,7 @@ function bindView() {
       render();
       sysModal(`
         <div class="big gold">RÉCOMPENSE</div>
-        <div class="sub">Vous avez gagné :<br><b>${esc(rw.icon)} ${esc(rw.name)}</b><br>Profitez-en bien, vous l'avez mérité 💙</div>`);
+        <div class="sub">${surprise ? "🎲 Le sort a désigné :" : "Vous avez gagné :"}<br><b>${esc(rw.icon)} ${esc(rw.name)}</b><br>Profitez-en bien, vous l'avez mérité 💙</div>`);
     });
   document.querySelectorAll("[data-delobj]").forEach(b =>
     b.onclick = () => {

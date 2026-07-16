@@ -37,10 +37,26 @@ boutons Annuler du journal < 44 px, toasts invisibles pour les lecteurs d'écran
 - ✅ Tests enrichis : haut fait à la première quête, graphique (16 barres),
   grilles de badges, annulation depuis le toast robuste aux hauts faits horaires.
 
+## Itération 3 — 2026-07-16 (00h)
+
+**Audit** : la compétition n'avait aucune mémoire (le duel repartait de zéro chaque
+semaine), les récompenses étaient prévisibles, chips de priorité peu contrastées.
+
+**Améliorations livrées :**
+- 👑 **Mur des trophées** (onglet Duel) : vainqueur de chaque semaine écoulée avec
+  le score XP, 12 dernières semaines, + ligne « Trophées » dans les statistiques.
+  Calculé depuis le journal, la semaine en cours reste en jeu.
+- 🎲 **Récompense surprise** : nouvelle option au lancement d'un défi — la
+  récompense est tirée au sort parmi la liste au moment de la réclamer
+  (« Le sort a désigné : … »).
+- 🎨 **Chips de priorité** : fond teinté (color-mix), taille légèrement augmentée.
+- ✅ Tests : 29 assertions (récompense surprise de bout en bout, mur des trophées
+  avec injection d'une semaine passée, compteur de trophées).
+
 **Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
-- Récompense « surprise » : tirage au sort parmi les récompenses au lieu d'un choix fixe.
 - Choix du thème visuel global (autres ambiances que le bleu système).
 - Notifications de rappel (nécessite une décision : push web ou rappels locaux).
-- Accessibilité : contraste des chips de priorité (haute/critique sur fond sombre).
 - Onboarding première ouverture (mini-tutoriel 3 écrans).
-- Historique des duels : vainqueur de chaque semaine passée (mur des trophées).
+- Pari de duel : miser une récompense sur la victoire de la semaine.
+- Répartition des tâches : suggérer une tâche « équitable » selon l'historique.
+- Mode saison : remise à zéro rituelle avec palmarès archivé.

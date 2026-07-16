@@ -55,10 +55,11 @@ const { APP_URL, launch, check, done } = require("./helpers");
   check("hauts faits verrouillés grisés", (await page.locator(".feat:not(.on)").count()) >= 1);
   await page.locator('[data-tab="quetes"]').click();
 
-  // Objectif : création, complétion, réclamation
+  // Objectif : création (récompense surprise 🎲), complétion, réclamation
   await page.locator('[data-tab="objectifs"]').click();
   await page.fill("#objName", "Test défi");
   await page.fill("#objTarget", "10");
+  await page.selectOption("#objReward", "__random__");
   await page.locator("#objAdd").click();
   await page.waitForTimeout(200);
   await page.locator('[data-tab="quetes"]').click();
@@ -67,11 +68,15 @@ const { APP_URL, launch, check, done } = require("./helpers");
   await modal.waitFor({ timeout: 2000 }).catch(() => {});
   if (await modal.count()) await modal.click();
   await page.locator('[data-tab="objectifs"]').click();
+  check("objectif surprise affiché 🎲", (await page.locator(".obj .oreward").last().textContent()).includes("surprise"));
   check("bouton de réclamation présent", (await page.locator("[data-claim]").count()) > 0);
   await page.locator("[data-claim]").last().click();
   await page.waitForTimeout(200);
+  const claimModal = (await page.locator(".sysbox").count()) ? await page.locator(".sysbox").textContent() : "";
+  check("tirage au sort annoncé", claimModal.includes("Le sort a désigné"));
   if (await page.locator("#veilOk").count()) await page.locator("#veilOk").click();
-  check("récompense gagnée listée", (await page.locator(".wonline").count()) === 1);
+  const wonTxt = (await page.locator(".wonline").count()) === 1 ? await page.locator(".wonline").textContent() : "";
+  check("récompense gagnée listée (réelle, pas 🎲) : " + wonTxt.trim().split("\n")[0], wonTxt !== "" && !wonTxt.includes("🎲"));
 
   // Journal + annulation
   await page.locator('[data-tab="journal"]').click();
@@ -93,6 +98,21 @@ const { APP_URL, launch, check, done } = require("./helpers");
   check("nom conservé après rechargement", (await page.locator(".hunter .name").first().textContent()).trim() === "Max");
   const borderColor = await page.locator(".hunter").nth(1).evaluate(el => el.style.borderTopColor);
   check("couleur personnalisée appliquée (" + borderColor + ")", borderColor.includes("255, 0, 0") || borderColor === "#ff0000");
+
+  // Mur des trophées : vide cette semaine, puis rempli avec une semaine passée injectée
+  await page.locator('[data-tab="duel"]').click();
+  check("mur des trophées en attente (semaine en cours)", (await page.locator(".trophyline").count()) === 0);
+  await page.evaluate(() => {
+    const raw = JSON.parse(localStorage.getItem("rangement-sl-v2"));
+    raw.S.log.push({ id: "old1", ts: Date.now() - 8 * 864e5, playerId: "p1", taskName: "Ancienne quête", icon: "🗡️", xp: 30, note: "" });
+    localStorage.setItem("rangement-sl-v2", JSON.stringify(raw));
+  });
+  await page.reload();
+  await page.waitForSelector(".hunter");
+  await page.locator('[data-tab="duel"]').click();
+  const trophyTxt = (await page.locator(".trophyline").count()) ? await page.locator(".trophyline").first().textContent() : "";
+  check("trophée décerné pour la semaine passée (" + trophyTxt.trim().replace(/\s+/g, " ") + ")", trophyTxt.includes("👑"));
+  check("compteur de trophées dans les stats", (await page.locator(".statgrid").textContent()).includes("Trophées"));
 
   const realErrors = errors.filter(e => !e.includes("ERR_FILE_NOT_FOUND") && !e.includes("ERR_CONNECTION"));
   check("aucune erreur JavaScript", realErrors.length === 0);
