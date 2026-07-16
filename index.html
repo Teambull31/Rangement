@@ -228,6 +228,14 @@
   .trophyline .tw { color: var(--ink-dim); font-size: 13px; flex: 0 0 92px; }
   .trophyline .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .trophyline .tscore { font-family: var(--display); font-size: 12px; font-weight: 700; color: var(--sys); font-variant-numeric: tabular-nums; }
+  .themerow { display: flex; gap: 8px; flex-wrap: wrap; }
+  .themebtn {
+    display: inline-flex; align-items: center; gap: 7px;
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--ink-dim);
+    border-radius: 3px; padding: 9px 12px; font-size: 14px; font-weight: 600;
+  }
+  .themebtn i { width: 12px; height: 12px; border-radius: 50%; }
+  .themebtn.on { border-color: var(--sys); color: var(--ink); background: rgba(255,255,255,.04); }
 
   /* ---------- Objectives ---------- */
   .obj { border: 1px solid var(--line); border-radius: 3px; background: var(--panel-2); padding: 12px; margin-bottom: 10px; }
@@ -985,6 +993,16 @@ function vReglages() {
     </div>
   </section>
   <section class="panel">
+    <h2>Apparence</h2>
+    <div class="themerow">
+      ${Object.entries(THEMES).map(([id, t]) => `
+      <button class="themebtn ${curTheme() === id ? "on" : ""}" data-theme="${id}">
+        <i style="background:${t.sys}"></i>${t.label}
+      </button>`).join("")}
+    </div>
+    <p class="hint">Le thème est propre à ce téléphone — chacun le sien.</p>
+  </section>
+  <section class="panel">
     <h2>Données</h2>
     <div class="frow">
       <button class="btn ghost" id="exportBtn">Exporter (sauvegarde)</button>
@@ -1177,6 +1195,10 @@ function bindView() {
       }
     });
 
+  // Apparence
+  document.querySelectorAll("[data-theme]").forEach(b =>
+    b.onclick = () => { applyTheme(b.dataset.theme); render(); });
+
   // Données
   const ex = $("#exportBtn");
   if (ex) ex.onclick = () => {
@@ -1216,9 +1238,88 @@ function bindView() {
   };
 }
 
+/* ---------- Thèmes (préférence propre à cet appareil) ---------- */
+const THEMES = {
+  systeme:  { label: "Système",  sys: "#4DC3FF", sysDim: "#2E7FB8", glow: "#2B5A8F", mana: "#8B7BFF" },
+  monarque: { label: "Monarque", sys: "#8B7BFF", sysDim: "#5E50C4", glow: "#4A3F9E", mana: "#4DC3FF" },
+  braise:   { label: "Braise",   sys: "#FF8A5C", sysDim: "#C05A32", glow: "#8F3A2B", mana: "#F0C550" },
+  guilde:   { label: "Guilde",   sys: "#5CE0A5", sysDim: "#2FA372", glow: "#22684D", mana: "#4DC3FF" },
+};
+function curTheme() { return localStorage.getItem("rangement-theme") || "systeme"; }
+function applyTheme(id) {
+  const t = THEMES[id] || THEMES.systeme;
+  const r = document.documentElement.style;
+  r.setProperty("--sys", t.sys);
+  r.setProperty("--sys-dim", t.sysDim);
+  r.setProperty("--line-glow", t.glow);
+  r.setProperty("--mana", t.mana);
+  localStorage.setItem("rangement-theme", id);
+}
+
+/* ---------- Premier lancement : réveil du Système ---------- */
+function onboarding() {
+  if (localStorage.getItem("rangement-onboard-v1")) return;
+  let step = 0;
+  const stepHtml = () => {
+    if (step === 0) return `
+      <div class="big">RÉVEIL DU SYSTÈME</div>
+      <div class="sub" style="text-align:left">Chaque tâche ménagère est une <b>quête</b> qui rapporte de l'<b>XP</b> selon sa priorité (10 à 50).<br><br>Vous montez de <b>niveau</b> et de <b>rang</b> (E → S → Monarque). Jouez chaque jour pour le bonus de série 🔥, et guettez la quête dorée ×2.</div>`;
+    if (step === 1) return `
+      <div class="big">VOS CHASSEURS</div>
+      <div class="sub" style="text-align:left">Personnalisez vos profils (modifiables plus tard dans Réglages) :</div>
+      ${S.players.map(p => `
+      <div class="frow" style="margin-top:10px">
+        <input type="text" data-ob-emoji="${p.id}" value="${esc(p.emoji)}" maxlength="4" style="flex:0 0 56px" aria-label="Emoji">
+        <input type="text" data-ob-name="${p.id}" value="${esc(p.name)}" maxlength="20" aria-label="Nom">
+        <input type="color" data-ob-color="${p.id}" value="${esc(p.color || "#4DC3FF")}" style="flex:0 0 46px;height:42px;padding:2px;background:#0A1120;border:1px solid var(--line);border-radius:3px" aria-label="Couleur">
+      </div>`).join("")}`;
+    return `
+      <div class="big gold">LA CHASSE</div>
+      <div class="sub" style="text-align:left">⚔️ Touchez <b>votre emoji</b> sur une quête accomplie.<br>👑 L'onglet <b>Duel</b> compare vos scores — un trophée par semaine gagnée.<br>🏆 Créez des <b>objectifs communs</b> : atteints, ils débloquent vos récompenses (ciné, resto, surprise 🎲…).<br><br>Que le meilleur chasseur gagne 💙</div>`;
+  };
+  const finish = () => {
+    localStorage.setItem("rangement-onboard-v1", "1");
+    $("#modal").innerHTML = "";
+    render();
+  };
+  const show = () => {
+    $("#modal").innerHTML = `
+    <div class="veil">
+      <div class="sysbox" role="dialog" aria-modal="true">
+        <div class="bang">Notification</div>
+        ${stepHtml()}
+        <div class="frow" style="margin-top:16px">
+          <button class="btn ghost" id="obSkip">Passer</button>
+          <button class="btn" id="obNext">${step === 2 ? "Commencer la chasse" : "Suivant"}</button>
+        </div>
+      </div>
+    </div>`;
+    $("#obSkip").onclick = finish;
+    $("#obNext").onclick = () => {
+      if (step === 1) {
+        S.players.forEach(p => {
+          const n = document.querySelector(`[data-ob-name="${p.id}"]`).value.trim();
+          const e = document.querySelector(`[data-ob-emoji="${p.id}"]`).value.trim();
+          const c = document.querySelector(`[data-ob-color="${p.id}"]`).value;
+          if (n) p.name = n;
+          if (e) p.emoji = e;
+          if (c) p.color = c;
+          queueOp({ table: "players", type: "upsert", row: toRow.players(p) });
+        });
+        save(); render();
+      }
+      if (step === 2) return finish();
+      step++; show();
+    };
+  };
+  show();
+}
+
+applyTheme(curTheme());
 render();
 loadRemote();
 flushOps();
+onboarding();
 
 if ("serviceWorker" in navigator && location.protocol === "https:") {
   navigator.serviceWorker.register("sw.js");

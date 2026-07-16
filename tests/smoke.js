@@ -6,6 +6,16 @@ const { APP_URL, launch, check, done } = require("./helpers");
   await page.goto(APP_URL);
   await page.waitForSelector(".quest");
 
+  // Onboarding « Réveil du Système » au premier lancement
+  await page.waitForSelector("#obNext");
+  check("onboarding affiché au premier lancement", true);
+  await page.locator("#obNext").click(); // étape 2 : profils
+  await page.fill('[data-ob-name="p1"]', "Testeur");
+  await page.locator("#obNext").click(); // étape 3
+  await page.locator("#obNext").click(); // Commencer la chasse
+  check("onboarding fermé", (await page.locator("#obNext").count()) === 0);
+  check("nom appliqué depuis l'onboarding", (await page.locator(".hunter .name").first().textContent()).trim() === "Testeur");
+
   const nQuests = await page.locator(".quest").count();
   check("13 quêtes par défaut", nQuests === 13);
 
@@ -98,6 +108,16 @@ const { APP_URL, launch, check, done } = require("./helpers");
   check("nom conservé après rechargement", (await page.locator(".hunter .name").first().textContent()).trim() === "Max");
   const borderColor = await page.locator(".hunter").nth(1).evaluate(el => el.style.borderTopColor);
   check("couleur personnalisée appliquée (" + borderColor + ")", borderColor.includes("255, 0, 0") || borderColor === "#ff0000");
+
+  // Thèmes : application + persistance
+  await page.locator('[data-tab="reglages"]').click();
+  await page.locator('[data-theme="monarque"]').click();
+  const sysVar = (await page.evaluate(() => document.documentElement.style.getPropertyValue("--sys"))).trim().toLowerCase();
+  check("thème appliqué (" + sysVar + ")", sysVar === "#8b7bff");
+  await page.reload();
+  await page.waitForSelector(".hunter");
+  const sysVar2 = (await page.evaluate(() => document.documentElement.style.getPropertyValue("--sys"))).trim().toLowerCase();
+  check("thème conservé après rechargement", sysVar2 === "#8b7bff");
 
   // Mur des trophées : vide cette semaine, puis rempli avec une semaine passée injectée
   await page.locator('[data-tab="duel"]').click();

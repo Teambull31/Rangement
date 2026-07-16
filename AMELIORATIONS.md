@@ -53,10 +53,26 @@ semaine), les récompenses étaient prévisibles, chips de priorité peu contras
 - ✅ Tests : 29 assertions (récompense surprise de bout en bout, mur des trophées
   avec injection d'une semaine passée, compteur de trophées).
 
+## Itération 4 — 2026-07-16 (06h)
+
+**Audit** : aucun accompagnement au premier lancement (noms par défaut conservés,
+mécaniques à deviner), un seul thème visuel.
+
+**Améliorations livrées :**
+- 🌅 **Onboarding « Réveil du Système »** : 3 écrans façon Solo Leveling au premier
+  lancement — concept (quêtes/XP/rangs), configuration des deux profils (noms,
+  emojis, couleurs — l'onboarding fait office de setup), règles du duel et des
+  objectifs. Passable, affiché une seule fois par appareil.
+- 🎨 **4 thèmes visuels** (Réglages → Apparence) : Système (bleu), Monarque
+  (violet), Braise (orange), Guilde (émeraude). Préférence par appareil
+  (localStorage), appliquée via les variables CSS.
+- ✅ Tests : 34 assertions (parcours d'onboarding complet, application et
+  persistance du thème) ; le test de synchro saute l'onboarding via initScript.
+
 **Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
-- Choix du thème visuel global (autres ambiances que le bleu système).
 - Notifications de rappel (nécessite une décision : push web ou rappels locaux).
-- Onboarding première ouverture (mini-tutoriel 3 écrans).
 - Pari de duel : miser une récompense sur la victoire de la semaine.
 - Répartition des tâches : suggérer une tâche « équitable » selon l'historique.
 - Mode saison : remise à zéro rituelle avec palmarès archivé.
+- Sons/effets optionnels sur montée de niveau (avec réglage on/off).
+- Widget récapitulatif hebdo le dimanche soir (dans l'appli).

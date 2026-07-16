@@ -6,6 +6,7 @@ const { APP_URL, launch, check, done } = require("./helpers");
 (async () => {
   const { browser, page, errors } = await launch();
 
+  await page.addInitScript(() => localStorage.setItem("rangement-onboard-v1", "1"));
   await page.route("**/supabase.js", route =>
     route.fulfill({
       contentType: "application/javascript",
