@@ -84,10 +84,29 @@ aucun moyen de voir qui avait fait une corvée en dernier.
 - ✅ Tests : 40 assertions — cycle complet du pari (mise → résolution → réclamation
   → récompense créditée) et indicateur « dernier ».
 
+## Itération 6 — 2026-07-16 (à la demande)
+
+**Audit** : le pari de duel (itération 5) était invisible hors de l'onglet Duel ;
+l'indicateur « dernier » aidait à voir qui avait fait une tâche, mais rien ne
+suggérait quoi faire ; aucun retour sonore, aucun moyen de désactiver un nudge.
+
+**Améliorations livrées :**
+- 🔔 **Rappel de l'enjeu sur l'onglet Quêtes** : bandeau doré discret rappelant
+  l'enjeu en cours dès l'écran principal, sans avoir à ouvrir Duel.
+- 👉 **Suggestion de tâche équitable** : la tâche jamais faite (ou faite il y a le
+  plus longtemps) est repérée par un badge « à ton tour ? » et une bordure dorée.
+  Désactivable dans Réglages → Apparence (propre à l'appareil).
+  N'écrase pas la quête dorée du jour si elles coïncident.
+- 🔊 **Sons synthétisés** (Web Audio, pas de fichier externe) sur montée de niveau
+  et haut fait débloqué — un petit carillon distinct pour chacun. Interrupteur
+  dans Réglages → Apparence, propre à l'appareil, activé par défaut.
+- ✅ Tests : 39 assertions — rappel de pari, suggestion (avec gestion du cas de
+  collision avec la quête bonus), et persistance des deux interrupteurs après
+  rechargement.
+
 **Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
 - Notifications de rappel (nécessite une décision : push web ou rappels locaux).
-- Répartition des tâches : suggérer une tâche « équitable » selon l'historique.
 - Mode saison : remise à zéro rituelle avec palmarès archivé.
-- Sons/effets optionnels sur montée de niveau (avec réglage on/off).
 - Widget récapitulatif hebdo le dimanche soir (dans l'appli).
-- Rappel visuel de l'enjeu de pari sur l'onglet Quêtes (bandeau discret).
+- Historique/statistiques par tâche (laquelle rapporte le plus, laquelle traîne).
+- Mini-animation de confettis à la réclamation d'une récompense.

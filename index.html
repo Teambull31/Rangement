@@ -237,6 +237,27 @@
   }
   .themebtn i { width: 12px; height: 12px; border-radius: 50%; }
   .themebtn.on { border-color: var(--sys); color: var(--ink); background: rgba(255,255,255,.04); }
+  .togglerow { display: flex; align-items: center; gap: 11px; margin-top: 12px; font-size: 14.5px; }
+  .switch { position: relative; display: inline-block; width: 42px; height: 24px; flex: 0 0 auto; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch span {
+    position: absolute; inset: 0; background: #0A1120; border: 1px solid var(--line);
+    border-radius: 99px; transition: background .15s, border-color .15s;
+  }
+  .switch span::before {
+    content: ""; position: absolute; width: 16px; height: 16px; left: 3px; top: 50%;
+    transform: translateY(-50%); background: var(--ink-dim); border-radius: 50%; transition: transform .15s, background .15s;
+  }
+  .switch input:checked + span { background: rgba(77,195,255,.18); border-color: var(--sys); }
+  .switch input:checked + span::before { transform: translate(18px, -50%); background: var(--sys); }
+  .switch input:focus-visible + span { outline: 2px solid var(--sys); outline-offset: 2px; }
+  .suggested { border-left-color: var(--gold) !important; }
+  .suggested .qname::after { content: " 👉"; }
+  .betremind {
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(240,197,80,.08); border: 1px solid var(--gold); border-radius: 3px;
+    padding: 9px 12px; margin-bottom: 12px; font-size: 14px; color: var(--ink);
+  }
   .betline { font-size: 15px; padding: 4px 0 10px; border-bottom: 1px dashed var(--line); margin-bottom: 8px; }
   .betline:last-child { border-bottom: none; margin-bottom: 0; }
   .betline.hot { border: 1px solid var(--gold); border-radius: 3px; padding: 10px 12px; background: rgba(240,197,80,.07); }
@@ -727,20 +748,47 @@ function renderTabs() {
 }
 
 /* ---------- Quêtes ---------- */
+function suggestionsOn() { return localStorage.getItem("rangement-suggest") !== "off"; }
+
+// Tâche la plus "en retard" : jamais faite, sinon faite il y a le plus longtemps.
+function overdueTaskId() {
+  if (!S.tasks.length) return null;
+  let best = null, bestTs = Infinity;
+  for (const t of S.tasks) {
+    const last = [...S.log].reverse().find(l => l.taskName === t.name);
+    const ts = last ? last.ts : -Infinity; // jamais faite = priorité maximale
+    if (ts < bestTs) { bestTs = ts; best = t.id; }
+  }
+  return best;
+}
+
+function activeBet() {
+  const cur = weekKey(NOW());
+  return (S.bets || []).find(b => b.week === cur && !b.claimed) || null;
+}
+function betRewardLabel(b) {
+  if (b.rewardId === "__random__") return "🎲 Récompense surprise";
+  const r = S.rewards.find(x => x.id === b.rewardId);
+  return r ? esc(r.icon) + " " + esc(r.name) : "🎁 Récompense";
+}
+
 function vQuetes() {
   const bId = bonusTaskId();
+  const suggestId = suggestionsOn() ? overdueTaskId() : null;
+  const bet = activeBet();
   const rows = S.tasks.map(t => {
-    const p = PRIOS[t.prio], isB = t.id === bId;
+    const p = PRIOS[t.prio], isB = t.id === bId, isSuggest = t.id === suggestId && !isB;
     const last = [...S.log].reverse().find(l => l.taskName === t.name);
     const lastP = last && S.players.find(pl => pl.id === last.playerId);
     return `
-    <div class="quest ${isB ? "bonus" : ""}" style="--pcol:${p.col}">
+    <div class="quest ${isB ? "bonus" : ""} ${isSuggest ? "suggested" : ""}" style="--pcol:${p.col}">
       <span class="qi">${esc(t.icon)}</span>
       <div class="qmain">
         <div class="qname">${esc(t.name)}</div>
         <div class="qmeta">
           <span class="chip">${p.label} · ${p.xp} XP</span>
           ${isB ? '<span class="chip gold">×2 aujourd’hui</span>' : ""}
+          ${isSuggest ? '<span class="chip gold">à ton tour ?</span>' : ""}
           ${lastP ? `<span class="lastdone">dernier : ${esc(lastP.emoji)}</span>` : ""}
         </div>
       </div>
@@ -750,10 +798,11 @@ function vQuetes() {
     </div>`;
   }).join("");
   return `
+  ${bet ? `<div class="betremind">⚔️ Enjeu de la semaine : <b>${betRewardLabel(bet)}</b> — voir l'onglet Duel</div>` : ""}
   <section class="panel">
     <h2>Quêtes disponibles <small>— touche ton emoji quand c'est fait</small></h2>
     ${rows || '<p class="hint">Aucune quête. Ajoute des tâches dans Réglages.</p>'}
-    <p class="hint">Bonus de série : +5&nbsp;% d'XP par jour d'activité consécutif (max +50&nbsp;%). La quête dorée rapporte le double aujourd'hui.</p>
+    <p class="hint">Bonus de série : +5&nbsp;% d'XP par jour d'activité consécutif (max +50&nbsp;%). La quête dorée rapporte le double aujourd'hui${suggestId ? ", et 👉 marque la tâche la plus en attente" : ""}.</p>
   </section>`;
 }
 
@@ -794,27 +843,23 @@ function trophyWall(byWeek) {
 function betSection() {
   const cur = weekKey(NOW());
   const bets = S.bets || [];
-  const active = bets.find(b => b.week === cur && !b.claimed);
+  const active = activeBet();
   const pending = bets.filter(b => !b.claimed && b.week < cur);
   const { byWeek } = trophyData();
-  const rwOf = b => b.rewardId === "__random__"
-    ? { icon: "🎲", name: "Récompense surprise" }
-    : (S.rewards.find(r => r.id === b.rewardId) || { icon: "🎁", name: "Récompense" });
 
   const pendingRows = pending.map(b => {
     const x = byWeek[b.week] || { a: 0, b: 0 };
     const win = x.a === x.b ? null : (x.a > x.b ? S.players[0] : S.players[1]);
     const d = new Date(b.week + "T12:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
-    const rw = rwOf(b);
     return win
-      ? `<div class="betline">👑 <b>${esc(win.name)}</b> a remporté l'enjeu de la sem. du ${d} : ${esc(rw.icon)} ${esc(rw.name)}
+      ? `<div class="betline">👑 <b>${esc(win.name)}</b> a remporté l'enjeu de la sem. du ${d} : ${betRewardLabel(b)}
          <button class="claim" data-claimbet="${b.id}">Réclamer l'enjeu</button></div>`
-      : `<div class="betline">⚡ Égalité sur la sem. du ${d} — l'enjeu ${esc(rw.icon)} est retiré
+      : `<div class="betline">⚡ Égalité sur la sem. du ${d} — l'enjeu ${betRewardLabel(b)} est retiré
          <button class="undo" style="margin-top:8px" data-tiebet="${b.id}">Retirer l'enjeu</button></div>`;
   }).join("");
 
   const activeHtml = active
-    ? `<div class="betline hot">⚔️ Enjeu de la semaine : <b>${esc(rwOf(active).icon)} ${esc(rwOf(active).name)}</b><br>
+    ? `<div class="betline hot">⚔️ Enjeu de la semaine : <b>${betRewardLabel(active)}</b><br>
        <span class="hint">Le vainqueur du duel dimanche soir l'emporte. Bonne chasse !</span></div>`
     : `<div class="frow" style="margin-top:4px">
         <select id="betReward">
@@ -1050,6 +1095,15 @@ function vReglages() {
       </button>`).join("")}
     </div>
     <p class="hint">Le thème est propre à ce téléphone — chacun le sien.</p>
+    <div class="togglerow">
+      <label class="switch"><input type="checkbox" id="soundToggle" ${soundsOn() ? "checked" : ""}><span></span></label>
+      <span>Sons (montée de niveau, hauts faits)</span>
+    </div>
+    <div class="togglerow">
+      <label class="switch"><input type="checkbox" id="suggestToggle" ${suggestionsOn() ? "checked" : ""}><span></span></label>
+      <span>Suggestion de quête équitable</span>
+    </div>
+    <p class="hint">Ces deux réglages sont aussi propres à ce téléphone.</p>
   </section>
   <section class="panel">
     <h2>Données</h2>
@@ -1117,15 +1171,18 @@ function doTask(taskId, playerId) {
   render();
 
   if (after > before) {
+    chime("level");
     const rk = rankOf(after);
     sysModal(`
       <div class="big">NIVEAU ${after}</div>
       <div class="sub">${esc(p.emoji)} <b>${esc(p.name)}</b> monte en puissance !<br>Rang actuel : <b class="${rk.s ? "gold" : ""}">${rk.r}</b></div>`);
   } else if (objsAfter > objsBefore) {
+    chime("level");
     sysModal(`
       <div class="big gold">OBJECTIF ATTEINT</div>
       <div class="sub">Un défi commun est terminé.<br>Allez le réclamer dans l'onglet <b>Objectifs</b> 🎁</div>`);
   } else if (newFeat) {
+    chime("feat");
     sysModal(`
       <div class="big gold">HAUT FAIT</div>
       <div class="sub">${esc(p.emoji)} <b>${esc(p.name)}</b> débloque :<br><span style="font-size:26px">${newFeat.icon}</span><br><b>${esc(newFeat.name)}</b></div>`);
@@ -1286,6 +1343,15 @@ function bindView() {
   // Apparence
   document.querySelectorAll("[data-theme]").forEach(b =>
     b.onclick = () => { applyTheme(b.dataset.theme); render(); });
+  const soundToggle = $("#soundToggle");
+  if (soundToggle) soundToggle.onchange = () => {
+    localStorage.setItem("rangement-sound", soundToggle.checked ? "on" : "off");
+    if (soundToggle.checked) chime("feat");
+  };
+  const suggestToggle = $("#suggestToggle");
+  if (suggestToggle) suggestToggle.onchange = () => {
+    localStorage.setItem("rangement-suggest", suggestToggle.checked ? "on" : "off");
+  };
 
   // Données
   const ex = $("#exportBtn");
@@ -1401,6 +1467,29 @@ function onboarding() {
     };
   };
   show();
+}
+
+/* ---------- Sons (synthétisés, pas de fichier externe) ---------- */
+function soundsOn() { return localStorage.getItem("rangement-sound") !== "off"; }
+let audioCtx = null;
+function chime(kind) {
+  if (!soundsOn()) return;
+  try {
+    audioCtx ??= new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    const notes = kind === "level" ? [523.25, 659.25, 783.99, 1046.5] : [659.25, 987.77];
+    const t0 = audioCtx.currentTime;
+    notes.forEach((freq, i) => {
+      const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+      osc.type = "sine"; osc.frequency.value = freq;
+      const start = t0 + i * 0.09;
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(0.18, start + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.32);
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.start(start); osc.stop(start + 0.34);
+    });
+  } catch (e) { /* audio indisponible, tant pis */ }
 }
 
 applyTheme(curTheme());

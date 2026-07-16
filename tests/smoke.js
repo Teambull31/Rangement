@@ -58,6 +58,9 @@ const { APP_URL, launch, check, done } = require("./helpers");
   check("fenêtre système de montée de niveau", levelUpSeen);
 
   check("indicateur « dernier » affiché sur les quêtes", (await page.locator(".lastdone").count()) >= 1);
+  const suggestedCount = await page.locator(".quest.suggested").count();
+  const bonusEqualsOverdue = await page.evaluate(() => bonusTaskId() === overdueTaskId());
+  check("suggestion de tâche équitable affichée", bonusEqualsOverdue ? suggestedCount === 0 : suggestedCount === 1);
 
   // Duel : graphique hebdomadaire + hauts faits
   await page.locator('[data-tab="duel"]').click();
@@ -141,6 +144,9 @@ const { APP_URL, launch, check, done } = require("./helpers");
   await page.locator("#betAdd").click();
   await page.waitForTimeout(200);
   check("enjeu actif affiché", (await page.locator(".betline.hot").count()) === 1);
+  await page.locator('[data-tab="quetes"]').click();
+  check("rappel de l'enjeu visible sur l'onglet Quêtes", (await page.locator(".betremind").count()) === 1);
+  await page.locator('[data-tab="duel"]').click();
   await page.evaluate(() => {
     const raw = JSON.parse(localStorage.getItem("rangement-sl-v2"));
     const past = new Date(Date.now() - 8 * 864e5);
@@ -161,6 +167,22 @@ const { APP_URL, launch, check, done } = require("./helpers");
   if (await page.locator("#veilOk").count()) await page.locator("#veilOk").click();
   await page.locator('[data-tab="objectifs"]').click();
   check("enjeu ajouté aux récompenses gagnées", (await page.locator(".wonline").count()) === 2);
+
+  // Réglages : interrupteurs son et suggestion (propres à l'appareil)
+  await page.locator('[data-tab="reglages"]').click();
+  check("interrupteur son présent et activé par défaut", await page.locator("#soundToggle").isChecked());
+  await page.evaluate(() => document.getElementById("soundToggle").click());
+  check("son désactivé stocké", (await page.evaluate(() => localStorage.getItem("rangement-sound"))) === "off");
+  check("interrupteur suggestion présent et activé par défaut", await page.locator("#suggestToggle").isChecked());
+  await page.evaluate(() => document.getElementById("suggestToggle").click());
+  await page.waitForTimeout(100);
+  check("suggestion désactivée stockée", (await page.evaluate(() => localStorage.getItem("rangement-suggest"))) === "off");
+  await page.locator('[data-tab="quetes"]').click();
+  check("plus de badge suggéré une fois désactivé", (await page.locator(".quest.suggested").count()) === 0);
+  await page.reload();
+  await page.waitForSelector(".hunter");
+  await page.locator('[data-tab="reglages"]').click();
+  check("réglages son/suggestion conservés après rechargement", (await page.locator("#soundToggle").isChecked()) === false);
 
   const realErrors = errors.filter(e => !e.includes("ERR_FILE_NOT_FOUND") && !e.includes("ERR_CONNECTION"));
   check("aucune erreur JavaScript", realErrors.length === 0);
