@@ -330,6 +330,7 @@
   .charcard-emoji { font-size: 30px; line-height: 1; }
   .charcard-name { font-weight: 700; font-size: 15px; }
   .charcard-cond { font-size: 12px; color: var(--ink-dim); line-height: 1.3; }
+  .charcard-cond .condok { color: var(--rcol); font-weight: 600; }
   .charcard-btn { padding: 6px 10px; font-size: 12.5px; margin-top: 2px; }
   .charcard-cur { font-size: 13px; color: var(--gold); font-weight: 700; }
 
@@ -715,6 +716,10 @@ const FEATS = [
   { id: "big5", icon: "💥", name: "5 grosses quêtes (50+ XP)",    test: st => st.big >= 5 },
   { id: "sun",  icon: "🌅", name: "Lève-tôt (quête avant 8 h)",   test: st => st.early },
   { id: "moon", icon: "🌙", name: "Oiseau de nuit (après 22 h)",  test: st => st.night },
+  { id: "hero1",  icon: "🎴", name: "Premier héros débloqué",     test: st => st.heroes >= 1 },
+  { id: "hero5",  icon: "🎭", name: "5 héros débloqués",          test: st => st.heroes >= 5 },
+  { id: "heroH",  icon: "🌌", name: "Moitié du panthéon",         test: st => st.heroes >= Math.ceil(CHARACTERS.length / 2) },
+  { id: "soul",   icon: "🧬", name: "Âme liée (héros incarné)",   test: st => st.embodied },
 ];
 function bestStreakOf(pid) {
   const days = [...new Set(S.log.filter(l => l.playerId === pid).map(l => dayKey(l.ts)))].sort();
@@ -740,8 +745,13 @@ function featStats(pid) {
     night: mine.some(l => new Date(l.ts).getHours() >= 22),
   };
 }
+// Stats étendues pour les hauts faits : ajoute la collection de héros et l'incarnation
+function fullFeatStats(pid) {
+  const p = S.players.find(x => x.id === pid);
+  return { ...featStats(pid), heroes: unlockedCharIds(pid).length, embodied: !!(p && p.characterId) };
+}
 function unlockedFeats(pid) {
-  const st = featStats(pid);
+  const st = fullFeatStats(pid);
   return FEATS.filter(f => f.test(st));
 }
 
@@ -809,6 +819,17 @@ function condText(cond) {
   if (cond.count) parts.push(cond.count + " quêtes");
   if (cond.streak) parts.push("série " + cond.streak + " j");
   if (cond.trophies) parts.push(cond.trophies + " trophée" + (cond.trophies > 1 ? "s" : ""));
+  return parts.join(" · ");
+}
+// Version avec progression : « niv. 8/13 · 20/35 quêtes », les critères atteints cochés ✓
+function condProgress(cond, st) {
+  const seg = (cur, need, curTxt, okTxt) => cur >= need
+    ? `<span class="condok">${okTxt} ✓</span>` : curTxt;
+  const parts = [];
+  if (cond.lvl) parts.push(seg(st.lvl, cond.lvl, `niv. ${st.lvl}/${cond.lvl}`, `niv. ${cond.lvl}`));
+  if (cond.count) parts.push(seg(st.count, cond.count, `${st.count}/${cond.count} quêtes`, `${cond.count} quêtes`));
+  if (cond.streak) parts.push(seg(st.streak, cond.streak, `série ${st.streak}/${cond.streak} j`, `série ${cond.streak} j`));
+  if (cond.trophies) { const s = cond.trophies > 1 ? "s" : ""; parts.push(seg(st.trophies, cond.trophies, `${st.trophies}/${cond.trophies} trophée${s}`, `${cond.trophies} trophée${s}`)); }
   return parts.join(" · ");
 }
 function unlockedCharIds(pid) {
@@ -1214,7 +1235,7 @@ function taskSplit() {
 
 function featSection() {
   return S.players.map(p => {
-    const st = featStats(p.id);
+    const st = fullFeatStats(p.id);
     const n = FEATS.filter(f => f.test(st)).length;
     return `
     <div class="feathead"><i class="dot" style="background:${esc(p.color)}"></i>${esc(p.emoji)} ${esc(p.name)} — ${n}/${FEATS.length}</div>
@@ -1333,7 +1354,7 @@ function vHeros() {
         ${isUnlocked
           ? `<div class="hint">${"⭐".repeat(tier)}${"☆".repeat(3 - tier)}</div>
              ${isCur ? '<div class="charcard-cur">Incarné ✓</div>' : `<button class="btn charcard-btn" data-equip="${c.id}">Incarner</button>`}`
-          : `<div class="charcard-cond">🔒 ${condText(c.cond)}</div>`}
+          : `<div class="charcard-cond">🔒 ${condProgress(c.cond, st)}</div>`}
       </div>`;
     }).join("");
     return `<div class="day-h">${esc(u)}</div><div class="chargrid">${cards}</div>`;
@@ -1535,6 +1556,7 @@ function vReglages() {
       ${notifHistory().length
         ? notifHistory().slice().reverse().map(n => `<div class="notifhistline">🔔 ${new Date(n.ts).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" })}<span class="grow"></span><span class="hint">${esc(n.body)}</span></div>`).join("")
         : '<p class="hint">Aucune notification envoyée pour l\'instant.</p>'}
+      ${notifHistory().length ? '<button class="undo" id="clearNotifHist" style="margin-top:6px">Effacer l\'historique</button>' : ""}
     </div>` : ""}
     <div class="togglerow">
       <label class="switch"><input type="checkbox" id="recapToggle" ${weeklyRecapOn() ? "checked" : ""}><span></span></label>
@@ -2089,6 +2111,11 @@ function bindView() {
     }
     localStorage.setItem("rangement-notifs", "on");
     toast("Notifications activées 🔔");
+  };
+  const clearNotifHist = $("#clearNotifHist");
+  if (clearNotifHist) clearNotifHist.onclick = () => {
+    localStorage.removeItem("rangement-notif-log");
+    render();
   };
 
   // Données

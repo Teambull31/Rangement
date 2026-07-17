@@ -355,6 +355,11 @@ const { APP_URL, launch, check, done } = require("./helpers");
   const notifHistTxt = (await notifPage.locator(".notifhist").count()) ? await notifPage.locator(".notifhist").textContent() : "";
   check("historique des notifications affiché (" + notifHistTxt.trim() + ")", notifHistTxt.includes("🔔"));
   check("une seule entrée dans l'historique (pas de doublon)", (await notifPage.locator(".notifhistline").count()) === 1);
+  await notifPage.evaluate(() => document.getElementById("clearNotifHist").click());
+  await notifPage.waitForTimeout(150);
+  check("historique vidé par « Effacer l'historique »",
+    (await notifPage.locator(".notifhistline").count()) === 0
+    && (await notifPage.evaluate(() => localStorage.getItem("rangement-notif-log"))) === null);
   await notifContext.close();
 
   // Héros : collection, déblocage au mérite, incarnation, stuff
@@ -372,6 +377,9 @@ const { APP_URL, launch, check, done } = require("./helpers");
   check("compte fraîche : quasiment tout est verrouillé", (await heroPage.locator(".charcard.locked").count()) >= totalChars - 2);
   const luffyCond = await heroPage.locator('.charcard:has-text("Luffy") .charcard-cond').textContent();
   check("Luffy est le plus dur à obtenir (" + luffyCond.trim() + ")", luffyCond.includes("28") && luffyCond.includes("100") && luffyCond.includes("trophée"));
+  check("progression visible sur les héros verrouillés (" + luffyCond.trim() + ")", luffyCond.includes("1/28") && luffyCond.includes("0/100"));
+  check("hauts faits héros verrouillés sur un compte frais",
+    await heroPage.evaluate(() => unlockedFeats("p1").every(f => !["hero1", "hero5", "heroH", "soul"].includes(f.id))));
 
   // Grosse progression injectée : 300 quêtes réparties sur 15 jours (niveau ~29, série 15, 2 trophées passés)
   await heroPage.evaluate(() => {
@@ -386,6 +394,8 @@ const { APP_URL, launch, check, done } = require("./helpers");
   await heroPage.locator('[data-tab="heros"]').click();
   const unlockedCount = await heroPage.evaluate(() => unlockedCharIds("p1").length);
   check("gros grind -> collection complète débloquée (" + unlockedCount + "/" + totalChars + ")", unlockedCount === totalChars);
+  check("hauts faits héros débloqués par le grind",
+    await heroPage.evaluate(() => { const ids = new Set(unlockedFeats("p1").map(f => f.id)); return ids.has("hero1") && ids.has("hero5") && ids.has("heroH"); }));
 
   // Incarner Frieren : avatar + stuff
   await heroPage.locator('.charcard:has-text("Frieren") [data-equip]').click();
@@ -395,6 +405,8 @@ const { APP_URL, launch, check, done } = require("./helpers");
   await heroPage.locator('[data-tab="heros"]').click();
   const gearStars = await heroPage.locator(".curchar .gearstep.on").count();
   check("stuff de Frieren progresse avec le niveau (" + gearStars + " palier(s))", gearStars >= 1);
+  check("haut fait « Âme liée » après incarnation",
+    await heroPage.evaluate(() => unlockedFeats("p1").some(f => f.id === "soul")));
   await heroPage.reload();
   await heroPage.waitForSelector(".hunter");
   check("héros conservé après rechargement", (await heroPage.locator(".hunter").first().locator(".charline").count()) === 1);

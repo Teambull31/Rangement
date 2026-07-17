@@ -241,13 +241,32 @@ Gachiakuta, Black Clover, One Piece, Bleach, Demon Slayer, Fullmetal Alchemist.
   Une assertion existante a flaké une fois (dismiss du rappel du soir) puis
   repassé — test renforcé avec diagnostic du stockage pour la prochaine fois.
 
+## Itération 13 — 2026-07-17 (soir)
+
+**Audit** : les héros verrouillés n'affichaient que la condition brute (« niv. 13 ·
+35 quêtes ») sans dire où on en est — friction motivationnelle ; le nouveau système
+de héros n'alimentait pas les hauts faits ; l'historique de notifications ne
+pouvait pas être vidé (piste notée à l'it. 11).
+
+**Améliorations livrées :**
+- 📈 **Progression visible sur chaque héros verrouillé** : « niv. 8/13 ·
+  20/35 quêtes », les critères déjà remplis passent en couleur de rareté avec ✓.
+  On sait toujours ce qui manque pour le prochain déblocage.
+- 🎴 **4 hauts faits héros** : Premier héros débloqué, 5 héros, Moitié du
+  panthéon (seuil dynamique sur la taille du roster), Âme liée (incarner un
+  héros). Toujours dérivés de l'état — zéro stockage, zéro migration.
+- 🧹 **Bouton « Effacer l'historique »** des notifications dans Réglages
+  (l'anti-doublon quotidien est conservé).
+- ✅ Tests : 98 assertions (+5) — format de progression sur Luffy, hauts faits
+  héros verrouillés/débloqués/Âme liée, vidage de l'historique.
+
 **Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
 - Ambiguïté à clarifier avec l'utilisateur : « gachiacuta dans macchi » —
   Dandadan ? (à ajouter dès confirmation, la structure roster le permet en
   quelques lignes).
-- Hauts faits liés aux héros (premier héros incarné, collection complète…).
 - Mode saison : remise à zéro rituelle avec palmarès archivé (table `seasons`
   à proposer clairement avant d'y toucher).
 - Choix de l'heure du rappel de série indépendamment du rappel générique du soir.
-- Bouton pour effacer l'historique des notifications depuis Réglages.
 - Revoir la taille du fichier index.html (grossit à chaque itération).
+- Tri « presque débloqués » en tête de collection, ou barre de progression
+  globale de la collection (X/26) sur l'onglet Héros.
