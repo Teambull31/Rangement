@@ -338,11 +338,37 @@ cible + récompense à inventer), et rien n'aidait à choisir une cible réalist
 - ✅ Tests : 115 assertions (+3) — rythme affiché, préremplissage du preset,
   défi préréglé effectivement lancé.
 
+## Itération 18 — 2026-07-18 (nuit)
+
+**Audit** : la piste « heure du rappel de série indépendante » attendait depuis
+l'it. 11 ; l'activité quotidienne n'était visible nulle part dans la durée
+(le graphique hebdo agrège par semaine — aucune vue jour par jour, alors que
+les séries se jouent au jour près) ; le bonus de série (+5 %/jour) restait
+invisible, on ne voyait que « 🔥 N j » sans l'effet concret.
+
+**Améliorations livrées :**
+- 🕐 **Heure du rappel de série 🔥 indépendante** : nouveau champ dans Réglages —
+  quand une série est en jeu, le rappel peut sonner plus tôt que le rappel
+  générique du soir (par défaut il suit la même heure ; vider le champ le
+  réaligne). Propre à l'appareil, comme le reste du rappel.
+- 🗓️ **Calendrier d'activité** (onglet Duel) : heatmap des 8 dernières semaines
+  façon Duolingo/GitHub — une case par jour, ramp séquentiel doré construit en
+  `color-mix` sur les variables du thème (suit automatiquement les 5 thèmes,
+  vérifié en Aube), case du jour cerclée, jours futurs en pointillés, légende
+  moins→plus, détail par joueur en infobulle. Dérivé du journal, zéro stockage.
+- 🔥 **Multiplicateur de série visible** : la carte du chasseur affiche
+  « 🔥 7 j · +35 % » au lieu de « 🔥 7 j » — le bénéfice concret de la série.
+- 🛠️ Note d'infra : la boucle tourne désormais aussi hors sandbox — repli des
+  tests sur le Chrome système (`/opt/google/chrome/chrome`) quand le chromium
+  Playwright n'est pas installé (`tests/helpers.js`).
+- ✅ Tests : 122 assertions (+7) — calendrier (56 cases, case du jour active),
+  multiplicateur sur la carte, heure de série stockée séparément, rappel de
+  série visible avant l'heure générique, aucun rappel avant les deux heures.
+
 **Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
 - Ambiguïté à clarifier avec l'utilisateur : « gachiacuta dans macchi » —
   Dandadan ? (à ajouter dès confirmation, la structure roster le permet en
   quelques lignes).
 - Mode saison : remise à zéro rituelle avec palmarès archivé (table `seasons`
   à proposer clairement avant d'y toucher).
-- Choix de l'heure du rappel de série indépendamment du rappel générique du soir.
 - Revoir la taille du fichier index.html (grossit à chaque itération).

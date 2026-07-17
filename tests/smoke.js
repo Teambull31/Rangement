@@ -27,6 +27,8 @@ const { APP_URL, launch, check, done } = require("./helpers");
   if (await page.locator("#veilOk").count()) await page.locator("#veilOk").click();
   const xpText = (await page.locator(".hunter").first().locator(".xpnums").first().textContent()).trim();
   check("XP créditée après une quête (" + xpText + ")", /^[1-9]\d*\/100 XP/.test(xpText));
+  const streakTxt = (await page.locator(".hunter").first().locator(".streak").textContent()).trim();
+  check("multiplicateur de série affiché sur la carte (" + streakTxt + ")", streakTxt.includes("🔥1j") && streakTxt.includes("+5"));
 
   // Deuxième quête : toast avec bouton Annuler
   await page.locator(".quest").nth(1).locator('[data-p="p1"]').click();
@@ -69,6 +71,10 @@ const { APP_URL, launch, check, done } = require("./helpers");
   check("hauts faits débloqués visibles", (await page.locator(".feat.on").count()) >= 1);
   check("hauts faits verrouillés grisés", (await page.locator(".feat:not(.on)").count()) >= 1);
   check("répartition des tâches affichée", (await page.locator(".splitline").count()) >= 1);
+  check("calendrier d'activité : 56 cases sur 8 semaines", (await page.locator(".cal .cal-cell").count()) === 56);
+  const todayLvl = await page.locator(".cal .cal-cell.today").getAttribute("data-lvl");
+  check("case du jour marquée et active (lvl=" + todayLvl + ")",
+    (await page.locator(".cal .cal-cell.today").count()) === 1 && Number(todayLvl) >= 1);
 
   // Carte partageable du mur des trophées : repli téléchargement (API de partage absente par défaut)
   const [download] = await Promise.all([
@@ -347,6 +353,25 @@ const { APP_URL, launch, check, done } = require("./helpers");
   await evPage.waitForSelector(".quest");
   const streakBanner = (await evPage.locator(".evremind").count()) ? (await evPage.locator(".evremind").textContent()).trim() : "";
   check("rappel conscient de la série (" + streakBanner + ")", streakBanner.includes("série de 1 jour"));
+
+  // Heure du rappel de série 🔥 indépendante de l'heure du rappel générique
+  await evPage.locator('[data-tab="reglages"]').click();
+  await evPage.fill("#streakHour", "19");
+  await evPage.locator("#streakHour").evaluate(el => el.blur());
+  await evPage.waitForTimeout(150);
+  check("heure de série stockée séparément", (await evPage.evaluate(() => localStorage.getItem("rangement-streak-hour"))) === "19");
+  check("rappel de série visible dès son heure, même avant l'heure générique", (await evPage.evaluate(() => {
+    localStorage.setItem("rangement-evening-hour", "23");
+    localStorage.setItem("rangement-streak-hour", "0");
+    localStorage.removeItem("rangement-evening-dismiss");
+    return shouldShowEveningReminder();
+  })) === true);
+  check("aucun rappel avant l'heure de série et l'heure générique", await evPage.evaluate(() => {
+    localStorage.setItem("rangement-streak-hour", "23");
+    const attendu = new Date().getHours() >= 23; // vrai uniquement si le test tourne à 23 h
+    return shouldShowEveningReminder() === attendu;
+  }));
+  await evPage.evaluate(() => { localStorage.setItem("rangement-evening-hour", "0"); localStorage.removeItem("rangement-streak-hour"); });
 
   await evPage.locator('[data-tab="reglages"]').click();
   await evPage.evaluate(() => document.getElementById("eveningToggle").click());

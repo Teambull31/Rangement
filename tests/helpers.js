@@ -5,7 +5,7 @@ const { chromium } = require("playwright");
 const APP_URL = "file://" + path.resolve(__dirname, "..", "index.html");
 
 async function launch() {
-  const executablePath = fs.existsSync("/opt/pw-browsers/chromium") ? "/opt/pw-browsers/chromium" : undefined;
+  const executablePath = ["/opt/pw-browsers/chromium", "/opt/google/chrome/chrome"].find(p => fs.existsSync(p));
   const browser = await chromium.launch({ executablePath, args: ["--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   const errors = [];
