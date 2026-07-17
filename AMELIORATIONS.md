@@ -195,9 +195,28 @@ les appareils).
   sur les données restantes après un `undo`, et un `JSON.parse(null)` dans un
   contexte n'ayant encore jamais écrit dans `localStorage`.
 
+## Itération 11 — 2026-07-17 (à la demande, cadence passée à toutes les 2h)
+
+**Audit** : deux pistes en attente, sans changement de schéma.
+
+**Améliorations livrées :**
+- 📤 **Carte partageable du duel de la semaine** — bouton « Partager » à côté
+  de « Duel de la semaine » dans Duel, image 1080×1150 aux couleurs du thème
+  actif (XP de chacun, barre de proportion, couronne du leader). Réutilise le
+  même mécanisme de partage/téléchargement que le mur des trophées.
+- 🧹 **Factorisation des cartes canvas** : fond, en-tête « SYSTÈME / RANGEMENT »
+  et pied de page extraits en fonctions communes (`cardColors`, `cardCanvas`,
+  `cardHeader`, `cardFooter`, `shareCanvasCard`) — évite la duplication entre
+  mur des trophées et duel, et simplifie l'ajout d'une prochaine carte.
+- 🔔 **Historique des notifications envoyées** — visible dans Réglages sous
+  l'interrupteur, une fois les notifications activées : date et contenu des
+  14 dernières notifications réellement envoyées (transparence).
+- ✅ Tests : 82 assertions.
+
 **Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
 - Mode saison : remise à zéro rituelle avec palmarès archivé (nécessite une
   nouvelle table Supabase `seasons` — à proposer clairement avant d'y toucher).
-- Export/partage de la carte de duel de la semaine (pas seulement les trophées).
 - Choix de l'heure du rappel de série indépendamment du rappel générique du soir.
-- Historique des notifications envoyées, visible dans Réglages.
+- Bouton pour effacer l'historique des notifications depuis Réglages.
+- Revoir la taille du fichier index.html (grossit à chaque itération) : envisager
+  un découpage si la maintenabilité en pâtit.

@@ -292,6 +292,13 @@
     border-radius: 99px; padding: 6px 13px; font-size: 13px; font-weight: 600;
   }
   .filterbtn.on { border-color: var(--sys); color: var(--ink); background: rgba(255,255,255,.04); }
+  .notifhist { margin: 10px 0 4px; }
+  .notifhistline {
+    display: flex; align-items: center; gap: 8px; padding: 5px 0;
+    border-bottom: 1px dashed var(--line); font-size: 13px; color: var(--ink-dim);
+  }
+  .notifhistline:last-child { border-bottom: none; }
+  .notifhistline .hint { font-size: 12px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
 
   /* ---------- Objectives ---------- */
   .obj { border: 1px solid var(--line); border-radius: 3px; background: var(--panel-2); padding: 12px; margin-bottom: 10px; }
@@ -829,6 +836,14 @@ function notifsSupported() { return typeof Notification !== "undefined"; }
 function notifsOn() { return notifsSupported() && localStorage.getItem("rangement-notifs") === "on"; }
 function notifiedToday() { return localStorage.getItem("rangement-notif-sent") === dayKey(NOW()); }
 function markNotifiedToday() { localStorage.setItem("rangement-notif-sent", dayKey(NOW())); }
+function notifHistory() {
+  try { return JSON.parse(localStorage.getItem("rangement-notif-log") || "[]"); } catch (e) { return []; }
+}
+function pushNotifHistory(body) {
+  const h = notifHistory();
+  h.push({ ts: NOW(), body });
+  localStorage.setItem("rangement-notif-log", JSON.stringify(h.slice(-14)));
+}
 async function maybeSendStreakNotification() {
   if (!notifsOn() || notifiedToday() || Notification.permission !== "granted" || !shouldShowEveningReminder()) return;
   const body = eveningReminderTextPlain();
@@ -845,7 +860,7 @@ async function maybeSendStreakNotification() {
     try { new Notification(title, { body, icon: "icons/icon-192.png" }); sent = true; }
     catch (e) { /* notification indisponible sur cet appareil, tant pis */ }
   }
-  if (sent) markNotifiedToday();
+  if (sent) { markNotifiedToday(); pushNotifHistory(body); }
 }
 
 /* --- Récap hebdo du dimanche soir (dans l'appli, une fois par semaine) --- */
@@ -1103,7 +1118,10 @@ function vDuel() {
   const lead = wa === wb ? null : (wa > wb ? a : b);
   return `
   <section class="panel">
-    <h2>Duel de la semaine</h2>
+    <div class="panelhead">
+      <h2 style="margin-bottom:0">Duel de la semaine</h2>
+      <button class="linkbtn" id="shareDuelBtn">📤 Partager</button>
+    </div>
     <div class="vsrow">
       <div class="vsname">${esc(a.emoji)} ${esc(a.name)}</div>
       <div class="vs" style="flex:1;text-align:center">VS</div>
@@ -1320,6 +1338,12 @@ function vReglages() {
       <span>Notification du navigateur${notifsSupported() ? "" : " (non disponible sur cet appareil)"}</span>
     </div>
     <p class="hint">En plus du rappel dans l'appli : une vraie notification système, une fois par jour, si votre navigateur le permet. Sur iPhone, Safari ne le supporte pas hors app installée avec un service de notifications push — le rappel dans l'appli reste le plus fiable partout.</p>
+    ${notifsOn() ? `
+    <div class="notifhist">
+      ${notifHistory().length
+        ? notifHistory().slice().reverse().map(n => `<div class="notifhistline">🔔 ${new Date(n.ts).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" })}<span class="grow"></span><span class="hint">${esc(n.body)}</span></div>`).join("")
+        : '<p class="hint">Aucune notification envoyée pour l\'instant.</p>'}
+    </div>` : ""}
     <div class="togglerow">
       <label class="switch"><input type="checkbox" id="recapToggle" ${weeklyRecapOn() ? "checked" : ""}><span></span></label>
       <span>Récap du dimanche soir (dès 18 h)</span>
@@ -1402,35 +1426,55 @@ function confettiBurst() {
 }
 
 /* ---------- Carte partageable (canvas, aux couleurs du thème actif) ---------- */
+function cardColors() {
+  const cs = getComputedStyle(document.documentElement);
+  const col = (name, fallback) => (cs.getPropertyValue(name).trim() || fallback);
+  return {
+    abyss: "#060A13", panel: col("--panel", "#0C1526"), line: col("--line", "#1C3252"),
+    sys: col("--sys", "#4DC3FF"), gold: "#F0C550", ink: col("--ink", "#D9E7F7"), inkDim: col("--ink-dim", "#8AA3C2"),
+  };
+}
+function cardCanvas(W, H, c) {
+  const canvas = document.createElement("canvas");
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  const bg = ctx.createRadialGradient(W / 2, 160, 60, W / 2, 160, 900);
+  bg.addColorStop(0, "#101D33"); bg.addColorStop(1, c.abyss);
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = "center";
+  return { canvas, ctx };
+}
+function cardHeader(ctx, W, c, subtitle) {
+  ctx.fillStyle = c.sys;
+  ctx.font = "700 28px system-ui, sans-serif";
+  ctx.fillText("S Y S T È M E", W / 2, 130);
+  ctx.fillStyle = c.ink;
+  ctx.font = "900 64px system-ui, sans-serif";
+  ctx.fillText("RANGEMENT", W / 2, 210);
+  ctx.fillStyle = c.inkDim;
+  ctx.font = "500 24px system-ui, sans-serif";
+  ctx.fillText(subtitle, W / 2, 255);
+}
+function cardFooter(ctx, W, c, y) {
+  ctx.fillStyle = c.inkDim;
+  ctx.font = "500 22px system-ui, sans-serif";
+  ctx.fillText(new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }), W / 2, y);
+  ctx.fillStyle = c.sys;
+  ctx.font = "700 24px system-ui, sans-serif";
+  ctx.fillText("⚔️ rangement — ménage gamifié ⚔️", W / 2, y + 50);
+}
+
 function buildTrophyCard() {
   const [a, b] = S.players;
   const trophies = trophyData();
   const la = levelInfo(totalXp(a.id)), lb = levelInfo(totalXp(b.id));
   const ra = rankOf(la.lvl), rb = rankOf(lb.lvl);
-  const cs = getComputedStyle(document.documentElement);
-  const col = (name, fallback) => (cs.getPropertyValue(name).trim() || fallback);
-  const abyss = "#060A13", panel = col("--panel", "#0C1526"), line = col("--line", "#1C3252");
-  const sys = col("--sys", "#4DC3FF"), gold = "#F0C550", ink = col("--ink", "#D9E7F7"), inkDim = col("--ink-dim", "#8AA3C2");
+  const c = cardColors();
+  const { panel, line, sys, gold, ink, inkDim } = c;
 
   const W = 1080, H = 1350;
-  const canvas = document.createElement("canvas");
-  canvas.width = W; canvas.height = H;
-  const ctx = canvas.getContext("2d");
-
-  const bg = ctx.createRadialGradient(W / 2, 160, 60, W / 2, 160, 900);
-  bg.addColorStop(0, "#101D33"); bg.addColorStop(1, abyss);
-  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
-
-  ctx.textAlign = "center";
-  ctx.fillStyle = sys;
-  ctx.font = "700 28px system-ui, sans-serif";
-  ctx.fillText("S Y S T È M E", W / 2, 130);
-  ctx.fillStyle = ink;
-  ctx.font = "900 64px system-ui, sans-serif";
-  ctx.fillText("RANGEMENT", W / 2, 210);
-  ctx.fillStyle = inkDim;
-  ctx.font = "500 24px system-ui, sans-serif";
-  ctx.fillText("Mur des trophées", W / 2, 255);
+  const { canvas, ctx } = cardCanvas(W, H, c);
+  cardHeader(ctx, W, c, "Mur des trophées");
 
   function playerBlock(cx, p, lvl, rank, trophyCount) {
     ctx.fillStyle = panel;
@@ -1462,25 +1506,76 @@ function buildTrophyCard() {
   playerBlock(W / 2 - 250, a, la.lvl, ra, trophies.winsA);
   playerBlock(W / 2 + 250, b, lb.lvl, rb, trophies.winsB);
 
-  ctx.fillStyle = inkDim;
-  ctx.font = "500 22px system-ui, sans-serif";
-  ctx.fillText(new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }), W / 2, 950);
-  ctx.fillStyle = sys;
-  ctx.font = "700 24px system-ui, sans-serif";
-  ctx.fillText("⚔️ rangement — ménage gamifié ⚔️", W / 2, 1000);
-
+  cardFooter(ctx, W, c, 950);
   return canvas;
 }
 
-function shareTrophyCard() {
-  const canvas = buildTrophyCard();
+function buildDuelCard() {
+  const [a, b] = S.players;
+  const wa = weekXp(a.id), wb = weekXp(b.id), tot = wa + wb;
+  const pa = tot ? Math.round(100 * wa / tot) : 50;
+  const lead = wa === wb ? null : (wa > wb ? a : b);
+  const c = cardColors();
+  const { panel, line, sys, gold, ink, inkDim } = c;
+
+  const W = 1080, H = 1150;
+  const { canvas, ctx } = cardCanvas(W, H, c);
+  cardHeader(ctx, W, c, "Duel de la semaine");
+
+  function playerBlock(cx, p, xp) {
+    ctx.fillStyle = panel;
+    ctx.strokeStyle = (lead && lead.id === p.id) ? gold : line;
+    ctx.lineWidth = 3;
+    const bx = cx - 220, by = 320, bw = 440, bh = 330, r = 20;
+    ctx.beginPath();
+    ctx.roundRect(bx, by, bw, bh, r);
+    ctx.fill(); ctx.stroke();
+    if (lead && lead.id === p.id) {
+      ctx.font = "56px system-ui, sans-serif";
+      ctx.fillText("👑", cx, by - 20);
+    }
+    ctx.fillStyle = p.color || sys;
+    ctx.font = "900 110px system-ui, sans-serif";
+    ctx.fillText(p.emoji || "⚔️", cx, by + 140);
+    ctx.fillStyle = ink;
+    ctx.font = "700 40px system-ui, sans-serif";
+    ctx.fillText(p.name, cx, by + 205);
+    ctx.fillStyle = c.sys;
+    ctx.font = "900 46px system-ui, sans-serif";
+    ctx.fillText(xp + " XP", cx, by + 270);
+    ctx.fillStyle = inkDim;
+    ctx.font = "500 24px system-ui, sans-serif";
+    ctx.fillText("cette semaine", cx, by + 305);
+  }
+  playerBlock(W / 2 - 250, a, wa);
+  playerBlock(W / 2 + 250, b, wb);
+
+  const barY = 730, barW = 700, barH = 26, barX = W / 2 - barW / 2;
+  ctx.fillStyle = line;
+  ctx.beginPath(); ctx.roundRect(barX, barY, barW, barH, barH / 2); ctx.fill();
+  ctx.fillStyle = a.color || sys;
+  ctx.beginPath(); ctx.roundRect(barX, barY, barW * pa / 100, barH, barH / 2); ctx.fill();
+  ctx.fillStyle = b.color || sys;
+  ctx.save(); ctx.beginPath(); ctx.roundRect(barX, barY, barW, barH, barH / 2); ctx.clip();
+  ctx.fillRect(barX + barW * pa / 100, barY, barW * (100 - pa) / 100, barH);
+  ctx.restore();
+
+  ctx.fillStyle = gold;
+  ctx.font = "700 34px system-ui, sans-serif";
+  ctx.fillText(lead ? "👑 " + lead.name + " mène le duel" : "⚡ Égalité parfaite", W / 2, 810);
+
+  cardFooter(ctx, W, c, 950);
+  return canvas;
+}
+
+function shareCanvasCard(canvas, filenamePrefix, shareTitle, shareText) {
   canvas.toBlob(async blob => {
     if (!blob) { toast("Export impossible"); return; }
-    const filename = "rangement-trophees-" + dayKey(NOW()) + ".png";
+    const filename = filenamePrefix + "-" + dayKey(NOW()) + ".png";
     const file = (typeof File !== "undefined") ? new File([blob], filename, { type: "image/png" }) : null;
     if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
       try {
-        await navigator.share({ files: [file], title: "Rangement — Mur des trophées", text: "Notre chasse au ménage 👑⚔️" });
+        await navigator.share({ files: [file], title: shareTitle, text: shareText });
         return;
       } catch (e) { /* partage annulé ou indisponible -> repli téléchargement */ }
     }
@@ -1492,6 +1587,12 @@ function shareTrophyCard() {
     link.remove();
     URL.revokeObjectURL(url);
   }, "image/png");
+}
+function shareTrophyCard() {
+  shareCanvasCard(buildTrophyCard(), "rangement-trophees", "Rangement — Mur des trophées", "Notre chasse au ménage 👑⚔️");
+}
+function shareDuelCard() {
+  shareCanvasCard(buildDuelCard(), "rangement-duel", "Rangement — Duel de la semaine", "Qui va gagner cette semaine ? ⚔️🔥");
 }
 
 function sysModal(html, onClose) {
@@ -1569,6 +1670,8 @@ function bindView() {
   if (cvt) cvt.onclick = () => { chartView = chartView === "chart" ? "table" : "chart"; render(); };
   const shareBtn = $("#shareTrophyBtn");
   if (shareBtn) shareBtn.onclick = shareTrophyCard;
+  const shareDuelBtn = $("#shareDuelBtn");
+  if (shareDuelBtn) shareDuelBtn.onclick = shareDuelCard;
 
   // Journal : recherche + filtre par joueur
   const journalSearch = $("#journalSearch");

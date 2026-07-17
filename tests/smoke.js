@@ -88,6 +88,14 @@ const { APP_URL, launch, check, done } = require("./helpers");
   const shareCall = await page.evaluate(() => window.__shareCalled);
   check("partage natif utilisé quand disponible", shareCall && shareCall.nFiles === 1);
 
+  // Carte partageable du duel de la semaine (l'API de partage native est déjà stubbée)
+  await page.evaluate(() => { window.__shareCalled = null; });
+  await page.locator("#shareDuelBtn").click();
+  await page.waitForFunction(() => window.__shareCalled !== null, { timeout: 3000 });
+  const duelShareCall = await page.evaluate(() => window.__shareCalled);
+  check("carte du duel partagée (" + (duelShareCall && duelShareCall.title) + ")",
+    duelShareCall && duelShareCall.nFiles === 1 && duelShareCall.title.includes("Duel"));
+
   // Vue tableau accessible du graphique XP (bascule)
   await page.locator("#chartViewToggle").click();
   check("bascule vers la vue tableau", (await page.locator("table.datatable").count()) === 1);
@@ -340,6 +348,10 @@ const { APP_URL, launch, check, done } = require("./helpers");
   await notifPage.waitForTimeout(150);
   const calls2 = await notifPage.evaluate(() => window.__notifCalls.length);
   check("pas de doublon de notification le même jour", calls2 === 1);
+  await notifPage.locator('[data-tab="reglages"]').click();
+  const notifHistTxt = (await notifPage.locator(".notifhist").count()) ? await notifPage.locator(".notifhist").textContent() : "";
+  check("historique des notifications affiché (" + notifHistTxt.trim() + ")", notifHistTxt.includes("🔔"));
+  check("une seule entrée dans l'historique (pas de doublon)", (await notifPage.locator(".notifhistline").count()) === 1);
   await notifContext.close();
 
   // Mouvement réduit : aucune animation de confettis ne doit être créée
