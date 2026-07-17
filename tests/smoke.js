@@ -70,6 +70,24 @@ const { APP_URL, launch, check, done } = require("./helpers");
   check("hauts faits verrouillés grisés", (await page.locator(".feat:not(.on)").count()) >= 1);
   check("répartition des tâches affichée", (await page.locator(".splitline").count()) >= 1);
 
+  // Carte partageable du mur des trophées : repli téléchargement (API de partage absente par défaut)
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.locator("#shareTrophyBtn").click(),
+  ]);
+  check("carte du mur des trophées téléchargée (" + download.suggestedFilename() + ")", download.suggestedFilename().startsWith("rangement-trophees-"));
+
+  // Repli sur l'API de partage native du téléphone quand disponible
+  await page.evaluate(() => {
+    window.__shareCalled = null;
+    navigator.canShare = () => true;
+    navigator.share = async (data) => { window.__shareCalled = { title: data.title, nFiles: data.files ? data.files.length : 0 }; };
+  });
+  await page.locator("#shareTrophyBtn").click();
+  await page.waitForFunction(() => window.__shareCalled !== null, { timeout: 3000 });
+  const shareCall = await page.evaluate(() => window.__shareCalled);
+  check("partage natif utilisé quand disponible", shareCall && shareCall.nFiles === 1);
+
   // Vue tableau accessible du graphique XP (bascule)
   await page.locator("#chartViewToggle").click();
   check("bascule vers la vue tableau", (await page.locator("table.datatable").count()) === 1);
@@ -201,6 +219,9 @@ const { APP_URL, launch, check, done } = require("./helpers");
   await page.evaluate(() => document.getElementById("suggestToggle").click());
   await page.waitForTimeout(100);
   check("suggestion désactivée stockée", (await page.evaluate(() => localStorage.getItem("rangement-suggest"))) === "off");
+  check("interrupteur récap présent et activé par défaut", await page.locator("#recapToggle").isChecked());
+  await page.evaluate(() => document.getElementById("recapToggle").click());
+  check("récap désactivé stocké", (await page.evaluate(() => localStorage.getItem("rangement-recap"))) === "off");
   await page.locator('[data-tab="quetes"]').click();
   check("plus de badge suggéré une fois désactivé", (await page.locator(".quest.suggested").count()) === 0);
   await page.reload();
@@ -218,6 +239,7 @@ const { APP_URL, launch, check, done } = require("./helpers");
   await evPage.addInitScript(() => {
     localStorage.setItem("rangement-onboard-v1", "1");
     localStorage.setItem("rangement-evening-hour", "0");
+    localStorage.setItem("rangement-recap", "off"); // déterminisme : indépendant du jour/heure réels
   });
   await evPage.goto(APP_URL);
   await evPage.waitForSelector(".quest");
@@ -235,6 +257,17 @@ const { APP_URL, launch, check, done } = require("./helpers");
   await evPage.evaluate(() => document.getElementById("eveningToggle").click());
   await evPage.locator('[data-tab="quetes"]').click();
   check("rappel désactivable dans Réglages", (await evPage.locator(".evremind").count()) === 0);
+
+  // Récap hebdo : indépendant du jour/heure réels, on invoque directement les fonctions exposées
+  check("récap désactivé -> shouldShowWeeklyRecap() false", (await evPage.evaluate(() => {
+    localStorage.setItem("rangement-recap", "off");
+    return shouldShowWeeklyRecap();
+  })) === false);
+  await evPage.evaluate(() => { localStorage.removeItem("rangement-recap-dismiss"); weeklyRecapModal(); });
+  const recapText = (await evPage.locator(".sysbox").count()) ? await evPage.locator(".sysbox").textContent() : "";
+  check("récap hebdo affiche les XP et le leader", recapText.includes("RÉCAP DE LA SEMAINE") && recapText.includes("XP"));
+  await evPage.locator("#veilOk").click();
+  check("récap masqué pour la semaine après fermeture", (await evPage.evaluate(() => recapDismissedThisWeek())) === true);
   await evContext.close();
 
   // Mouvement réduit : aucune animation de confettis ne doit être créée

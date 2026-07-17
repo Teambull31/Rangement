@@ -144,8 +144,29 @@ place, un rappel honnête, actif uniquement quand l'appli est ouverte.
   dans un contexte dédié (affichage, masquage via « Plus tard », persistance du
   masquage le même jour, réapparition le lendemain, désactivation).
 
+## Itération 9 — 2026-07-17 (à la demande)
+
+**Audit** : deux pistes en attente ne nécessitaient pas de nouvelle table
+Supabase — priorité sur le mode saison (structurel, migration nécessaire, écarté
+cette fois pour rester sur du terrain sûr).
+
+**Améliorations livrées :**
+- 📋 **Récap hebdo du dimanche soir** : une fenêtre système s'affiche une fois,
+  le dimanche à partir de 18 h, résumant l'XP et les quêtes de chacun cette
+  semaine, le leader, et un rappel de l'enjeu en cours s'il y en a un.
+  Activable/désactivable dans Réglages (propre à l'appareil).
+- 📤 **Carte partageable du mur des trophées** : bouton « Partager » dans Duel
+  qui génère une image (canvas, 1080×1350, aux couleurs du thème actif) avec
+  niveaux, rangs et trophées des deux chasseurs. Utilise le partage natif du
+  téléphone (`navigator.share`) quand disponible, sinon téléchargement direct.
+- ✅ Tests : 65 assertions — récap hebdo testé via invocation directe des
+  fonctions exposées (indépendant du jour/heure réels de la machine de test,
+  pour éviter toute fragilité un vrai dimanche soir), export image testé sur
+  les deux chemins (partage natif simulé et repli téléchargement).
+
 **Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
-- Mode saison : remise à zéro rituelle avec palmarès archivé.
-- Widget récapitulatif hebdo le dimanche soir (dans l'appli).
-- Export du mur des trophées / répartition en image partageable.
+- Mode saison : remise à zéro rituelle avec palmarès archivé (nécessite une
+  nouvelle table Supabase `seasons` — à proposer clairement avant d'y toucher).
 - Vraies notifications push si un jour une petite fonction serveur est ajoutée.
+- Export/partage de la carte de duel de la semaine (pas seulement les trophées).
+- Filtrer/rechercher dans le Journal (l'historique s'allonge avec le temps).
