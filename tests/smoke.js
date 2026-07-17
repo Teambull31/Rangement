@@ -427,6 +427,11 @@ const { APP_URL, launch, check, done } = require("./helpers");
   check("stuff de Frieren progresse avec le niveau (" + gearStars + " palier(s))", gearStars >= 1);
   check("haut fait « Âme liée » après incarnation",
     await heroPage.evaluate(() => unlockedFeats("p1").some(f => f.id === "soul")));
+  const [heroDl] = await Promise.all([
+    heroPage.waitForEvent("download"),
+    heroPage.locator("#shareHeroBtn").click(),
+  ]);
+  check("carte de héros téléchargée (" + heroDl.suggestedFilename() + ")", heroDl.suggestedFilename().startsWith("rangement-heros-"));
   await heroPage.reload();
   await heroPage.waitForSelector(".hunter");
   check("héros conservé après rechargement", (await heroPage.locator(".hunter").first().locator(".charline").count()) === 1);
@@ -454,10 +459,18 @@ const { APP_URL, launch, check, done } = require("./helpers");
   });
   await unlockPage.reload();
   await unlockPage.waitForSelector(".quest");
+  const preLen = await unlockPage.evaluate(() => S.log.length);
+  check("état injecté conservé après rechargement (" + preLen + " entrées)", preLen === 2);
   await unlockPage.locator(".quest").first().locator('[data-p="p1"]').click();
   await unlockPage.waitForTimeout(300);
   const unlockModal = (await unlockPage.locator(".sysbox").count()) ? await unlockPage.locator(".sysbox").textContent() : "";
   check("« HÉROS DÉBLOQUÉ » prioritaire sur la montée de niveau (" + unlockModal.replace(/\s+/g, " ").slice(0, 60) + ")", unlockModal.includes("HÉROS DÉBLOQUÉ") && unlockModal.includes("Usopp"));
+  check("bouton « Incarner » présent dans la modale", (await unlockPage.locator("#veilExtra").count()) === 1);
+  await unlockPage.locator("#veilExtra").click();
+  await unlockPage.waitForTimeout(250);
+  check("héros incarné en un geste depuis la modale",
+    (await unlockPage.evaluate(() => S.players[0].characterId)) === "usopp"
+    && (await unlockPage.locator(".hunter").first().locator(".charline").textContent()).includes("Usopp"));
   await unlockContext.close();
 
   // Mouvement réduit : aucune animation de confettis ne doit être créée

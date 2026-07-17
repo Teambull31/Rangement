@@ -279,6 +279,30 @@ désigner d'objectif immédiat (piste « presque débloqués » de l'it. 13).
   Prochaine recrue = Sein sur compte frais, panneau absent quand tout est
   débloqué.
 
+## Itération 15 — 2026-07-18 (demande utilisateur : « nouvelle itération »)
+
+**Audit** : la modale « HÉROS DÉBLOQUÉ » célébrait puis renvoyait vers l'onglet
+Héros pour incarner (friction au moment le plus fort émotionnellement) ; le
+héros incarné n'avait pas de carte partageable alors que trophées et duel en
+ont une.
+
+**Améliorations livrées :**
+- ⚡ **Incarner en un geste** : la modale de déblocage propose directement
+  « Incarner 🎴 » (en plus de Continuer). `sysModal` accepte désormais un
+  bouton d'action optionnel ; la logique d'incarnation est factorisée
+  (`equipChar`) avec le bouton de la collection.
+- 📤 **Carte de héros partageable** (canvas 1080×1350, comme trophées/duel) :
+  emblème, nom, rareté (couleur du cadre), univers, paliers de stuff, « incarné
+  par X — rang · niveau ». Bouton « 📤 Partager » sur le panneau Héros incarné ;
+  partage natif ou téléchargement PNG.
+- ✅ Tests : 108 assertions (+5) — bouton Incarner dans la modale, incarnation
+  effective en un geste, téléchargement de la carte de héros. Un flake de
+  contention CPU (tests lancés en parallèle des captures d'écran) a fait
+  échouer le scénario de déblocage une fois : reproduction isolée 3/3 OK,
+  assertion diagnostique ajoutée (« état injecté conservé après
+  rechargement »), et règle retenue — ne plus rien exécuter en parallèle de
+  la suite.
+
 **Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
 - Ambiguïté à clarifier avec l'utilisateur : « gachiacuta dans macchi » —
   Dandadan ? (à ajouter dès confirmation, la structure roster le permet en

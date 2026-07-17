@@ -868,6 +868,13 @@ function gearTier(ch, st) {
 function charOf(p) {
   return p && p.characterId ? CHARACTERS.find(c => c.id === p.characterId) || null : null;
 }
+function equipChar(p, c) {
+  p.characterId = c.id;
+  p.emoji = c.emoji;
+  save(); queueOp({ table: "players", type: "upsert", row: toRow.players(p) });
+  render(); toast(`${c.emoji} ${p.name} incarne ${c.name} !`);
+  try { if (navigator.vibrate) navigator.vibrate(35); } catch (e) {}
+}
 
 function objProgress(o) {
   const f = l => l.ts >= o.createdAt;
@@ -1380,7 +1387,10 @@ function vHeros() {
   return `
   ${switcher}
   <section class="panel">
-    <h2>Héros incarné <small>— ${esc(p.name)}</small></h2>
+    <div class="panelhead">
+      <h2 style="margin-bottom:0">Héros incarné <small>— ${esc(p.name)}</small></h2>
+      ${cur ? '<button class="linkbtn" id="shareHeroBtn">📤 Partager</button>' : ""}
+    </div>
     ${curHtml}
     ${cur ? `<button class="undo" style="margin-top:10px" id="unequipBtn">Reprendre son emoji personnel</button>` : ""}
   </section>
@@ -1811,6 +1821,57 @@ function buildDuelCard() {
   return canvas;
 }
 
+function buildHeroCard(p) {
+  const ch = charOf(p);
+  const c = cardColors();
+  const { panel, gold, ink, inkDim } = c;
+  const rcol = RARITIES[ch.rarity].col;
+  const st = charStats(p.id);
+  const tier = gearTier(ch, st);
+  const li = levelInfo(totalXp(p.id));
+  const rk = rankOf(li.lvl);
+
+  const W = 1080, H = 1350;
+  const { canvas, ctx } = cardCanvas(W, H, c);
+  cardHeader(ctx, W, c, "Carte de héros");
+
+  ctx.fillStyle = panel;
+  ctx.strokeStyle = rcol;
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.roundRect(W / 2 - 350, 320, 700, 660, 24);
+  ctx.fill(); ctx.stroke();
+
+  ctx.font = "900 170px system-ui, sans-serif";
+  ctx.fillStyle = ink;
+  ctx.fillText(ch.emoji, W / 2, 530);
+  ctx.fillStyle = rcol;
+  ctx.font = "900 64px system-ui, sans-serif";
+  ctx.fillText(ch.name, W / 2, 640);
+  ctx.font = "700 34px system-ui, sans-serif";
+  ctx.fillText("Rareté " + ch.rarity, W / 2, 695);
+  ctx.fillStyle = inkDim;
+  ctx.font = "500 30px system-ui, sans-serif";
+  ctx.fillText(ch.univers, W / 2, 740);
+
+  ctx.fillStyle = gold;
+  ctx.font = "700 44px system-ui, sans-serif";
+  ctx.fillText("⭐".repeat(tier) + "☆".repeat(3 - tier), W / 2, 815);
+  ctx.fillStyle = tier ? ink : inkDim;
+  ctx.font = "500 30px system-ui, sans-serif";
+  ctx.fillText(tier ? ch.gear[tier - 1] : "Équipement à forger", W / 2, 862);
+
+  ctx.fillStyle = inkDim;
+  ctx.font = "500 28px system-ui, sans-serif";
+  ctx.fillText("incarné par", W / 2, 915);
+  ctx.fillStyle = p.color || c.sys;
+  ctx.font = "700 40px system-ui, sans-serif";
+  ctx.fillText(p.name + " — " + rk.r + " · niv. " + li.lvl, W / 2, 960);
+
+  cardFooter(ctx, W, c, 1090);
+  return canvas;
+}
+
 function shareCanvasCard(canvas, filenamePrefix, shareTitle, shareText) {
   canvas.toBlob(async blob => {
     if (!blob) { toast("Export impossible"); return; }
@@ -1837,17 +1898,26 @@ function shareTrophyCard() {
 function shareDuelCard() {
   shareCanvasCard(buildDuelCard(), "rangement-duel", "Rangement — Duel de la semaine", "Qui va gagner cette semaine ? ⚔️🔥");
 }
+function shareHeroCard(p) {
+  const ch = charOf(p);
+  if (!ch) return;
+  shareCanvasCard(buildHeroCard(p), "rangement-heros", "Rangement — Carte de héros", `${p.name} incarne ${ch.name} ! 🎴`);
+}
 
-function sysModal(html, onClose) {
+function sysModal(html, onClose, extra) {
   $("#modal").innerHTML = `
   <div class="veil" id="veil">
     <div class="sysbox" role="alertdialog" aria-modal="true">
       <div class="bang">Notification</div>
       ${html}
-      <button class="btn" id="veilOk">Continuer</button>
+      <div class="frow" style="justify-content:center">
+        ${extra ? `<button class="btn" id="veilExtra">${extra.label}</button>` : ""}
+        <button class="btn ${extra ? "ghost" : ""}" id="veilOk">Continuer</button>
+      </div>
     </div>
   </div>`;
   $("#veilOk").onclick = () => { $("#modal").innerHTML = ""; if (onClose) onClose(); };
+  if (extra) $("#veilExtra").onclick = () => { $("#modal").innerHTML = ""; extra.onclick(); };
 }
 
 function doTask(taskId, playerId) {
@@ -1881,7 +1951,9 @@ function doTask(taskId, playerId) {
     chime("level");
     sysModal(`
       <div class="big gold">HÉROS DÉBLOQUÉ</div>
-      <div class="sub"><span style="font-size:40px">${newChar.emoji}</span><br><b>${esc(newChar.name)}</b> (${esc(newChar.univers)}) rejoint la collection de <b>${esc(p.name)}</b> !<br>Rendez-vous dans l'onglet <b>Héros</b> pour l'incarner 🎴</div>`);
+      <div class="sub"><span style="font-size:40px">${newChar.emoji}</span><br><b>${esc(newChar.name)}</b> (${esc(newChar.univers)}) rejoint la collection de <b>${esc(p.name)}</b> !</div>`,
+      null,
+      { label: "Incarner 🎴", onclick: () => equipChar(p, newChar) });
   } else if (after > before) {
     chime("level");
     const rk = rankOf(after);
@@ -1924,12 +1996,13 @@ function bindView() {
       const c = CHARACTERS.find(x => x.id === b.dataset.equip);
       if (!p || !c) return;
       if (!unlockedCharIds(p.id).includes(c.id)) { toast("Héros pas encore débloqué"); return; }
-      p.characterId = c.id;
-      p.emoji = c.emoji;
-      save(); queueOp({ table: "players", type: "upsert", row: toRow.players(p) });
-      render(); toast(`${c.emoji} ${p.name} incarne ${c.name} !`);
-      try { if (navigator.vibrate) navigator.vibrate(35); } catch (e) {}
+      equipChar(p, c);
     });
+  const shareHeroBtn = $("#shareHeroBtn");
+  if (shareHeroBtn) shareHeroBtn.onclick = () => {
+    const p = S.players.find(x => x.id === herosView);
+    if (p && charOf(p)) shareHeroCard(p);
+  };
   const unequipBtn = $("#unequipBtn");
   if (unequipBtn) unequipBtn.onclick = () => {
     const p = S.players.find(x => x.id === herosView);
