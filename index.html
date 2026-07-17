@@ -33,6 +33,9 @@
     --ok: #5CE0A5;
     --ink: #D9E7F7;
     --ink-dim: #8AA3C2;
+    --field: #0A1120;
+    --navbg: rgba(8,13,24,.92);
+    --logo-top: #EAF6FF;
     --display: 'Orbitron', 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
     --body: 'Rajdhani', 'Segoe UI', system-ui, sans-serif;
   }
@@ -77,7 +80,7 @@
     letter-spacing: .18em;
     text-transform: uppercase;
     margin-top: 8px;
-    background: linear-gradient(180deg, #EAF6FF 30%, var(--sys) 90%);
+    background: linear-gradient(180deg, var(--logo-top) 30%, var(--sys) 90%);
     -webkit-background-clip: text; background-clip: text;
     -webkit-text-fill-color: transparent;
     text-wrap: balance;
@@ -114,7 +117,7 @@
   }
   .rank.s { color: var(--gold); text-shadow: 0 0 12px rgba(240,197,80,.55); }
   .lvl { font-family: var(--display); font-size: 12px; font-weight: 700; color: var(--sys); letter-spacing: .1em; }
-  .xpbar { height: 7px; background: #0A1120; border: 1px solid var(--line); border-radius: 99px; margin-top: 9px; overflow: hidden; }
+  .xpbar { height: 7px; background: var(--field); border: 1px solid var(--line); border-radius: 99px; margin-top: 9px; overflow: hidden; }
   .xpbar > i {
     display: block; height: 100%;
     background: linear-gradient(90deg, var(--sys-dim), var(--sys));
@@ -128,7 +131,7 @@
   /* ---------- Tabs ---------- */
   nav {
     position: fixed; bottom: 0; left: 0; right: 0; z-index: 40;
-    background: rgba(8,13,24,.92);
+    background: var(--navbg);
     backdrop-filter: blur(10px);
     border-top: 1px solid var(--line);
     padding-bottom: env(safe-area-inset-bottom);
@@ -201,7 +204,7 @@
     font-family: var(--display); font-weight: 900; color: var(--crit);
     font-size: 15px; letter-spacing: .1em;
   }
-  .duelbar { display: flex; height: 14px; border-radius: 99px; overflow: hidden; border: 1px solid var(--line); background: #0A1120; }
+  .duelbar { display: flex; height: 14px; border-radius: 99px; overflow: hidden; border: 1px solid var(--line); background: var(--field); }
   .duelbar .a { background: linear-gradient(90deg, var(--sys-dim), var(--sys)); transition: width .5s; }
   .duelbar .b { background: linear-gradient(90deg, var(--mana), #6455D6); transition: width .5s; }
   .statgrid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 6px 14px; font-variant-numeric: tabular-nums; }
@@ -242,7 +245,7 @@
   .switch { position: relative; display: inline-block; width: 42px; height: 24px; flex: 0 0 auto; }
   .switch input { opacity: 0; width: 0; height: 0; }
   .switch span {
-    position: absolute; inset: 0; background: #0A1120; border: 1px solid var(--line);
+    position: absolute; inset: 0; background: var(--field); border: 1px solid var(--line);
     border-radius: 99px; transition: background .15s, border-color .15s;
   }
   .switch span::before {
@@ -264,7 +267,7 @@
   .betline.hot { border: 1px solid var(--gold); border-radius: 3px; padding: 10px 12px; background: rgba(240,197,80,.07); }
   .splitline { display: flex; align-items: center; gap: 9px; padding: 7px 0 4px; font-size: 14.5px; }
   .splitcounts { font-family: var(--display); font-size: 12px; font-weight: 700; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
-  .splitbar { display: flex; height: 5px; border-radius: 99px; overflow: hidden; background: #0A1120; margin-bottom: 9px; }
+  .splitbar { display: flex; height: 5px; border-radius: 99px; overflow: hidden; background: var(--field); margin-bottom: 9px; }
   .splitbar i { display: block; height: 100%; }
   .panelhead { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
   .linkbtn {
@@ -338,7 +341,7 @@
   .obj { border: 1px solid var(--line); border-radius: 3px; background: var(--panel-2); padding: 12px; margin-bottom: 10px; }
   .obj .oname { font-weight: 700; font-size: 16.5px; }
   .obj .oreward { font-size: 14px; color: var(--gold); margin-top: 1px; }
-  .obj .obar { height: 9px; background: #0A1120; border: 1px solid var(--line); border-radius: 99px; overflow: hidden; margin-top: 9px; }
+  .obj .obar { height: 9px; background: var(--field); border: 1px solid var(--line); border-radius: 99px; overflow: hidden; margin-top: 9px; }
   .obj .obar i { display: block; height: 100%; background: linear-gradient(90deg, var(--mana), var(--sys)); border-radius: 99px; transition: width .5s; }
   .obj .onums { display: flex; justify-content: space-between; font-size: 13px; color: var(--ink-dim); margin-top: 5px; font-variant-numeric: tabular-nums; }
   .obj.done { border-color: var(--gold); }
@@ -363,7 +366,7 @@
   .frow { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
   .frow > * { flex: 1; }
   input[type=text], input[type=number], select {
-    background: #0A1120; border: 1px solid var(--line); color: var(--ink);
+    background: var(--field); border: 1px solid var(--line); color: var(--ink);
     border-radius: 3px; padding: 9px 10px; font-size: 16px; min-width: 0;
   }
   .btn {
@@ -1529,7 +1532,7 @@ function vReglages() {
     <div class="frow">
       <input type="text" data-pemoji="${p.id}" value="${esc(p.emoji)}" maxlength="4" style="flex:0 0 64px" aria-label="Emoji">
       <input type="text" data-pname="${p.id}" value="${esc(p.name)}" maxlength="20" aria-label="Nom">
-      <input type="color" data-pcolor="${p.id}" value="${esc(p.color || "#4DC3FF")}" style="flex:0 0 52px;height:44px;padding:2px;background:#0A1120;border:1px solid var(--line);border-radius:3px" aria-label="Couleur">
+      <input type="color" data-pcolor="${p.id}" value="${esc(p.color || "#4DC3FF")}" style="flex:0 0 52px;height:44px;padding:2px;background:var(--field);border:1px solid var(--line);border-radius:3px" aria-label="Couleur">
     </div>`).join("")}
     <button class="btn" id="savePlayers">Enregistrer</button>
     <p class="hint" style="margin-top:6px">La couleur personnalise ta carte, tes boutons de quête et la barre de duel — elle se synchronise sur les deux téléphones.</p>
@@ -1683,8 +1686,8 @@ function cardColors() {
   const cs = getComputedStyle(document.documentElement);
   const col = (name, fallback) => (cs.getPropertyValue(name).trim() || fallback);
   return {
-    abyss: "#060A13", panel: col("--panel", "#0C1526"), line: col("--line", "#1C3252"),
-    sys: col("--sys", "#4DC3FF"), gold: "#F0C550", ink: col("--ink", "#D9E7F7"), inkDim: col("--ink-dim", "#8AA3C2"),
+    abyss: col("--abyss", "#060A13"), panel: col("--panel", "#0C1526"), line: col("--line", "#1C3252"),
+    sys: col("--sys", "#4DC3FF"), gold: col("--gold", "#F0C550"), ink: col("--ink", "#D9E7F7"), inkDim: col("--ink-dim", "#8AA3C2"),
   };
 }
 function cardCanvas(W, H, c) {
@@ -2277,6 +2280,10 @@ const THEMES = {
   monarque: { label: "Monarque", sys: "#8B7BFF", sysDim: "#5E50C4", glow: "#4A3F9E", mana: "#4DC3FF" },
   braise:   { label: "Braise",   sys: "#FF8A5C", sysDim: "#C05A32", glow: "#8F3A2B", mana: "#F0C550" },
   guilde:   { label: "Guilde",   sys: "#5CE0A5", sysDim: "#2FA372", glow: "#22684D", mana: "#4DC3FF" },
+  aube:     { label: "Aube",     sys: "#0E7AC0", sysDim: "#0A5A8F", glow: "#9FC2E4", mana: "#6D5BD0",
+              light: { abyss: "#EAF0F9", panel: "#FFFFFF", panel2: "#F4F8FE", line: "#C9D8EE", ink: "#16263F", inkDim: "#54688A", field: "#FFFFFF",
+                       gold: "#9C7C0C", ok: "#1F8F5F", crit: "#CC3344", high: "#C2601A",
+                       navbg: "rgba(255,255,255,.92)", logoTop: "#33475F" } },
 };
 function curTheme() { return localStorage.getItem("rangement-theme") || "systeme"; }
 function applyTheme(id) {
@@ -2286,6 +2293,17 @@ function applyTheme(id) {
   r.setProperty("--sys-dim", t.sysDim);
   r.setProperty("--line-glow", t.glow);
   r.setProperty("--mana", t.mana);
+  // Thème clair : bascule du fond, des panneaux et des encres (sinon retour aux défauts sombres)
+  const L = t.light;
+  const vars = { "--abyss": "abyss", "--panel": "panel", "--panel-2": "panel2", "--line": "line", "--ink": "ink", "--ink-dim": "inkDim", "--field": "field",
+                 "--gold": "gold", "--ok": "ok", "--crit": "crit", "--high": "high",
+                 "--navbg": "navbg", "--logo-top": "logoTop" };
+  for (const [cssVar, key] of Object.entries(vars)) {
+    if (L && L[key]) r.setProperty(cssVar, L[key]); else r.removeProperty(cssVar);
+  }
+  r.colorScheme = L ? "light" : "dark";
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = L ? L.abyss : "#060A13";
   localStorage.setItem("rangement-theme", id);
 }
 
@@ -2304,7 +2322,7 @@ function onboarding() {
       <div class="frow" style="margin-top:10px">
         <input type="text" data-ob-emoji="${p.id}" value="${esc(p.emoji)}" maxlength="4" style="flex:0 0 56px" aria-label="Emoji">
         <input type="text" data-ob-name="${p.id}" value="${esc(p.name)}" maxlength="20" aria-label="Nom">
-        <input type="color" data-ob-color="${p.id}" value="${esc(p.color || "#4DC3FF")}" style="flex:0 0 46px;height:42px;padding:2px;background:#0A1120;border:1px solid var(--line);border-radius:3px" aria-label="Couleur">
+        <input type="color" data-ob-color="${p.id}" value="${esc(p.color || "#4DC3FF")}" style="flex:0 0 46px;height:42px;padding:2px;background:var(--field);border:1px solid var(--line);border-radius:3px" aria-label="Couleur">
       </div>`).join("")}`;
     return `
       <div class="big gold">LA CHASSE</div>

@@ -303,6 +303,26 @@ ont une.
   rechargement »), et règle retenue — ne plus rien exécuter en parallèle de
   la suite.
 
+## Itération 16 — 2026-07-18 (matin)
+
+**Audit** : les 4 thèmes ne variaient que les accents — fond sombre imposé,
+pénible en plein soleil et pas au goût de tout le monde (personnalisation
+incomplète). Import/export déjà en place, rien à faire là.
+
+**Améliorations livrées :**
+- 🌅 **Thème clair « Aube »** (5ᵉ thème) : palette complète — fond, panneaux,
+  encres, champs, doré/vert/rouge/orange assombris pour rester lisibles sur
+  blanc, barre d'onglets claire, dégradé du titre adapté, `color-scheme`
+  (contrôles natifs clairs) et meta `theme-color` dynamique (barre du
+  navigateur assortie). Toujours propre à chaque téléphone.
+- 🧹 Préalable technique : toutes les couleurs codées en dur variabilisées
+  (`--field` pour les champs/jauges, `--navbg`, `--logo-top`), et les cartes
+  canvas partagées lisent désormais `--gold`/`--abyss` — elles suivent donc
+  aussi le thème clair.
+- ✅ Tests : 112 assertions (+4) — fond clair appliqué, meta theme-color,
+  persistance après rechargement, retour propre au sombre. Validation
+  visuelle sur Quêtes/Duel/Réglages.
+
 **Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
 - Ambiguïté à clarifier avec l'utilisateur : « gachiacuta dans macchi » —
   Dandadan ? (à ajouter dès confirmation, la structure roster le permet en

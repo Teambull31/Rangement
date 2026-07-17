@@ -214,6 +214,24 @@ const { APP_URL, launch, check, done } = require("./helpers");
   const sysVar2 = (await page.evaluate(() => document.documentElement.style.getPropertyValue("--sys"))).trim().toLowerCase();
   check("thème conservé après rechargement", sysVar2 === "#8b7bff");
 
+  // Thème clair « Aube » : fond, meta theme-color, persistance, retour au sombre
+  await page.locator('[data-tab="reglages"]').click();
+  await page.locator('[data-theme="aube"]').click();
+  await page.waitForTimeout(150);
+  const bodyBg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  check("thème clair Aube : fond clair (" + bodyBg + ")", bodyBg === "rgb(234, 240, 249)");
+  check("thème clair : meta theme-color suit",
+    (await page.evaluate(() => document.querySelector('meta[name="theme-color"]').content)) === "#EAF0F9");
+  await page.reload();
+  await page.waitForSelector(".hunter");
+  check("thème clair conservé après rechargement",
+    (await page.evaluate(() => getComputedStyle(document.body).backgroundColor)) === "rgb(234, 240, 249)");
+  await page.locator('[data-tab="reglages"]').click();
+  await page.locator('[data-theme="monarque"]').click();
+  await page.waitForTimeout(150);
+  check("retour au thème sombre : fond restauré",
+    (await page.evaluate(() => getComputedStyle(document.body).backgroundColor)) === "rgb(6, 10, 19)");
+
   // Mur des trophées : vide cette semaine, puis rempli avec une semaine passée injectée
   await page.locator('[data-tab="duel"]').click();
   check("mur des trophées en attente (semaine en cours)", (await page.locator(".trophyline").count()) === 0);
