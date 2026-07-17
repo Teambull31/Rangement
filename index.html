@@ -373,7 +373,9 @@
   }
   .btn.ghost { background: none; color: var(--ink-dim); border-color: var(--line); }
   .btn.danger { color: var(--crit); border-color: #5A2430; background: rgba(255,92,110,.08); }
-  .mgline { display: flex; align-items: center; gap: 9px; padding: 7px 0; border-bottom: 1px dashed var(--line); }
+  .mgline { display: flex; align-items: center; gap: 6px; padding: 7px 0; border-bottom: 1px dashed var(--line); }
+  .mgline select { padding-left: 6px; padding-right: 4px; }
+  .mgline input[data-ticon] { text-align: center; padding-left: 4px; padding-right: 4px; }
   .mgline:last-child { border-bottom: none; }
   .mgline .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .x { background: none; border: none; color: var(--crit); font-size: 17px; padding: 2px 6px; }
@@ -835,6 +837,20 @@ function condProgress(cond, st) {
 function unlockedCharIds(pid) {
   const st = charStats(pid);
   return CHARACTERS.filter(c => condMet(c.cond, st)).map(c => c.id);
+}
+// Héros verrouillé le plus proche du déblocage (moyenne des ratios critère par critère)
+function nextHeroFor(pid) {
+  const st = charStats(pid);
+  const locked = CHARACTERS.filter(c => !condMet(c.cond, st));
+  if (!locked.length) return null;
+  const score = c => {
+    let s = 0, n = 0;
+    for (const k of ["lvl", "count", "streak", "trophies"]) {
+      if (c.cond[k]) { s += Math.min(st[k] / c.cond[k], 1); n++; }
+    }
+    return s / n;
+  };
+  return locked.reduce((a, b) => (score(b) > score(a) ? b : a));
 }
 // Stuff : 3 paliers par héros, seuils dérivés de la rareté (progression après le déblocage)
 const GEAR_STEPS = {
@@ -1312,6 +1328,7 @@ function vHeros() {
   const st = charStats(p.id);
   const unlocked = new Set(unlockedCharIds(p.id));
   const cur = charOf(p);
+  const nxt = nextHeroFor(p.id);
 
   const switcher = `
   <div class="filterrow" style="margin-bottom:12px">
@@ -1367,6 +1384,18 @@ function vHeros() {
     ${curHtml}
     ${cur ? `<button class="undo" style="margin-top:10px" id="unequipBtn">Reprendre son emoji personnel</button>` : ""}
   </section>
+  ${nxt ? `
+  <section class="panel">
+    <h2>Prochaine recrue</h2>
+    <div class="curchar" style="--rcol:${RARITIES[nxt.rarity].col}">
+      <span class="curchar-emoji">${nxt.emoji}</span>
+      <div class="grow">
+        <div class="curchar-name">${esc(nxt.name)} <span class="rarity" style="--rcol:${RARITIES[nxt.rarity].col}">${nxt.rarity}</span></div>
+        <div class="hint">${esc(nxt.univers)}</div>
+        <div class="charcard-cond" style="margin-top:4px">${condProgress(nxt.cond, st)}</div>
+      </div>
+    </div>
+  </section>` : ""}
   <section class="panel">
     <h2>Collection <small>— ${unlocked.size}/${CHARACTERS.length} débloqués</small></h2>
     <p class="hint">Plus un héros est légendaire, plus il se mérite : niveaux, quêtes, séries et trophées. Son équipement progresse ensuite avec vous. Chaque héros est représenté par son emblème.</p>
@@ -1499,10 +1528,10 @@ function vReglages() {
     <h2>Tâches ménagères</h2>
     ${S.tasks.map(t => `
     <div class="mgline">
-      <span>${esc(t.icon)}</span>
-      <span class="grow">${esc(t.name)}</span>
-      <select data-tprio="${t.id}" style="flex:0 0 auto">
-        ${Object.entries(PRIOS).map(([k, v]) => `<option value="${k}" ${t.prio === k ? "selected" : ""}>${v.label} · ${v.xp}</option>`).join("")}
+      <input type="text" data-ticon="${t.id}" value="${esc(t.icon)}" maxlength="4" style="flex:0 0 44px" aria-label="Icône">
+      <input type="text" data-tname="${t.id}" value="${esc(t.name)}" maxlength="50" class="grow" style="min-width:0" aria-label="Nom de la tâche">
+      <select data-tprio="${t.id}" style="flex:0 0 auto" aria-label="Priorité">
+        ${Object.entries(PRIOS).map(([k, v]) => `<option value="${k}" ${t.prio === k ? "selected" : ""}>${v.label}</option>`).join("")}
       </select>
       <button class="x" data-deltask="${t.id}" aria-label="Supprimer">✕</button>
     </div>`).join("")}
@@ -2069,6 +2098,18 @@ function bindView() {
         save(); queueOp({ table: "tasks", type: "upsert", row: toRow.tasks(t) });
         render();
       }
+    });
+  document.querySelectorAll("[data-tname], [data-ticon]").forEach(inp =>
+    inp.onchange = () => {
+      const id = inp.dataset.tname || inp.dataset.ticon;
+      const isName = !!inp.dataset.tname;
+      const t = S.tasks.find(x => x.id === id);
+      if (!t) return;
+      const v = inp.value.trim();
+      if (!v) { inp.value = isName ? t.name : t.icon; return; }
+      if (isName) t.name = v; else t.icon = v;
+      save(); queueOp({ table: "tasks", type: "upsert", row: toRow.tasks(t) });
+      render();
     });
 
   // Apparence

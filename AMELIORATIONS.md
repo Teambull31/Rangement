@@ -260,6 +260,25 @@ pouvait pas être vidé (piste notée à l'it. 11).
 - ✅ Tests : 98 assertions (+5) — format de progression sur Luffy, hauts faits
   héros verrouillés/débloqués/Âme liée, vidage de l'historique.
 
+## Itération 14 — 2026-07-17 (nuit)
+
+**Audit** : les tâches ne pouvaient être que créées/supprimées — impossible de
+corriger une faute de frappe ou changer une icône sans tout refaire
+(personnalisation incomplète) ; l'onglet Héros listait la collection sans
+désigner d'objectif immédiat (piste « presque débloqués » de l'it. 13).
+
+**Améliorations livrées :**
+- 🎯 **« Prochaine recrue »** : l'onglet Héros met en avant le héros verrouillé
+  le plus proche du déblocage (moyenne des ratios critère par critère), avec
+  sa progression détaillée — un objectif clair à chaque visite. Disparaît
+  quand la collection est complète.
+- ✏️ **Tâches éditables en place** : nom et icône modifiables directement dans
+  Réglages (en plus de la priorité), synchronisés entre téléphones via le même
+  upsert que le reste. Valeur vide → restauration de l'ancienne.
+- ✅ Tests : 103 assertions (+5) — renommage/icône propagés à l'onglet Quêtes,
+  Prochaine recrue = Sein sur compte frais, panneau absent quand tout est
+  débloqué.
+
 **Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
 - Ambiguïté à clarifier avec l'utilisateur : « gachiacuta dans macchi » —
   Dandadan ? (à ajouter dès confirmation, la structure roster le permet en
@@ -268,5 +287,3 @@ pouvait pas être vidé (piste notée à l'it. 11).
   à proposer clairement avant d'y toucher).
 - Choix de l'heure du rappel de série indépendamment du rappel générique du soir.
 - Revoir la taille du fichier index.html (grossit à chaque itération).
-- Tri « presque débloqués » en tête de collection, ou barre de progression
-  globale de la collection (X/26) sur l'onglet Héros.

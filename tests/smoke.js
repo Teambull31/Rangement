@@ -188,6 +188,22 @@ const { APP_URL, launch, check, done } = require("./helpers");
   const borderColor = await page.locator(".hunter").nth(1).evaluate(el => el.style.borderTopColor);
   check("couleur personnalisée appliquée (" + borderColor + ")", borderColor.includes("255, 0, 0") || borderColor === "#ff0000");
 
+  // Tâches éditables en place : nom et icône
+  await page.locator('[data-tab="reglages"]').click();
+  const t0 = await page.evaluate(() => S.tasks[0].id);
+  await page.fill(`[data-tname="${t0}"]`, "Vitres du salon");
+  await page.locator(`[data-tname="${t0}"]`).evaluate(el => el.blur());
+  await page.waitForTimeout(200);
+  check("tâche renommée depuis Réglages", (await page.evaluate(() => S.tasks[0].name)) === "Vitres du salon");
+  await page.fill(`[data-ticon="${t0}"]`, "🫧");
+  await page.locator(`[data-ticon="${t0}"]`).evaluate(el => el.blur());
+  await page.waitForTimeout(200);
+  check("icône de tâche modifiée", (await page.evaluate(() => S.tasks[0].icon)) === "🫧");
+  await page.locator('[data-tab="quetes"]').click();
+  const renamedQuest = page.locator(".quest", { hasText: "Vitres du salon" });
+  check("nouveau nom et icône visibles sur l'onglet Quêtes",
+    (await renamedQuest.count()) === 1 && (await renamedQuest.textContent()).includes("🫧"));
+
   // Thèmes : application + persistance
   await page.locator('[data-tab="reglages"]').click();
   await page.locator('[data-theme="monarque"]').click();
@@ -380,6 +396,8 @@ const { APP_URL, launch, check, done } = require("./helpers");
   check("progression visible sur les héros verrouillés (" + luffyCond.trim() + ")", luffyCond.includes("1/28") && luffyCond.includes("0/100"));
   check("hauts faits héros verrouillés sur un compte frais",
     await heroPage.evaluate(() => unlockedFeats("p1").every(f => !["hero1", "hero5", "heroH", "soul"].includes(f.id))));
+  const nextTxt = await heroPage.locator("section.panel", { hasText: "Prochaine recrue" }).textContent();
+  check("« Prochaine recrue » = Sein sur un compte frais (" + nextTxt.replace(/\s+/g, " ").trim().slice(0, 60) + ")", nextTxt.includes("Sein"));
 
   // Grosse progression injectée : 300 quêtes réparties sur 15 jours (niveau ~29, série 15, 2 trophées passés)
   await heroPage.evaluate(() => {
@@ -396,6 +414,8 @@ const { APP_URL, launch, check, done } = require("./helpers");
   check("gros grind -> collection complète débloquée (" + unlockedCount + "/" + totalChars + ")", unlockedCount === totalChars);
   check("hauts faits héros débloqués par le grind",
     await heroPage.evaluate(() => { const ids = new Set(unlockedFeats("p1").map(f => f.id)); return ids.has("hero1") && ids.has("hero5") && ids.has("heroH"); }));
+  check("plus de « Prochaine recrue » quand tout est débloqué",
+    (await heroPage.locator("section.panel", { hasText: "Prochaine recrue" }).count()) === 0);
 
   // Incarner Frieren : avatar + stuff
   await heroPage.locator('.charcard:has-text("Frieren") [data-equip]').click();
