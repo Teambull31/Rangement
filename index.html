@@ -879,6 +879,13 @@ function equipChar(p, c) {
   try { if (navigator.vibrate) navigator.vibrate(35); } catch (e) {}
 }
 
+// Rythme du duo : XP cumulés des 28 derniers jours, ramenés à la semaine
+function duoWeeklyPace() {
+  const cutoff = NOW() - 28 * 864e5;
+  const xp = S.log.filter(l => l.ts >= cutoff).reduce((a, l) => a + l.xp, 0);
+  return Math.round(xp / 4);
+}
+
 function objProgress(o) {
   const f = l => l.ts >= o.createdAt;
   return o.type === "xp"
@@ -1451,6 +1458,11 @@ function vObjectifs() {
   </section>
   <section class="panel">
     <h2>Nouveau défi</h2>
+    <div class="filterrow" style="margin-bottom:8px">
+      <button class="filterbtn" data-objpreset="sprint">⚡ Sprint 300 XP</button>
+      <button class="filterbtn" data-objpreset="quetes20">🗡️ 20 quêtes</button>
+      <button class="filterbtn" data-objpreset="grand">🏰 Grand ménage</button>
+    </div>
     <div class="frow"><input type="text" id="objName" placeholder="Nom du défi (ex : Opération appart nickel)" maxlength="60"></div>
     <div class="frow">
       <select id="objType">
@@ -1466,7 +1478,7 @@ function vObjectifs() {
       </select>
       <button class="btn" id="objAdd">Lancer le défi</button>
     </div>
-    <p class="hint">Le compteur démarre à la création du défi : chaque quête accomplie par l'un de vous deux le fait avancer.</p>
+    <p class="hint">Le compteur démarre à la création du défi : chaque quête accomplie par l'un de vous deux le fait avancer.${duoWeeklyPace() ? ` Votre rythme actuel : <b>~${duoWeeklyPace()} XP par semaine</b> à deux — de quoi calibrer la cible.` : ""}</p>
   </section>
   <section class="panel">
     <h2>Idées de récompenses</h2>
@@ -2043,6 +2055,19 @@ function bindView() {
     });
 
   // Objectifs
+  document.querySelectorAll("[data-objpreset]").forEach(b =>
+    b.onclick = () => {
+      const presets = {
+        sprint:   { name: "Sprint de la semaine", type: "xp",    target: 300 },
+        quetes20: { name: "20 quêtes à deux",     type: "count", target: 20 },
+        grand:    { name: "Grand ménage",         type: "xp",    target: 1000 },
+      };
+      const pr = presets[b.dataset.objpreset];
+      if (!pr) return;
+      $("#objName").value = pr.name;
+      $("#objType").value = pr.type;
+      $("#objTarget").value = pr.target;
+    });
   const objAdd = $("#objAdd");
   if (objAdd) objAdd.onclick = () => {
     const name = $("#objName").value.trim();

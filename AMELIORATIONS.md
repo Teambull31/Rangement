@@ -323,6 +323,21 @@ incomplète). Import/export déjà en place, rien à faire là.
   persistance après rechargement, retour propre au sombre. Validation
   visuelle sur Quêtes/Duel/Réglages.
 
+## Itération 17 — 2026-07-18 (midi)
+
+**Audit** : créer un défi commun partait d'une page blanche (nom + type +
+cible + récompense à inventer), et rien n'aidait à choisir une cible réaliste.
+
+**Améliorations livrées :**
+- ⚡ **Presets de défi en un tap** : « Sprint 300 XP », « 20 quêtes »,
+  « Grand ménage 1 000 XP » préremplissent le formulaire (nom, type, cible) —
+  il ne reste qu'à choisir la récompense et lancer.
+- 📈 **Rythme du duo affiché** : « Votre rythme actuel : ~N XP par semaine à
+  deux » (moyenne des 28 derniers jours) sous le formulaire, pour calibrer la
+  cible sans deviner.
+- ✅ Tests : 115 assertions (+3) — rythme affiché, préremplissage du preset,
+  défi préréglé effectivement lancé.
+
 **Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
 - Ambiguïté à clarifier avec l'utilisateur : « gachiacuta dans macchi » —
   Dandadan ? (à ajouter dès confirmation, la structure roster le permet en

@@ -142,6 +142,17 @@ const { APP_URL, launch, check, done } = require("./helpers");
   const wonTxt = (await page.locator(".wonline").count()) === 1 ? await page.locator(".wonline").textContent() : "";
   check("récompense gagnée listée (réelle, pas 🎲) : " + wonTxt.trim().split("\n")[0], wonTxt !== "" && !wonTxt.includes("🎲"));
 
+  // Presets de défi : un tap remplit le formulaire ; rythme hebdo affiché
+  check("rythme hebdo du duo affiché", (await page.locator('section.panel', { hasText: "Nouveau défi" }).textContent()).includes("XP par semaine"));
+  await page.locator('[data-objpreset="sprint"]').click();
+  check("preset Sprint : formulaire prérempli",
+    (await page.locator("#objName").inputValue()) === "Sprint de la semaine"
+    && (await page.locator("#objType").inputValue()) === "xp"
+    && (await page.locator("#objTarget").inputValue()) === "300");
+  await page.locator("#objAdd").click();
+  await page.waitForTimeout(200);
+  check("défi préréglé lancé", (await page.locator('.obj:has-text("Sprint de la semaine")').count()) === 1);
+
   // Journal + annulation
   await page.locator('[data-tab="journal"]').click();
   const before = await page.locator(".logline").count();
