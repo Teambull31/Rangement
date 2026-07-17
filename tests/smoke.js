@@ -141,6 +141,31 @@ const { APP_URL, launch, check, done } = require("./helpers");
   await page.waitForTimeout(200);
   check("annulation depuis le journal", (await page.locator(".logline").count()) === before - 1);
 
+  // Recherche et filtre du Journal (une entrée fraîche pour Chasseuse : l'undo précédent a pu vider les siennes)
+  await page.locator('[data-tab="quetes"]').click();
+  await page.locator(".quest").nth(2).locator('[data-p="p2"]').click();
+  if (await page.locator("#veilOk").count()) await page.locator("#veilOk").click();
+  await page.locator('[data-tab="journal"]').click();
+  const totalLines = await page.locator(".logline").count();
+  await page.fill("#journalSearch", "vitres");
+  await page.waitForTimeout(150);
+  const vitresLines = await page.locator(".logline").count();
+  check("recherche filtre le journal (" + vitresLines + "/" + totalLines + ")", vitresLines > 0 && vitresLines < totalLines);
+  check("chaque ligne visible contient bien « Vitres »", await page.locator(".logline").evaluateAll(
+    els => els.every(el => el.textContent.includes("Vitres"))));
+  await page.fill("#journalSearch", "zzz-introuvable");
+  await page.waitForTimeout(150);
+  check("aucun résultat -> message clair", (await page.locator(".logline").count()) === 0 && (await page.locator(".hint", { hasText: "Aucune entrée" }).count()) === 1);
+  await page.fill("#journalSearch", "");
+  await page.waitForTimeout(150);
+  await page.locator('[data-jf]', { hasText: "Chasseuse" }).click();
+  await page.waitForTimeout(150);
+  const p2Lines = await page.locator(".logline").count();
+  check("filtre par joueur (" + p2Lines + "/" + totalLines + ")", p2Lines > 0 && p2Lines < totalLines);
+  await page.locator('[data-jf="all"]').click();
+  await page.waitForTimeout(150);
+  check("filtre « Tous » restaure toutes les lignes", (await page.locator(".logline").count()) === totalLines);
+
   // Réglages : renommage + couleur, persistance après rechargement
   await page.locator('[data-tab="reglages"]').click();
   await page.fill('[data-pname="p1"]', "Max");
@@ -253,6 +278,20 @@ const { APP_URL, launch, check, done } = require("./helpers");
   await evPage.reload();
   await evPage.waitForSelector(".quest");
   check("rappel réapparaît une fois la dismission effacée", (await evPage.locator(".evremind").count()) === 1);
+
+  // Rappel conscient de la série (façon Duolingo) : une quête hier, rien aujourd'hui -> bandeau spécifique
+  // (mutation directe de S + save() : ce contexte n'a encore jamais écrit dans localStorage)
+  await evPage.evaluate(() => {
+    const y = new Date(); y.setDate(y.getDate() - 1); y.setHours(12, 0, 0, 0);
+    S.log.push({ id: "streak-risk", ts: y.getTime(), playerId: "p1", taskName: "Vaisselle / lave-vaisselle", icon: "🍽️", xp: 20, note: "" });
+    save();
+    localStorage.removeItem("rangement-evening-dismiss");
+  });
+  await evPage.reload();
+  await evPage.waitForSelector(".quest");
+  const streakBanner = (await evPage.locator(".evremind").count()) ? (await evPage.locator(".evremind").textContent()).trim() : "";
+  check("rappel conscient de la série (" + streakBanner + ")", streakBanner.includes("série de 1 jour"));
+
   await evPage.locator('[data-tab="reglages"]').click();
   await evPage.evaluate(() => document.getElementById("eveningToggle").click());
   await evPage.locator('[data-tab="quetes"]').click();
@@ -269,6 +308,39 @@ const { APP_URL, launch, check, done } = require("./helpers");
   await evPage.locator("#veilOk").click();
   check("récap masqué pour la semaine après fermeture", (await evPage.evaluate(() => recapDismissedThisWeek())) === true);
   await evContext.close();
+
+  // Notification navigateur (best-effort) : Notification API simulée pour un test déterministe
+  const notifContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const notifPage = await notifContext.newPage();
+  await notifPage.addInitScript(() => {
+    localStorage.setItem("rangement-onboard-v1", "1");
+    localStorage.setItem("rangement-recap", "off");
+    localStorage.setItem("rangement-evening-hour", "0");
+    window.__notifCalls = [];
+    class FakeNotification {
+      constructor(title, opts) { window.__notifCalls.push({ title, opts }); }
+    }
+    FakeNotification.requestPermission = () => Promise.resolve("granted");
+    FakeNotification.permission = "granted";
+    window.Notification = FakeNotification;
+  });
+  await notifPage.goto(APP_URL);
+  await notifPage.waitForSelector(".quest");
+  check("notifications signalées comme supportées (stub)", (await notifPage.evaluate(() => notifsSupported())) === true);
+  await notifPage.locator('[data-tab="reglages"]').click();
+  check("interrupteur notification présent, désactivé par défaut (opt-in)", (await notifPage.locator("#notifToggle").isChecked()) === false);
+  await notifPage.evaluate(() => document.getElementById("notifToggle").click());
+  await notifPage.waitForTimeout(150);
+  check("notifications activées après consentement", (await notifPage.evaluate(() => localStorage.getItem("rangement-notifs"))) === "on");
+  await notifPage.evaluate(() => maybeSendStreakNotification());
+  await notifPage.waitForTimeout(150);
+  const calls1 = await notifPage.evaluate(() => window.__notifCalls.length);
+  check("notification envoyée quand le rappel du soir est actif (" + calls1 + ")", calls1 === 1);
+  await notifPage.evaluate(() => maybeSendStreakNotification());
+  await notifPage.waitForTimeout(150);
+  const calls2 = await notifPage.evaluate(() => window.__notifCalls.length);
+  check("pas de doublon de notification le même jour", calls2 === 1);
+  await notifContext.close();
 
   // Mouvement réduit : aucune animation de confettis ne doit être créée
   const rmContext = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });

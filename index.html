@@ -286,6 +286,12 @@
     padding: 9px 12px; margin-bottom: 12px; font-size: 14px; color: var(--ink);
   }
   .evremind button { background: none; border: 1px solid var(--line); color: var(--ink-dim); border-radius: 3px; font-size: 12px; padding: 5px 10px; }
+  .filterrow { display: flex; gap: 7px; flex-wrap: wrap; }
+  .filterbtn {
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--ink-dim);
+    border-radius: 99px; padding: 6px 13px; font-size: 13px; font-weight: 600;
+  }
+  .filterbtn.on { border-color: var(--sys); color: var(--ink); background: rgba(255,255,255,.04); }
 
   /* ---------- Objectives ---------- */
   .obj { border: 1px solid var(--line); border-radius: 3px; background: var(--panel-2); padding: 12px; margin-bottom: 10px; }
@@ -785,13 +791,61 @@ function todayHasActivity() {
   const k = dayKey(NOW());
   return S.log.some(l => dayKey(l.ts) === k);
 }
+function playerHasActivityToday(pid) {
+  const k = dayKey(NOW());
+  return S.log.some(l => l.playerId === pid && dayKey(l.ts) === k);
+}
+// Série "en jeu" : vivante grâce à une quête d'hier, mais rien encore aujourd'hui.
+function streakAtRisk(pid) { return !playerHasActivityToday(pid) && streakOf(pid) > 0; }
+function atRiskPlayers() { return S.players.filter(p => streakAtRisk(p.id)); }
 function eveningDismissedToday() { return localStorage.getItem("rangement-evening-dismiss") === dayKey(NOW()); }
 function dismissEveningReminder() { localStorage.setItem("rangement-evening-dismiss", dayKey(NOW())); }
 function shouldShowEveningReminder() {
   return eveningReminderOn()
     && new Date().getHours() >= eveningReminderHour()
-    && !todayHasActivity()
+    && (!todayHasActivity() || atRiskPlayers().length > 0)
     && !eveningDismissedToday();
+}
+function eveningReminderText() {
+  const risky = atRiskPlayers();
+  if (risky.length) {
+    return risky.map(p => {
+      const n = streakOf(p.id);
+      return `🔥 <b>${esc(p.name)}</b> va perdre sa série de ${n} jour${n > 1 ? "s" : ""} !`;
+    }).join(" ");
+  }
+  return "🌙 Personne n'a encore chassé aujourd'hui — une petite quête avant la nuit ?";
+}
+function eveningReminderTextPlain() {
+  const risky = atRiskPlayers();
+  if (risky.length) {
+    return risky.map(p => `${p.name} : série de ${streakOf(p.id)} jour(s) en jeu`).join(" · ");
+  }
+  return "Personne n'a encore chassé aujourd'hui.";
+}
+
+/* --- Notification navigateur (best-effort, en plus du rappel dans l'appli) --- */
+function notifsSupported() { return typeof Notification !== "undefined"; }
+function notifsOn() { return notifsSupported() && localStorage.getItem("rangement-notifs") === "on"; }
+function notifiedToday() { return localStorage.getItem("rangement-notif-sent") === dayKey(NOW()); }
+function markNotifiedToday() { localStorage.setItem("rangement-notif-sent", dayKey(NOW())); }
+async function maybeSendStreakNotification() {
+  if (!notifsOn() || notifiedToday() || Notification.permission !== "granted" || !shouldShowEveningReminder()) return;
+  const body = eveningReminderTextPlain();
+  const title = "⚔️ Rangement — ne perds pas ta série !";
+  let sent = false;
+  try {
+    const reg = navigator.serviceWorker && (await navigator.serviceWorker.getRegistration());
+    if (reg && reg.showNotification) {
+      await reg.showNotification(title, { body, icon: "icons/icon-192.png", badge: "icons/icon-192.png", tag: "rangement-streak" });
+      sent = true;
+    }
+  } catch (e) { /* pas de service worker actif -> repli sur Notification() */ }
+  if (!sent) {
+    try { new Notification(title, { body, icon: "icons/icon-192.png" }); sent = true; }
+    catch (e) { /* notification indisponible sur cet appareil, tant pis */ }
+  }
+  if (sent) markNotifiedToday();
 }
 
 /* --- Récap hebdo du dimanche soir (dans l'appli, une fois par semaine) --- */
@@ -867,7 +921,7 @@ function vQuetes() {
     </div>`;
   }).join("");
   return `
-  ${shouldShowEveningReminder() ? `<div class="evremind">🌙 Personne n'a encore chassé aujourd'hui — une petite quête avant la nuit ? <button id="evRemindOk">Plus tard</button></div>` : ""}
+  ${shouldShowEveningReminder() ? `<div class="evremind">${eveningReminderText()} <button id="evRemindOk">Plus tard</button></div>` : ""}
   ${bet ? `<div class="betremind">⚔️ Enjeu de la semaine : <b>${betRewardLabel(bet)}</b> — voir l'onglet Duel</div>` : ""}
   <section class="panel">
     <h2>Quêtes disponibles <small>— touche ton emoji quand c'est fait</small></h2>
@@ -1154,10 +1208,33 @@ function vObjectifs() {
 }
 
 /* ---------- Journal ---------- */
+let journalFilter = { q: "", player: "all" }; // session seulement, pas persisté
+
 function vJournal() {
   if (!S.log.length) return `<section class="panel"><h2>Journal de chasse</h2><p class="hint">Rien pour l'instant — la première quête vous attend.</p></section>`;
+
+  const q = journalFilter.q.trim().toLowerCase();
+  const filtered = S.log.filter(l => {
+    if (journalFilter.player !== "all" && l.playerId !== journalFilter.player) return false;
+    if (q && !l.taskName.toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  const filterBar = `
+  <div class="frow" style="margin-bottom:9px">
+    <input type="text" id="journalSearch" placeholder="Rechercher une tâche…" value="${esc(journalFilter.q)}" aria-label="Rechercher dans le journal">
+  </div>
+  <div class="filterrow">
+    <button class="filterbtn ${journalFilter.player === "all" ? "on" : ""}" data-jf="all">Tous</button>
+    ${S.players.map(p => `<button class="filterbtn ${journalFilter.player === p.id ? "on" : ""}" data-jf="${p.id}">${esc(p.emoji)} ${esc(p.name)}</button>`).join("")}
+  </div>`;
+
+  if (!filtered.length) {
+    return `<section class="panel"><h2>Journal de chasse</h2>${filterBar}<p class="hint" style="margin-top:10px">Aucune entrée ne correspond à ce filtre.</p></section>`;
+  }
+
   const byDay = {};
-  for (const l of S.log.slice().reverse()) (byDay[dayKey(l.ts)] ??= []).push(l);
+  for (const l of filtered.slice().reverse()) (byDay[dayKey(l.ts)] ??= []).push(l);
   const days = Object.keys(byDay).map(k => {
     const label = new Date(k + "T12:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
     return `<div class="day-h">${label}</div>` + byDay[k].map(l => {
@@ -1170,7 +1247,7 @@ function vJournal() {
       </div>`;
     }).join("");
   }).join("");
-  return `<section class="panel"><h2>Journal de chasse</h2>${days}</section>`;
+  return `<section class="panel"><h2>Journal de chasse</h2>${filterBar}${days}</section>`;
 }
 
 /* ---------- Réglages ---------- */
@@ -1237,7 +1314,12 @@ function vReglages() {
       <input type="number" id="eveningHour" min="0" max="23" value="${eveningReminderHour()}" style="flex:0 0 70px">
       <span class="hint" style="flex:0 0 auto">h, heure de ce téléphone</span>
     </div>
-    <p class="hint">S'affiche uniquement dans l'appli (pas de notification push) tant qu'elle est ouverte le soir venu — propre à ce téléphone.</p>
+    <p class="hint">Le rappel devient prioritaire dès qu'une série 🔥 est en jeu — protégez vos séries en cours.</p>
+    <div class="togglerow">
+      <label class="switch"><input type="checkbox" id="notifToggle" ${(notifsSupported() && notifsOn()) ? "checked" : ""} ${notifsSupported() ? "" : "disabled"}><span></span></label>
+      <span>Notification du navigateur${notifsSupported() ? "" : " (non disponible sur cet appareil)"}</span>
+    </div>
+    <p class="hint">En plus du rappel dans l'appli : une vraie notification système, une fois par jour, si votre navigateur le permet. Sur iPhone, Safari ne le supporte pas hors app installée avec un service de notifications push — le rappel dans l'appli reste le plus fiable partout.</p>
     <div class="togglerow">
       <label class="switch"><input type="checkbox" id="recapToggle" ${weeklyRecapOn() ? "checked" : ""}><span></span></label>
       <span>Récap du dimanche soir (dès 18 h)</span>
@@ -1488,7 +1570,18 @@ function bindView() {
   const shareBtn = $("#shareTrophyBtn");
   if (shareBtn) shareBtn.onclick = shareTrophyCard;
 
-  // Journal
+  // Journal : recherche + filtre par joueur
+  const journalSearch = $("#journalSearch");
+  if (journalSearch) journalSearch.oninput = () => {
+    const pos = journalSearch.selectionStart;
+    journalFilter.q = journalSearch.value;
+    render();
+    const el = $("#journalSearch");
+    if (el) { el.focus(); el.setSelectionRange(pos, pos); }
+  };
+  document.querySelectorAll("[data-jf]").forEach(b =>
+    b.onclick = () => { journalFilter.player = b.dataset.jf; render(); });
+
   document.querySelectorAll("[data-undo]").forEach(b =>
     b.onclick = () => {
       S.log = S.log.filter(l => l.id !== b.dataset.undo);
@@ -1657,6 +1750,20 @@ function bindView() {
   if (recapToggle) recapToggle.onchange = () => {
     localStorage.setItem("rangement-recap", recapToggle.checked ? "on" : "off");
   };
+  const notifToggle = $("#notifToggle");
+  if (notifToggle) notifToggle.onchange = async () => {
+    if (!notifToggle.checked) { localStorage.setItem("rangement-notifs", "off"); return; }
+    if (!notifsSupported()) { toast("Notifications non disponibles sur cet appareil"); notifToggle.checked = false; return; }
+    const perm = await Notification.requestPermission();
+    if (perm !== "granted") {
+      toast("Permission refusée — activable dans les réglages du navigateur");
+      notifToggle.checked = false;
+      localStorage.setItem("rangement-notifs", "off");
+      return;
+    }
+    localStorage.setItem("rangement-notifs", "on");
+    toast("Notifications activées 🔔");
+  };
 
   // Données
   const ex = $("#exportBtn");
@@ -1807,6 +1914,7 @@ if (!localStorage.getItem("rangement-onboard-v1")) {
 } else if (shouldShowWeeklyRecap()) {
   weeklyRecapModal();
 }
+maybeSendStreakNotification();
 
 if ("serviceWorker" in navigator && location.protocol === "https:") {
   navigator.serviceWorker.register("sw.js");

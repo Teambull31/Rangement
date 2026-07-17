@@ -164,9 +164,40 @@ cette fois pour rester sur du terrain sûr).
   pour éviter toute fragilité un vrai dimanche soir), export image testé sur
   les deux chemins (partage natif simulé et repli téléchargement).
 
+## Itération 10 — 2026-07-17 (à la demande, avec précision utilisateur en cours de route)
+
+**Audit** : deux pistes sans changement de schéma (recherche Journal, carte de
+duel) ; en cours de route, demande explicite de l'utilisateur — un rappel
+quotidien façon Duolingo pour ne pas perdre sa série.
+
+**Décision tranchée sur le rappel de série** : pas de vraie notification push
+en arrière-plan (même limite qu'à l'itération 8, aucun serveur). À la place :
+le rappel du soir existant devient **conscient des séries en jeu**, complété
+par une **vraie notification navigateur en option** (best-effort — fonctionne
+sur Android/desktop ; sur iPhone, Safari ne le permet pas hors app installée
+avec un service push, donc le rappel dans l'appli reste la garantie sur tous
+les appareils).
+
+**Améliorations livrées :**
+- 🔥 **Rappel conscient des séries** : le bandeau du soir affiche désormais
+  « 🔥 *Nom* va perdre sa série de *N* jours ! » dès qu'une série est en jeu
+  (vivante grâce à hier, rien encore aujourd'hui) — remplace le message
+  générique quand c'est le cas. Se déclenche même si l'autre joueur a déjà
+  joué aujourd'hui, tant qu'un des deux est en risque.
+- 🔔 **Notification navigateur** (opt-in, désactivée par défaut) : une vraie
+  notification système une fois par jour quand le rappel est actif, via le
+  service worker si possible, sinon `Notification()` directement. Réglage
+  clairement documenté sur ses limites par plateforme.
+- 🔍 **Recherche et filtre dans le Journal** : champ de recherche par nom de
+  tâche + filtre par joueur, curseur de saisie préservé pendant la frappe.
+- ✅ Tests : 76 assertions — dont deux vrais bugs de test découverts et
+  corrigés en cours de route (pas de bug applicatif) : une hypothèse fausse
+  sur les données restantes après un `undo`, et un `JSON.parse(null)` dans un
+  contexte n'ayant encore jamais écrit dans `localStorage`.
+
 **Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
 - Mode saison : remise à zéro rituelle avec palmarès archivé (nécessite une
   nouvelle table Supabase `seasons` — à proposer clairement avant d'y toucher).
-- Vraies notifications push si un jour une petite fonction serveur est ajoutée.
 - Export/partage de la carte de duel de la semaine (pas seulement les trophées).
-- Filtrer/rechercher dans le Journal (l'historique s'allonge avec le temps).
+- Choix de l'heure du rappel de série indépendamment du rappel générique du soir.
+- Historique des notifications envoyées, visible dans Réglages.
