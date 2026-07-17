@@ -213,10 +213,41 @@ les appareils).
   14 dernières notifications réellement envoyées (transparence).
 - ✅ Tests : 82 assertions.
 
+## Itération 12 — 2026-07-17 (demande utilisateur : système de héros)
+
+**Demande** : incarner des personnages d'anime débloqués au mérite (plus le
+personnage est apprécié, plus il est dur à obtenir — difficultés à définir par
+la boucle), avec du stuff évolutif. Univers demandés : Frieren, L'Apothicaire,
+Gachiakuta, Black Clover, One Piece, Bleach, Demon Slayer, Fullmetal Alchemist.
+
+**Livré :**
+- 🎴 **Nouvel onglet Héros** : collection de **26 héros** répartis en 4 raretés
+  (B/A/S/SS) sur les 8 univers. Déblocage **au mérite, sans hasard** : niveaux,
+  quêtes cumulées, séries, trophées hebdo. Boss final : Luffy 👒 (niv. 28,
+  100 quêtes, série 14 j, 2 trophées). Représentation par emblèmes emoji (pas
+  d'images copiées des œuvres).
+- ⭐ **Stuff évolutif** : 3 paliers d'équipement thématiques par héros (ex.
+  Gear 2 → Gear 4 → Gear 5 pour Luffy), débloqués en continuant à progresser
+  après l'obtention. Seuils dérivés de la rareté.
+- 🧝 **Incarnation synchronisée** : le héros incarné devient l'avatar du joueur
+  partout (cartes, boutons de quête, journal) et se synchronise entre les deux
+  téléphones (colonne `players.character_id`, seule modif de schéma — la
+  collection elle-même est dérivée du journal, aucun stockage).
+- ‼ **Notification « HÉROS DÉBLOQUÉ »** prioritaire sur la montée de niveau.
+- Barre d'onglets resserrée (6 onglets).
+- ✅ Tests : 93 assertions — collection complète, verrouillage sur compte
+  frais, déblocage total après grind simulé (300 quêtes/15 jours), incarnation,
+  persistance, stuff, retrait, et priorité de la modale de déblocage.
+  Une assertion existante a flaké une fois (dismiss du rappel du soir) puis
+  repassé — test renforcé avec diagnostic du stockage pour la prochaine fois.
+
 **Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
-- Mode saison : remise à zéro rituelle avec palmarès archivé (nécessite une
-  nouvelle table Supabase `seasons` — à proposer clairement avant d'y toucher).
+- Ambiguïté à clarifier avec l'utilisateur : « gachiacuta dans macchi » —
+  Dandadan ? (à ajouter dès confirmation, la structure roster le permet en
+  quelques lignes).
+- Hauts faits liés aux héros (premier héros incarné, collection complète…).
+- Mode saison : remise à zéro rituelle avec palmarès archivé (table `seasons`
+  à proposer clairement avant d'y toucher).
 - Choix de l'heure du rappel de série indépendamment du rappel générique du soir.
 - Bouton pour effacer l'historique des notifications depuis Réglages.
-- Revoir la taille du fichier index.html (grossit à chaque itération) : envisager
-  un découpage si la maintenabilité en pâtit.
+- Revoir la taille du fichier index.html (grossit à chaque itération).

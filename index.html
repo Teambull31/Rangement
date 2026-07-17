@@ -136,11 +136,12 @@
   .tabs { max-width: 640px; margin: 0 auto; display: flex; }
   .tabs button {
     flex: 1; background: none; border: none; color: var(--ink-dim);
-    font-size: 12px; font-weight: 600; letter-spacing: .05em;
-    padding: 9px 2px 11px; text-transform: uppercase;
-    border-top: 2px solid transparent;
+    font-size: 9.5px; font-weight: 600; letter-spacing: 0;
+    padding: 9px 1px 11px; text-transform: uppercase;
+    border-top: 2px solid transparent; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .tabs button .ico { display: block; font-size: 19px; margin-bottom: 2px; }
+  .tabs button .ico { display: block; font-size: 18px; margin-bottom: 2px; }
   .tabs button.on { color: var(--sys); border-top-color: var(--sys); }
 
   /* ---------- Panels / sections ---------- */
@@ -300,6 +301,38 @@
   .notifhistline:last-child { border-bottom: none; }
   .notifhistline .hint { font-size: 12px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
 
+  /* ---------- Héros ---------- */
+  .charline { font-size: 12.5px; color: var(--gold); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rarity {
+    font-family: var(--display); font-size: 11px; font-weight: 900; letter-spacing: .06em;
+    color: var(--rcol, var(--sys)); border: 1px solid var(--rcol, var(--sys));
+    border-radius: 2px; padding: 1px 6px;
+    background: color-mix(in srgb, var(--rcol, #4DC3FF) 14%, transparent);
+  }
+  .curchar {
+    display: flex; gap: 13px; align-items: flex-start;
+    border: 1px solid var(--rcol, var(--line)); border-radius: 3px;
+    background: var(--panel-2); padding: 12px;
+  }
+  .curchar-emoji { font-size: 44px; line-height: 1; }
+  .curchar-name { font-weight: 700; font-size: 17px; display: flex; align-items: center; gap: 8px; }
+  .gearline { display: flex; flex-direction: column; gap: 2px; margin: 7px 0 5px; }
+  .gearstep { font-size: 13px; color: var(--ink-dim); }
+  .gearstep.on { color: var(--ink); }
+  .chargrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 4px; }
+  .charcard {
+    background: var(--panel-2); border: 1px solid var(--line); border-top: 2px solid var(--rcol, var(--line));
+    border-radius: 3px; padding: 10px; display: flex; flex-direction: column; gap: 5px;
+  }
+  .charcard.locked { opacity: .5; filter: grayscale(.55); }
+  .charcard.current { border-color: var(--rcol); box-shadow: 0 0 10px color-mix(in srgb, var(--rcol) 35%, transparent); }
+  .charcard-top { display: flex; justify-content: space-between; align-items: center; }
+  .charcard-emoji { font-size: 30px; line-height: 1; }
+  .charcard-name { font-weight: 700; font-size: 15px; }
+  .charcard-cond { font-size: 12px; color: var(--ink-dim); line-height: 1.3; }
+  .charcard-btn { padding: 6px 10px; font-size: 12.5px; margin-top: 2px; }
+  .charcard-cur { font-size: 13px; color: var(--gold); font-weight: 700; }
+
   /* ---------- Objectives ---------- */
   .obj { border: 1px solid var(--line); border-radius: 3px; background: var(--panel-2); padding: 12px; margin-bottom: 10px; }
   .obj .oname { font-weight: 700; font-size: 16.5px; }
@@ -431,8 +464,8 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 function defaultState() {
   return {
     players: [
-      { id: "p1", name: "Chasseur", emoji: "⚔️", color: "#4DC3FF" },
-      { id: "p2", name: "Chasseuse", emoji: "🏹", color: "#8B7BFF" },
+      { id: "p1", name: "Chasseur", emoji: "⚔️", color: "#4DC3FF", characterId: null },
+      { id: "p2", name: "Chasseuse", emoji: "🏹", color: "#8B7BFF", characterId: null },
     ],
     tasks: [
       { id: uid(), name: "Vaisselle / lave-vaisselle", icon: "🍽️", prio: "normale" },
@@ -494,7 +527,7 @@ function save() { localStorage.setItem(KEY, JSON.stringify({ S, pending: PENDING
 
 /* --- correspondance lignes SQL <-> état de l'appli --- */
 const fromRow = {
-  players: r => ({ id: r.id, name: r.name, emoji: r.emoji, color: r.color || "#4DC3FF" }),
+  players: r => ({ id: r.id, name: r.name, emoji: r.emoji, color: r.color || "#4DC3FF", characterId: r.character_id || null }),
   tasks: r => ({ id: r.id, name: r.name, icon: r.icon, prio: r.prio, createdAt: Number(r.created_at) }),
   rewards: r => ({ id: r.id, name: r.name, icon: r.icon }),
   objectives: r => ({ id: r.id, name: r.name, type: r.type, target: r.target, rewardId: r.reward_id, createdAt: Number(r.created_at), claimed: r.claimed }),
@@ -503,7 +536,7 @@ const fromRow = {
   bets: r => ({ id: r.id, week: r.week, rewardId: r.reward_id, createdAt: Number(r.created_at), claimed: r.claimed }),
 };
 const toRow = {
-  players: p => ({ id: p.id, name: p.name, emoji: p.emoji, color: p.color || "#4DC3FF" }),
+  players: p => ({ id: p.id, name: p.name, emoji: p.emoji, color: p.color || "#4DC3FF", character_id: p.characterId || null }),
   tasks: t => ({ id: t.id, name: t.name, icon: t.icon, prio: t.prio, created_at: t.createdAt || Date.now() }),
   rewards: r => ({ id: r.id, name: r.name, icon: r.icon }),
   objectives: o => ({ id: o.id, name: o.name, type: o.type, target: o.target, reward_id: o.rewardId, created_at: o.createdAt, claimed: o.claimed }),
@@ -712,6 +745,93 @@ function unlockedFeats(pid) {
   return FEATS.filter(f => f.test(st));
 }
 
+/* --- Héros à incarner : collection au mérite, difficultés selon la popularité --- */
+const RARITIES = {
+  B:  { label: "B",  col: "#8AA3C2" },
+  A:  { label: "A",  col: "#4DC3FF" },
+  S:  { label: "S",  col: "#8B7BFF" },
+  SS: { label: "SS", col: "#F0C550" },
+};
+// cond : toutes les clés présentes doivent être atteintes (lvl, count, streak, trophies)
+const CHARACTERS = [
+  // Frieren
+  { id: "sein",     name: "Sein",        emoji: "🍺", univers: "Frieren",           rarity: "B",  cond: { lvl: 3 },                              gear: ["Gourde vide", "Gourde pleine", "Bénédiction de la déesse"] },
+  { id: "stark",    name: "Stark",       emoji: "🪓", univers: "Frieren",           rarity: "A",  cond: { lvl: 7,  count: 15 },                  gear: ["Hache ébréchée", "Hache d'Eisen", "Hache du dragon"] },
+  { id: "fern",     name: "Fern",        emoji: "🔮", univers: "Frieren",           rarity: "S",  cond: { lvl: 13, count: 35 },                  gear: ["Bâton d'apprentie", "Bâton de Frieren", "Zoltraak maîtrisé"] },
+  { id: "himmel",   name: "Himmel",      emoji: "🗡️", univers: "Frieren",           rarity: "S",  cond: { lvl: 15, streak: 7 },                  gear: ["Épée (réplique)", "Épée du héros", "Statue à ton effigie"] },
+  { id: "frieren",  name: "Frieren",     emoji: "❄️", univers: "Frieren",           rarity: "SS", cond: { lvl: 22, count: 60, streak: 7 },       gear: ["Grimoire de voyage", "Grimoire de Flamme", "Magie d'un millénaire"] },
+  // L'Apothicaire
+  { id: "jinshi",   name: "Jinshi",      emoji: "🌙", univers: "L'Apothicaire",     rarity: "S",  cond: { lvl: 14, count: 30 },                  gear: ["Éventail de soie", "Sceau impérial", "Ornement de jade"] },
+  { id: "maomao",   name: "Maomao",      emoji: "⚗️", univers: "L'Apothicaire",     rarity: "SS", cond: { lvl: 20, count: 50, streak: 7 },       gear: ["Nécessaire d'herboriste", "Coffret à poisons", "Insigne de la cour"] },
+  // Gachiakuta
+  { id: "rudo",     name: "Rudo",        emoji: "🥾", univers: "Gachiakuta",        rarity: "A",  cond: { lvl: 8,  count: 20 },                  gear: ["Gants usés", "3R affûté", "Instrument géant"] },
+  { id: "enjin",    name: "Enjin",       emoji: "🧹", univers: "Gachiakuta",        rarity: "S",  cond: { lvl: 14, streak: 5 },                  gear: ["Balai de nettoyeur", "Balai jinki", "Balai du capitaine"] },
+  // Black Clover
+  { id: "noelle",   name: "Noelle",      emoji: "🌊", univers: "Black Clover",      rarity: "A",  cond: { lvl: 9,  count: 20 },                  gear: ["Baguette fêlée", "Robe de vaillance", "Armure marine"] },
+  { id: "yuno",     name: "Yuno",        emoji: "🌪️", univers: "Black Clover",      rarity: "S",  cond: { lvl: 15, count: 40 },                  gear: ["Grimoire quatre-feuilles", "Esprit du vent", "Étoile polaire"] },
+  { id: "asta",     name: "Asta",        emoji: "⚔️", univers: "Black Clover",      rarity: "SS", cond: { lvl: 21, count: 55, streak: 7 },       gear: ["Épée démoniaque", "Anti-magie déchaînée", "Forme de démon"] },
+  // One Piece
+  { id: "usopp",    name: "Usopp",       emoji: "🎯", univers: "One Piece",         rarity: "B",  cond: { lvl: 4 },                              gear: ["Lance-pierre", "Kabuto", "Kabuto vert"] },
+  { id: "nami",     name: "Nami",        emoji: "🍊", univers: "One Piece",         rarity: "A",  cond: { lvl: 8,  count: 18 },                  gear: ["Bâton climatique", "Clima-Tact parfait", "Zeus"] },
+  { id: "sanji",    name: "Sanji",       emoji: "🍳", univers: "One Piece",         rarity: "S",  cond: { lvl: 14, count: 35 },                  gear: ["Costume noir", "Diable Jambe", "Raid Suit"] },
+  { id: "zoro",     name: "Zoro",        emoji: "🔱", univers: "One Piece",         rarity: "SS", cond: { lvl: 24, count: 70 },                  gear: ["Deux sabres", "Santoryu", "Enma"] },
+  { id: "luffy",    name: "Luffy",       emoji: "👒", univers: "One Piece",         rarity: "SS", cond: { lvl: 28, count: 100, streak: 14, trophies: 2 }, gear: ["Gear 2", "Gear 4", "Gear 5"] },
+  // Bleach
+  { id: "rukia",    name: "Rukia",       emoji: "🌨️", univers: "Bleach",            rarity: "S",  cond: { lvl: 13, streak: 5 },                  gear: ["Sode no Shirayuki", "Premier ban", "Bankai"] },
+  { id: "byakuya",  name: "Byakuya",     emoji: "🌸", univers: "Bleach",            rarity: "S",  cond: { lvl: 16, count: 40 },                  gear: ["Senbonzakura", "Kageyoshi", "Senkei"] },
+  { id: "ichigo",   name: "Ichigo",      emoji: "☠️", univers: "Bleach",            rarity: "SS", cond: { lvl: 23, count: 65, streak: 7 },       gear: ["Zangetsu", "Masque de hollow", "Getsuga final"] },
+  // Demon Slayer
+  { id: "zenitsu",  name: "Zenitsu",     emoji: "⚡", univers: "Demon Slayer",      rarity: "A",  cond: { lvl: 9,  count: 20 },                  gear: ["Sabre jaune", "Souffle de la foudre", "Éclair divin"] },
+  { id: "nezuko",   name: "Nezuko",      emoji: "🎍", univers: "Demon Slayer",      rarity: "SS", cond: { lvl: 20, streak: 14 },                 gear: ["Bambou", "Sang démoniaque", "Éveil"] },
+  { id: "tanjiro",  name: "Tanjiro",     emoji: "🔥", univers: "Demon Slayer",      rarity: "SS", cond: { lvl: 21, count: 60 },                  gear: ["Sabre noir", "Souffle de l'eau", "Danse du dieu du feu"] },
+  // Fullmetal Alchemist
+  { id: "alphonse", name: "Alphonse",    emoji: "🛡️", univers: "Fullmetal Alchemist", rarity: "A",  cond: { lvl: 10, count: 25 },               gear: ["Armure cabossée", "Armure gravée", "Âme polie"] },
+  { id: "mustang",  name: "Roy Mustang", emoji: "🧤", univers: "Fullmetal Alchemist", rarity: "S",  cond: { lvl: 15, count: 40 },               gear: ["Gants ignifugés", "Flammes maîtrisées", "Grand brasier"] },
+  { id: "edward",   name: "Edward",      emoji: "⚙️", univers: "Fullmetal Alchemist", rarity: "SS", cond: { lvl: 22, count: 60, streak: 7 },    gear: ["Automail standard", "Automail de combat", "Transmutation parfaite"] },
+];
+const UNIVERSES = [...new Set(CHARACTERS.map(c => c.univers))];
+
+function charStats(pid) {
+  const st = featStats(pid);
+  const t = trophyData();
+  const trophies = S.players[0] && pid === S.players[0].id ? t.winsA : t.winsB;
+  return { lvl: st.lvl, count: st.count, streak: st.bestStreak, trophies };
+}
+function condMet(cond, st) {
+  return (!cond.lvl || st.lvl >= cond.lvl)
+    && (!cond.count || st.count >= cond.count)
+    && (!cond.streak || st.streak >= cond.streak)
+    && (!cond.trophies || st.trophies >= cond.trophies);
+}
+function condText(cond) {
+  const parts = [];
+  if (cond.lvl) parts.push("niv. " + cond.lvl);
+  if (cond.count) parts.push(cond.count + " quêtes");
+  if (cond.streak) parts.push("série " + cond.streak + " j");
+  if (cond.trophies) parts.push(cond.trophies + " trophée" + (cond.trophies > 1 ? "s" : ""));
+  return parts.join(" · ");
+}
+function unlockedCharIds(pid) {
+  const st = charStats(pid);
+  return CHARACTERS.filter(c => condMet(c.cond, st)).map(c => c.id);
+}
+// Stuff : 3 paliers par héros, seuils dérivés de la rareté (progression après le déblocage)
+const GEAR_STEPS = {
+  B:  [{ dl: 2, dc: 5 },  { dl: 4, dc: 12 },  { dl: 7,  dc: 25 }],
+  A:  [{ dl: 3, dc: 10 }, { dl: 6, dc: 20 },  { dl: 10, dc: 35 }],
+  S:  [{ dl: 3, dc: 15 }, { dl: 7, dc: 30 },  { dl: 12, dc: 50 }],
+  SS: [{ dl: 4, dc: 20 }, { dl: 8, dc: 40 },  { dl: 14, dc: 70 }],
+};
+function gearConds(ch) {
+  return GEAR_STEPS[ch.rarity].map(s => ({ lvl: (ch.cond.lvl || 1) + s.dl, count: (ch.cond.count || 0) + s.dc }));
+}
+function gearTier(ch, st) {
+  return gearConds(ch).filter(c => condMet(c, st)).length;
+}
+function charOf(p) {
+  return p && p.characterId ? CHARACTERS.find(c => c.id === p.characterId) || null : null;
+}
+
 function objProgress(o) {
   const f = l => l.ts >= o.createdAt;
   return o.type === "xp"
@@ -727,6 +847,7 @@ let TAB = "quetes";
 const TABS = [
   { id: "quetes",    label: "Quêtes",    ico: "⚔️" },
   { id: "duel",      label: "Duel",      ico: "🔥" },
+  { id: "heros",     label: "Héros",     ico: "🎴" },
   { id: "objectifs", label: "Objectifs", ico: "🏆" },
   { id: "journal",   label: "Journal",   ico: "📜" },
   { id: "reglages",  label: "Réglages",  ico: "⚙️" },
@@ -738,7 +859,7 @@ function render() {
   renderDuo();
   renderTabs();
   const v = $("#view");
-  v.innerHTML = ({ quetes: vQuetes, duel: vDuel, objectifs: vObjectifs, journal: vJournal, reglages: vReglages })[TAB]();
+  v.innerHTML = ({ quetes: vQuetes, duel: vDuel, heros: vHeros, objectifs: vObjectifs, journal: vJournal, reglages: vReglages })[TAB]();
   bindView();
 }
 
@@ -763,6 +884,7 @@ function renderDuo() {
       ${p.id === leadId ? '<span class="crown">👑</span>' : ""}
       <div class="face">${esc(p.emoji)}</div>
       <div class="name">${esc(p.name)}</div>
+      ${(() => { const c = charOf(p); return c ? `<div class="charline">${c.emoji} ${esc(c.name)} ${"⭐".repeat(gearTier(c, charStats(p.id)))}</div>` : ""; })()}
       <div class="rankline">
         <span class="rank ${rk.s ? "s" : ""}">${rk.r}</span>
         <span class="lvl">NIV. ${li.lvl}</span>
@@ -1158,6 +1280,76 @@ function vDuel() {
   <section class="panel">
     <h2>Hauts faits</h2>
     ${featSection()}
+  </section>`;
+}
+
+/* ---------- Héros ---------- */
+let herosView = "p1"; // dont on parcourt la collection (session seulement)
+
+function vHeros() {
+  const p = S.players.find(x => x.id === herosView) || S.players[0];
+  const st = charStats(p.id);
+  const unlocked = new Set(unlockedCharIds(p.id));
+  const cur = charOf(p);
+
+  const switcher = `
+  <div class="filterrow" style="margin-bottom:12px">
+    ${S.players.map(pl => `<button class="filterbtn ${herosView === pl.id ? "on" : ""}" data-hv="${pl.id}">${esc(pl.emoji)} ${esc(pl.name)}</button>`).join("")}
+  </div>`;
+
+  let curHtml;
+  if (cur) {
+    const tier = gearTier(cur, st);
+    const conds = gearConds(cur);
+    const next = tier < 3 ? conds[tier] : null;
+    curHtml = `
+    <div class="curchar" style="--rcol:${RARITIES[cur.rarity].col}">
+      <span class="curchar-emoji">${cur.emoji}</span>
+      <div class="grow">
+        <div class="curchar-name">${esc(cur.name)} <span class="rarity" style="--rcol:${RARITIES[cur.rarity].col}">${cur.rarity}</span></div>
+        <div class="hint">${esc(cur.univers)}</div>
+        <div class="gearline">
+          ${cur.gear.map((g, i) => `<span class="gearstep ${i < tier ? "on" : ""}">${i < tier ? "⭐" : "☆"} ${esc(g)}</span>`).join("")}
+        </div>
+        ${next ? `<div class="hint">Prochain palier : ${condText(next)}</div>` : `<div class="hint" style="color:var(--gold)">Équipement complet ! 🏅</div>`}
+      </div>
+    </div>`;
+  } else {
+    curHtml = `<p class="hint">${esc(p.name)} n'incarne encore aucun héros — débloquez-en un ci-dessous et touchez « Incarner ».</p>`;
+  }
+
+  const groups = UNIVERSES.map(u => {
+    const cards = CHARACTERS.filter(c => c.univers === u).map(c => {
+      const isUnlocked = unlocked.has(c.id);
+      const isCur = cur && cur.id === c.id;
+      const tier = isUnlocked ? gearTier(c, st) : 0;
+      return `
+      <div class="charcard ${isUnlocked ? "" : "locked"} ${isCur ? "current" : ""}" style="--rcol:${RARITIES[c.rarity].col}">
+        <div class="charcard-top">
+          <span class="charcard-emoji">${c.emoji}</span>
+          <span class="rarity" style="--rcol:${RARITIES[c.rarity].col}">${c.rarity}</span>
+        </div>
+        <div class="charcard-name">${esc(c.name)}</div>
+        ${isUnlocked
+          ? `<div class="hint">${"⭐".repeat(tier)}${"☆".repeat(3 - tier)}</div>
+             ${isCur ? '<div class="charcard-cur">Incarné ✓</div>' : `<button class="btn charcard-btn" data-equip="${c.id}">Incarner</button>`}`
+          : `<div class="charcard-cond">🔒 ${condText(c.cond)}</div>`}
+      </div>`;
+    }).join("");
+    return `<div class="day-h">${esc(u)}</div><div class="chargrid">${cards}</div>`;
+  }).join("");
+
+  return `
+  ${switcher}
+  <section class="panel">
+    <h2>Héros incarné <small>— ${esc(p.name)}</small></h2>
+    ${curHtml}
+    ${cur ? `<button class="undo" style="margin-top:10px" id="unequipBtn">Reprendre son emoji personnel</button>` : ""}
+  </section>
+  <section class="panel">
+    <h2>Collection <small>— ${unlocked.size}/${CHARACTERS.length} débloqués</small></h2>
+    <p class="hint">Plus un héros est légendaire, plus il se mérite : niveaux, quêtes, séries et trophées. Son équipement progresse ensuite avec vous. Chaque héros est représenté par son emblème.</p>
+    ${groups}
   </section>`;
 }
 
@@ -1614,6 +1806,7 @@ function doTask(taskId, playerId) {
   const before = levelInfo(totalXp(playerId)).lvl;
   const objsBefore = S.objectives.filter(o => !o.claimed && objProgress(o) >= o.target).length;
   const featsBefore = new Set(unlockedFeats(playerId).map(f => f.id));
+  const charsBefore = new Set(unlockedCharIds(playerId));
 
   let xp = PRIOS[t.prio].xp;
   const notes = [];
@@ -1630,9 +1823,15 @@ function doTask(taskId, playerId) {
   const after = levelInfo(totalXp(playerId)).lvl;
   const objsAfter = S.objectives.filter(o => !o.claimed && objProgress(o) >= o.target).length;
   const newFeat = unlockedFeats(playerId).find(f => !featsBefore.has(f.id));
+  const newChar = CHARACTERS.find(c => !charsBefore.has(c.id) && unlockedCharIds(playerId).includes(c.id));
   render();
 
-  if (after > before) {
+  if (newChar) {
+    chime("level");
+    sysModal(`
+      <div class="big gold">HÉROS DÉBLOQUÉ</div>
+      <div class="sub"><span style="font-size:40px">${newChar.emoji}</span><br><b>${esc(newChar.name)}</b> (${esc(newChar.univers)}) rejoint la collection de <b>${esc(p.name)}</b> !<br>Rendez-vous dans l'onglet <b>Héros</b> pour l'incarner 🎴</div>`);
+  } else if (after > before) {
     chime("level");
     const rk = rankOf(after);
     sysModal(`
@@ -1664,6 +1863,30 @@ function bindView() {
 
   const evRemindOk = $("#evRemindOk");
   if (evRemindOk) evRemindOk.onclick = () => { dismissEveningReminder(); render(); };
+
+  // Héros : sélecteur de joueur, incarnation, retrait
+  document.querySelectorAll("[data-hv]").forEach(b =>
+    b.onclick = () => { herosView = b.dataset.hv; render(); });
+  document.querySelectorAll("[data-equip]").forEach(b =>
+    b.onclick = () => {
+      const p = S.players.find(x => x.id === herosView);
+      const c = CHARACTERS.find(x => x.id === b.dataset.equip);
+      if (!p || !c) return;
+      if (!unlockedCharIds(p.id).includes(c.id)) { toast("Héros pas encore débloqué"); return; }
+      p.characterId = c.id;
+      p.emoji = c.emoji;
+      save(); queueOp({ table: "players", type: "upsert", row: toRow.players(p) });
+      render(); toast(`${c.emoji} ${p.name} incarne ${c.name} !`);
+      try { if (navigator.vibrate) navigator.vibrate(35); } catch (e) {}
+    });
+  const unequipBtn = $("#unequipBtn");
+  if (unequipBtn) unequipBtn.onclick = () => {
+    const p = S.players.find(x => x.id === herosView);
+    if (!p) return;
+    p.characterId = null;
+    save(); queueOp({ table: "players", type: "upsert", row: toRow.players(p) });
+    render(); toast("Héros retiré — modifie ton emoji dans Réglages si besoin");
+  };
 
   // Duel : bascule graphique / tableau
   const cvt = $("#chartViewToggle");

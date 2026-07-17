@@ -279,9 +279,12 @@ const { APP_URL, launch, check, done } = require("./helpers");
   check("rappel du soir affiché sans activité aujourd'hui", (await evPage.locator(".evremind").count()) === 1);
   await evPage.locator("#evRemindOk").click();
   check("rappel masqué après « Plus tard »", (await evPage.locator(".evremind").count()) === 0);
+  const dismissStored = await evPage.evaluate(() => localStorage.getItem("rangement-evening-dismiss"));
+  check("dismission écrite en stockage (" + dismissStored + ")", dismissStored !== null);
   await evPage.reload();
   await evPage.waitForSelector(".quest");
-  check("rappel toujours masqué après rechargement le même jour", (await evPage.locator(".evremind").count()) === 0);
+  const dismissAfterReload = await evPage.evaluate(() => localStorage.getItem("rangement-evening-dismiss"));
+  check("rappel toujours masqué après rechargement le même jour (dismiss=" + dismissAfterReload + ")", (await evPage.locator(".evremind").count()) === 0);
   await evPage.evaluate(() => localStorage.removeItem("rangement-evening-dismiss"));
   await evPage.reload();
   await evPage.waitForSelector(".quest");
@@ -353,6 +356,77 @@ const { APP_URL, launch, check, done } = require("./helpers");
   check("historique des notifications affiché (" + notifHistTxt.trim() + ")", notifHistTxt.includes("🔔"));
   check("une seule entrée dans l'historique (pas de doublon)", (await notifPage.locator(".notifhistline").count()) === 1);
   await notifContext.close();
+
+  // Héros : collection, déblocage au mérite, incarnation, stuff
+  const heroContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const heroPage = await heroContext.newPage();
+  await heroPage.addInitScript(() => {
+    localStorage.setItem("rangement-onboard-v1", "1");
+    localStorage.setItem("rangement-recap", "off");
+  });
+  await heroPage.goto(APP_URL);
+  await heroPage.waitForSelector(".quest");
+  await heroPage.locator('[data-tab="heros"]').click();
+  const totalChars = await heroPage.evaluate(() => CHARACTERS.length);
+  check("collection complète affichée (" + totalChars + " héros)", (await heroPage.locator(".charcard").count()) === totalChars);
+  check("compte fraîche : quasiment tout est verrouillé", (await heroPage.locator(".charcard.locked").count()) >= totalChars - 2);
+  const luffyCond = await heroPage.locator('.charcard:has-text("Luffy") .charcard-cond').textContent();
+  check("Luffy est le plus dur à obtenir (" + luffyCond.trim() + ")", luffyCond.includes("28") && luffyCond.includes("100") && luffyCond.includes("trophée"));
+
+  // Grosse progression injectée : 300 quêtes réparties sur 15 jours (niveau ~29, série 15, 2 trophées passés)
+  await heroPage.evaluate(() => {
+    for (let i = 0; i < 300; i++) {
+      const d = new Date(); d.setDate(d.getDate() - (i % 15)); d.setHours(10, 0, 0, 0);
+      S.log.push({ id: "grind" + i, ts: d.getTime() + (i * 1000), playerId: "p1", taskName: "Vitres", icon: "🪟", xp: 50, note: "" });
+    }
+    save();
+  });
+  await heroPage.reload();
+  await heroPage.waitForSelector(".quest");
+  await heroPage.locator('[data-tab="heros"]').click();
+  const unlockedCount = await heroPage.evaluate(() => unlockedCharIds("p1").length);
+  check("gros grind -> collection complète débloquée (" + unlockedCount + "/" + totalChars + ")", unlockedCount === totalChars);
+
+  // Incarner Frieren : avatar + stuff
+  await heroPage.locator('.charcard:has-text("Frieren") [data-equip]').click();
+  await heroPage.waitForTimeout(200);
+  check("héros incarné visible sur la carte du chasseur", (await heroPage.locator(".hunter").first().locator(".charline").textContent()).includes("Frieren"));
+  check("boutons de quête à l'emblème du héros", (await heroPage.locator('[data-tab="quetes"]').click(), await heroPage.locator(".doer").first().textContent()).includes("❄️"));
+  await heroPage.locator('[data-tab="heros"]').click();
+  const gearStars = await heroPage.locator(".curchar .gearstep.on").count();
+  check("stuff de Frieren progresse avec le niveau (" + gearStars + " palier(s))", gearStars >= 1);
+  await heroPage.reload();
+  await heroPage.waitForSelector(".hunter");
+  check("héros conservé après rechargement", (await heroPage.locator(".hunter").first().locator(".charline").count()) === 1);
+
+  // Reprendre son emoji : le héros est retiré
+  await heroPage.locator('[data-tab="heros"]').click();
+  await heroPage.locator("#unequipBtn").click();
+  await heroPage.waitForTimeout(200);
+  check("héros retiré", (await heroPage.locator(".hunter").first().locator(".charline").count()) === 0);
+  await heroContext.close();
+
+  // Déblocage en direct : juste sous le seuil d'Usopp (niv. 4), une quête le franchit
+  const unlockContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const unlockPage = await unlockContext.newPage();
+  await unlockPage.addInitScript(() => {
+    localStorage.setItem("rangement-onboard-v1", "1");
+    localStorage.setItem("rangement-recap", "off");
+  });
+  await unlockPage.goto(APP_URL);
+  await unlockPage.waitForSelector(".quest");
+  await unlockPage.evaluate(() => {
+    S.log.push({ id: "pre1", ts: Date.now() - 3600e3, playerId: "p1", taskName: "Vitres", icon: "🪟", xp: 190, note: "" });
+    S.log.push({ id: "pre2", ts: Date.now() - 1800e3, playerId: "p1", taskName: "Vitres", icon: "🪟", xp: 185, note: "" });
+    save();
+  });
+  await unlockPage.reload();
+  await unlockPage.waitForSelector(".quest");
+  await unlockPage.locator(".quest").first().locator('[data-p="p1"]').click();
+  await unlockPage.waitForTimeout(300);
+  const unlockModal = (await unlockPage.locator(".sysbox").count()) ? await unlockPage.locator(".sysbox").textContent() : "";
+  check("« HÉROS DÉBLOQUÉ » prioritaire sur la montée de niveau (" + unlockModal.replace(/\s+/g, " ").slice(0, 60) + ")", unlockModal.includes("HÉROS DÉBLOQUÉ") && unlockModal.includes("Usopp"));
+  await unlockContext.close();
 
   // Mouvement réduit : aucune animation de confettis ne doit être créée
   const rmContext = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
