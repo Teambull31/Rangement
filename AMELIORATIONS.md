@@ -121,9 +121,31 @@ l'équité des tâches était suggérée (itération 6) mais jamais mesurée dan
   absence de confettis en mouvement réduit (contexte Playwright dédié), badge de
   déséquilibre sur une tâche injectée délibérément à sens unique.
 
+## Itération 8 — 2026-07-16 (planifiée)
+
+**Audit** : la piste « notifications de rappel » restait en attente depuis
+l'itération 5, faute d'une décision technique claire ; le graphique XP hebdo
+(itération 2) n'avait toujours pas d'alternative texte malgré le guide dataviz.
+
+**Décision tranchée** : pas de vraie notification push (nécessiterait un serveur
+et des abonnements — hors de portée de cette architecture 100 % statique). À la
+place, un rappel honnête, actif uniquement quand l'appli est ouverte.
+
+**Améliorations livrées :**
+- 🌙 **Rappel du soir** : bandeau discret sur l'onglet Quêtes si personne n'a
+  joué aujourd'hui, à partir d'une heure réglable (20 h par défaut). Bouton
+  « Plus tard » qui le masque pour le reste de la journée. Activable/désactivable
+  et heure réglable dans Réglages, propre à l'appareil.
+- 📊 **Vue tableau accessible** pour le graphique XP par semaine (bascule
+  « Voir en tableau »/« Voir en graphique » dans Duel) : même donnée en `<table>`
+  sémantique (`scope="row"/"col"`), pour qui préfère lire des nombres ou utilise
+  un lecteur d'écran.
+- ✅ Tests : 58 assertions — bascule graphique/tableau, et rappel du soir testé
+  dans un contexte dédié (affichage, masquage via « Plus tard », persistance du
+  masquage le même jour, réapparition le lendemain, désactivation).
+
 **Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
-- Notifications de rappel (nécessite une décision : push web ou rappels locaux).
 - Mode saison : remise à zéro rituelle avec palmarès archivé.
 - Widget récapitulatif hebdo le dimanche soir (dans l'appli).
-- Vue « table » accessible des données du graphique XP par semaine (alternative texte).
 - Export du mur des trophées / répartition en image partageable.
+- Vraies notifications push si un jour une petite fonction serveur est ajoutée.

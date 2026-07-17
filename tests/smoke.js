@@ -70,6 +70,14 @@ const { APP_URL, launch, check, done } = require("./helpers");
   check("hauts faits verrouillés grisés", (await page.locator(".feat:not(.on)").count()) >= 1);
   check("répartition des tâches affichée", (await page.locator(".splitline").count()) >= 1);
 
+  // Vue tableau accessible du graphique XP (bascule)
+  await page.locator("#chartViewToggle").click();
+  check("bascule vers la vue tableau", (await page.locator("table.datatable").count()) === 1);
+  check("8 semaines listées dans le tableau", (await page.locator("table.datatable tbody tr").count()) === 8);
+  check("graphique masqué en vue tableau", (await page.locator('svg[role="img"]').count()) === 0);
+  await page.locator("#chartViewToggle").click();
+  check("retour à la vue graphique", (await page.locator('svg[role="img"]').count()) === 1);
+
   // Répartition : injecte une tâche faite uniquement par p1 -> badge ⚖️ attendu
   await page.evaluate(() => {
     const raw = JSON.parse(localStorage.getItem("rangement-sl-v2"));
@@ -203,6 +211,31 @@ const { APP_URL, launch, check, done } = require("./helpers");
   const realErrors = errors.filter(e => !e.includes("ERR_FILE_NOT_FOUND") && !e.includes("ERR_CONNECTION"));
   check("aucune erreur JavaScript", realErrors.length === 0);
   if (realErrors.length) console.error(realErrors);
+
+  // Rappel du soir : contexte dédié, aucune activité aujourd'hui, seuil abaissé à 0h
+  const evContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const evPage = await evContext.newPage();
+  await evPage.addInitScript(() => {
+    localStorage.setItem("rangement-onboard-v1", "1");
+    localStorage.setItem("rangement-evening-hour", "0");
+  });
+  await evPage.goto(APP_URL);
+  await evPage.waitForSelector(".quest");
+  check("rappel du soir affiché sans activité aujourd'hui", (await evPage.locator(".evremind").count()) === 1);
+  await evPage.locator("#evRemindOk").click();
+  check("rappel masqué après « Plus tard »", (await evPage.locator(".evremind").count()) === 0);
+  await evPage.reload();
+  await evPage.waitForSelector(".quest");
+  check("rappel toujours masqué après rechargement le même jour", (await evPage.locator(".evremind").count()) === 0);
+  await evPage.evaluate(() => localStorage.removeItem("rangement-evening-dismiss"));
+  await evPage.reload();
+  await evPage.waitForSelector(".quest");
+  check("rappel réapparaît une fois la dismission effacée", (await evPage.locator(".evremind").count()) === 1);
+  await evPage.locator('[data-tab="reglages"]').click();
+  await evPage.evaluate(() => document.getElementById("eveningToggle").click());
+  await evPage.locator('[data-tab="quetes"]').click();
+  check("rappel désactivable dans Réglages", (await evPage.locator(".evremind").count()) === 0);
+  await evContext.close();
 
   // Mouvement réduit : aucune animation de confettis ne doit être créée
   const rmContext = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
