@@ -759,3 +759,70 @@ introduit à l'itération 16 — aucune ne nécessitant de changement de schéma
   attente — rien ne sera créé en base sans accord explicite).
 - Revoir la taille du fichier index.html (grossit à chaque itération,
   maintenant ~2 950 lignes).
+
+## Itération 29 — 2026-07-18 (à la demande, cadence remise à toutes les 2h)
+
+**Audit** : un audit ciblé (agent dédié, lecture complète d'index.html face à
+l'historique des 28 itérations, avec attention particulière à l'itération 28
+qui vient d'être livrée) a fait remonter cinq frictions, aucune ne
+nécessitant de changement de schéma — trois ont été traitées.
+
+**Améliorations livrées :**
+- ✅ **Toast manquant sur le select de priorité d'une tâche** : l'itération
+  28 a ajouté un `toast()` de confirmation sur les écrans d'édition en
+  place, mais le `<select>` de priorité juste à côté des champs nom/icône
+  d'une tâche (Réglages) avait été oublié — incohérence à l'intérieur même
+  du correctif précédent, maintenant alignée.
+- 📋 **Récap hebdo du dimanche « vivant »** : comme le bandeau du soir et la
+  notification de série (rendus « vivants » à l'itération 27), le récap
+  hebdo n'était évalué qu'au chargement de la page — une tablette allumée
+  avant 18h le dimanche et laissée ouverte ne le voyait jamais apparaître.
+  `reminderTick()` (le tick à la minute déjà en place) vérifie désormais
+  aussi `shouldShowWeeklyRecap()` et ouvre le récap tout seul, sans jamais
+  interrompre une modale déjà affichée (garde sur `.veil`).
+- ⌨️ **Focus clavier restauré à la fermeture d'une modale système** :
+  l'itération 25 piégeait le focus pendant l'ouverture (`trapModal()`) mais
+  ne le rendait jamais à la fermeture — au clic sur « Continuer »/
+  « Annuler »/l'action extra, le focus retombait sur `<body>`. `sysModal()`
+  mémorise maintenant l'élément d'origine une seule fois par chaîne de
+  modales (comme l'entrée d'historique déjà poussée à l'ouverture) et le
+  refocalise à la fin de la chaîne, seulement s'il existe encore dans le
+  DOM. Fonctionne pour les modales autonomes (remise à zéro, récap hebdo) ;
+  n'a pas d'effet sur la chaîne de jalons d'une quête, dont le bouton
+  d'origine est déjà détruit par le `render()` qui précède l'ouverture —
+  limite connue, sans régression (repli silencieux).
+- 🩹 Petit correctif au passage : le champ « heure du rappel du soir » ne se
+  réaffichait pas avec la valeur bornée après une saisie hors limites
+  (ex. 27h → stockée 23h mais le champ montrait encore 27), contrairement à
+  son jumeau « heure de série » qui le faisait déjà depuis l'itération 18.
+- ✅ Tests : 225 assertions au total (218 dans smoke.js +7, 7 dans
+  sync-test.js inchangée) — toast sur le changement de priorité, champ
+  d'heure du soir réaffichant la valeur bornée, récap hebdo déclenché par
+  `reminderTick()` sans rechargement + absence de double-ouverture par
+  dessus une modale déjà affichée, focus restauré sur le bouton d'origine
+  après la modale de remise à zéro. Deux flakes de contention rencontrés en
+  cours de route (bandeau du soir puis grind héros complet, deux zones
+  jamais touchées par cette itération, dans deux passages isolés
+  consécutifs) — troisième passage isolé entièrement vert, cohérent avec le
+  pattern déjà documenté aux itérations 15/20/22/24 ; aucune correction
+  applicative nécessaire. Validation visuelle (captures 390×844) : toast
+  après changement de priorité, récap hebdo ouvert par le tick sans
+  rechargement.
+- 🔁 Cadence de la boucle remise à toutes les 2h à la demande de
+  l'utilisateur (`CronCreate`, session en cours) — cette programmation est
+  propre à la session : elle s'arrête si le conteneur est recyclé et
+  expire de toute façon au bout de 7 jours (limite du mécanisme, signalée
+  à l'utilisateur).
+
+**Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
+- Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
+  attente — rien ne sera créé en base sans accord explicite).
+- Nommer le défi concerné dans la modale « OBJECTIF ATTEINT » (actuellement
+  générique — gênant dès que plusieurs défis tournent en parallèle) ;
+  restaurer le focus clavier sur la chaîne de jalons d'une quête nécessite
+  de capturer l'élément déclencheur avant le `render()` de `doTask()` et de
+  le retrouver après re-rendu (par attributs `data-do`/`data-p`, pas par
+  référence DOM) — repéré à cette itération, laissé pour une prochaine
+  passe dédiée à l'accessibilité clavier.
+- Revoir la taille du fichier index.html (grossit à chaque itération,
+  maintenant ~2 970 lignes).

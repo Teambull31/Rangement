@@ -345,6 +345,12 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await page.waitForTimeout(200);
   check("icône de tâche modifiée", (await page.evaluate(() => S.tasks[0].icon)) === "🫧");
   await page.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
+  await page.selectOption(`[data-tprio="${t0}"]`, "critique");
+  await page.waitForTimeout(200);
+  check("priorité de tâche modifiée depuis Réglages", (await page.evaluate(() => S.tasks[0].prio)) === "critique");
+  check("toast de confirmation après changement de priorité (incohérence corrigée, it. 29)",
+    (await page.locator(".toast", { hasText: "Quêtes mises à jour" }).count()) === 1);
+  await page.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
   await page.locator('[data-tab="quetes"]').click();
   const renamedQuest = page.locator(".quest", { hasText: "Vitres du salon" });
   check("nouveau nom et icône visibles sur l'onglet Quêtes",
@@ -603,6 +609,16 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   const streakBanner = (await evPage.locator(".evremind").count()) ? (await evPage.locator(".evremind").textContent()).trim() : "";
   check("rappel conscient de la série (" + streakBanner + ")", streakBanner.includes("série de 1 jour"));
 
+  // Heure du rappel du soir : une saisie hors bornes est stockée bornée, et le champ
+  // doit désormais réafficher aussitôt la valeur réellement utilisée (re-render manquant, it. 29)
+  await evPage.locator('[data-tab="reglages"]').click();
+  await evPage.fill("#eveningHour", "27");
+  await evPage.locator("#eveningHour").evaluate(el => el.blur());
+  await evPage.waitForTimeout(150);
+  check("heure du soir bornée à 23 en stockage", (await evPage.evaluate(() => localStorage.getItem("rangement-evening-hour"))) === "23");
+  check("champ réaffiche la valeur bornée (23), pas la saisie brute (27)",
+    (await evPage.locator("#eveningHour").inputValue()) === "23");
+
   // Heure du rappel de série 🔥 indépendante de l'heure du rappel générique
   await evPage.locator('[data-tab="reglages"]').click();
   await evPage.fill("#streakHour", "19");
@@ -637,6 +653,22 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   check("récap hebdo affiche les XP et le leader", recapText.includes("RÉCAP DE LA SEMAINE") && recapText.includes("XP"));
   await evPage.locator("#veilOk").click();
   check("récap masqué pour la semaine après fermeture", (await evPage.evaluate(() => recapDismissedThisWeek())) === true);
+
+  // Récap hebdo « vivant » (it. 29) : reminderTick() doit désormais le déclencher tout
+  // seul si l'appli reste ouverte jusqu'à dimanche 18h, comme le bandeau du soir (it. 27).
+  await evPage.evaluate(() => {
+    localStorage.setItem("rangement-recap", "on");
+    localStorage.removeItem("rangement-recap-dismiss");
+    window.shouldShowWeeklyRecap = () => true; // simule l'heure due, indépendant de l'horloge réelle
+    reminderTick();
+  });
+  await evPage.waitForTimeout(150);
+  check("reminderTick() ouvre le récap tout seul, sans rechargement",
+    (await evPage.locator(".sysbox").count()) === 1 && (await evPage.locator(".sysbox").textContent()).includes("RÉCAP DE LA SEMAINE"));
+  await evPage.evaluate(() => reminderTick());
+  await evPage.waitForTimeout(150);
+  check("pas de double-ouverture par dessus une modale déjà affichée", (await evPage.locator(".veil").count()) === 1);
+  await evPage.locator("#veilOk").click();
   await evContext.close();
 
   // Notification navigateur (best-effort) : Notification API simulée pour un test déterministe
@@ -1046,6 +1078,8 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await it27Page.locator("#veilOk").click();
   await it27Page.waitForTimeout(150);
   check("« Garder nos données » : journal intact", (await it27Page.evaluate(() => S.log.length)) === 1);
+  check("focus clavier restauré sur le bouton d'origine après fermeture de la modale (it. 29)",
+    (await it27Page.evaluate(() => document.activeElement && document.activeElement.id)) === "resetBtn");
   await it27Page.locator("#resetBtn").click();
   await it27Page.waitForSelector("#veilExtra");
   await it27Page.locator("#veilExtra").click();
