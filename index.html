@@ -377,10 +377,14 @@
 
   /* ---------- Journal ---------- */
   .day-h { font-family: var(--display); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-dim); margin: 14px 0 6px; }
-  .logline { display: flex; align-items: center; gap: 10px; padding: 7px 2px; border-bottom: 1px dashed var(--line); font-size: 15.5px; }
+  .logline { display: flex; align-items: center; gap: 10px; padding: 7px 2px; border-bottom: 1px dashed var(--line); font-size: 15.5px; flex-wrap: wrap; }
   .logline:last-child { border-bottom: none; }
+  .logline .lname { flex: 1 1 auto; min-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .logline .lxp { margin-left: auto; font-family: var(--display); font-size: 12px; font-weight: 700; color: var(--sys); white-space: nowrap; }
   .undo { background: none; border: 1px solid var(--line); color: var(--ink-dim); border-radius: 3px; font-size: 13px; padding: 7px 12px; }
+  .notebtn { background: none; border: none; color: var(--ink-dim); font-size: 14px; padding: 4px 6px; opacity: .7; }
+  .notebtn:hover { opacity: 1; }
+  .jnote-edit { flex: 1; min-width: 60px; max-width: 160px; padding: 4px 7px; font-size: 13px; }
 
   /* ---------- Forms ---------- */
   .frow { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
@@ -1240,7 +1244,18 @@ function trophyData() {
     if (byWeek[wk].a > byWeek[wk].b) winsA++;
     else if (byWeek[wk].b > byWeek[wk].a) winsB++;
   }
-  return { byWeek, winsA, winsB };
+  // Série de victoires hebdo en cours : semaines écoulées consécutives (les plus
+  // récentes d'abord) remportées par le même joueur, stoppée à la première égalité/défaite.
+  let streakHolder = null, streakLen = 0;
+  for (const wk of Object.keys(byWeek).sort().reverse()) {
+    const x = byWeek[wk];
+    if (x.a === x.b) break;
+    const w = x.a > x.b ? "a" : "b";
+    if (streakHolder === null) streakHolder = w;
+    if (w !== streakHolder) break;
+    streakLen++;
+  }
+  return { byWeek, winsA, winsB, streakA: streakHolder === "a" ? streakLen : 0, streakB: streakHolder === "b" ? streakLen : 0 };
 }
 
 function trophyWall(byWeek) {
@@ -1430,6 +1445,7 @@ function vDuel() {
     ["Série en cours", streakOf(a.id), streakOf(b.id), " j"],
     ["Boucliers 🛡️ disponibles", availableShields(a.id), availableShields(b.id), ""],
     ["Trophées 👑", trophies.winsA, trophies.winsB, ""],
+    ["Série de victoires 🔥", trophies.streakA, trophies.streakB, " sem."],
   ];
   const wa = weekXp(a.id), wb = weekXp(b.id), tot = wa + wb;
   const pa = tot ? Math.round(100 * wa / tot) : 50;
@@ -1655,6 +1671,7 @@ function vObjectifs() {
 
 /* ---------- Journal ---------- */
 let journalFilter = { q: "", player: "all" }; // session seulement, pas persisté
+let journalEditing = null; // id de l'entrée dont la note est en cours d'édition, session seulement
 
 function vJournal() {
   if (!S.log.length) return `<section class="panel"><h2>Journal de chasse</h2><p class="hint">Rien pour l'instant — la première quête vous attend.</p></section>`;
@@ -1685,9 +1702,14 @@ function vJournal() {
     const label = new Date(k + "T12:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
     return `<div class="day-h">${label}</div>` + byDay[k].map(l => {
       const p = S.players.find(x => x.id === l.playerId);
+      const editable = l.note !== "bouclier";
+      const noteZone = journalEditing === l.id
+        ? `<input type="text" class="jnote-edit" data-noteedit="${l.id}" value="${esc(l.note)}" maxlength="40" placeholder="Note…" aria-label="Note sur cette entrée">`
+        : `${l.note ? ` <span class="chip gold">${esc(l.note)}</span>` : ""}${editable ? `<button class="notebtn" data-noteeditopen="${l.id}" aria-label="Ajouter ou modifier une note">✏️</button>` : ""}`;
       return `<div class="logline">
         <span>${esc(l.icon || "✅")}</span>
-        <span>${p ? esc(p.emoji + " ") : ""}${esc(l.taskName)}${l.note ? ` <span class="chip gold">${esc(l.note)}</span>` : ""}</span>
+        <span class="lname">${p ? esc(p.emoji + " ") : ""}${esc(l.taskName)}</span>
+        ${noteZone}
         <span class="lxp">+${l.xp} XP</span>
         <button class="undo" data-undo="${l.id}">Annuler</button>
       </div>`;
@@ -1717,8 +1739,7 @@ function vReglages() {
       <input type="text" data-pname="${p.id}" value="${esc(p.name)}" maxlength="20" aria-label="Nom">
       <input type="color" data-pcolor="${p.id}" value="${esc(p.color || "#4DC3FF")}" style="flex:0 0 52px;height:44px;padding:2px;background:var(--field);border:1px solid var(--line);border-radius:3px" aria-label="Couleur">
     </div>`).join("")}
-    <button class="btn" id="savePlayers">Enregistrer</button>
-    <p class="hint" style="margin-top:6px">La couleur personnalise ta carte, tes boutons de quête et la barre de duel — elle se synchronise sur les deux téléphones.</p>
+    <p class="hint" style="margin-top:6px">Enregistré automatiquement à chaque changement. La couleur personnalise ta carte, tes boutons de quête et la barre de duel — elle se synchronise sur les deux téléphones.</p>
   </section>
   <section class="panel">
     <h2>Tâches ménagères</h2>
@@ -2247,6 +2268,31 @@ function bindView() {
       render(); toast("Entrée annulée");
     });
 
+  document.querySelectorAll("[data-noteeditopen]").forEach(b =>
+    b.onclick = () => {
+      journalEditing = b.dataset.noteeditopen;
+      render();
+      const el = document.querySelector("[data-noteedit]");
+      if (el) { el.focus(); el.select(); }
+    });
+  const noteInput = document.querySelector("[data-noteedit]");
+  if (noteInput) {
+    const commit = () => {
+      const l = S.log.find(x => x.id === noteInput.dataset.noteedit);
+      journalEditing = null;
+      if (l) {
+        l.note = noteInput.value.trim().slice(0, 40);
+        save(); queueOp({ table: "log", type: "upsert", row: toRow.log(l) });
+      }
+      render();
+    };
+    noteInput.onblur = commit;
+    noteInput.onkeydown = e => {
+      if (e.key === "Enter") noteInput.blur();
+      else if (e.key === "Escape") { noteInput.onblur = null; journalEditing = null; render(); }
+    };
+  }
+
   // Objectifs
   document.querySelectorAll("[data-objpreset]").forEach(b =>
     b.onclick = () => {
@@ -2379,19 +2425,26 @@ function bindView() {
   };
 
   // Réglages
-  const sp = $("#savePlayers");
-  if (sp) sp.onclick = () => {
-    S.players.forEach(p => {
-      const n = document.querySelector(`[data-pname="${p.id}"]`).value.trim();
-      const e = document.querySelector(`[data-pemoji="${p.id}"]`).value.trim();
-      const c = document.querySelector(`[data-pcolor="${p.id}"]`).value;
-      if (n) p.name = n;
-      if (e) p.emoji = e;
-      if (c) p.color = c;
-      queueOp({ table: "players", type: "upsert", row: toRow.players(p) });
+  document.querySelectorAll("[data-pname], [data-pemoji]").forEach(inp =>
+    inp.onchange = () => {
+      const id = inp.dataset.pname || inp.dataset.pemoji;
+      const isName = !!inp.dataset.pname;
+      const p = S.players.find(x => x.id === id);
+      if (!p) return;
+      const v = inp.value.trim();
+      if (!v) { inp.value = isName ? p.name : p.emoji; return; }
+      if (isName) p.name = v; else p.emoji = v;
+      save(); queueOp({ table: "players", type: "upsert", row: toRow.players(p) });
+      render(); toast("Chasseurs mis à jour");
     });
-    save(); render(); toast("Chasseurs mis à jour");
-  };
+  document.querySelectorAll("[data-pcolor]").forEach(inp =>
+    inp.onchange = () => {
+      const p = S.players.find(x => x.id === inp.dataset.pcolor);
+      if (!p) return;
+      p.color = inp.value;
+      save(); queueOp({ table: "players", type: "upsert", row: toRow.players(p) });
+      render(); toast("Chasseurs mis à jour");
+    });
   const tAdd = $("#tAdd");
   if (tAdd) tAdd.onclick = () => {
     const name = $("#tName").value.trim();

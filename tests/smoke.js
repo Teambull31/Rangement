@@ -221,14 +221,29 @@ const { APP_URL, launch, check, done } = require("./helpers");
   await page.waitForTimeout(150);
   check("filtre « Tous » restaure toutes les lignes", (await page.locator(".logline").count()) === totalLines);
 
-  // Réglages : renommage + couleur, persistance après rechargement
+  // Note libre sur une entrée du journal (édition en place, comme les tâches/récompenses)
+  await page.locator(".notebtn").first().click();
+  await page.waitForTimeout(100);
+  check("clic sur le crayon affiche un champ d'édition", (await page.locator(".jnote-edit").count()) === 1);
+  await page.fill(".jnote-edit", "Bien fait !");
+  await page.locator(".jnote-edit").evaluate(el => el.blur());
+  await page.waitForTimeout(200);
+  check("note affichée en chip doré après édition", (await page.locator(".logline .chip.gold", { hasText: "Bien fait !" }).count()) === 1);
+  check("champ d'édition refermé après validation", (await page.locator(".jnote-edit").count()) === 0);
+  await page.reload();
+  await page.waitForSelector(".hunter");
+  await page.locator('[data-tab="journal"]').click();
+  check("note du journal conservée après rechargement", (await page.locator(".logline .chip.gold", { hasText: "Bien fait !" }).count()) === 1);
+
+  // Réglages : renommage + couleur enregistrés au changement (onchange), sans bouton
   await page.locator('[data-tab="reglages"]').click();
   await page.fill('[data-pname="p1"]', "Max");
-  // La couleur se vérifie sur le joueur 2 : le leader de la semaine porte la bordure dorée.
-  await page.locator('[data-pcolor="p2"]').evaluate(el => { el.value = "#ff0000"; });
-  await page.locator("#savePlayers").click();
+  await page.locator('[data-pname="p1"]').evaluate(el => el.blur());
   await page.waitForTimeout(200);
   check("joueur renommé", (await page.locator(".hunter .name").first().textContent()).trim() === "Max");
+  // La couleur se vérifie sur le joueur 2 : le leader de la semaine porte la bordure dorée.
+  await page.locator('[data-pcolor="p2"]').evaluate(el => { el.value = "#ff0000"; el.dispatchEvent(new Event("change")); });
+  await page.waitForTimeout(200);
   await page.reload();
   await page.waitForSelector(".hunter");
   check("nom conservé après rechargement", (await page.locator(".hunter .name").first().textContent()).trim() === "Max");
@@ -341,6 +356,12 @@ const { APP_URL, launch, check, done } = require("./helpers");
   const trophyTxt = (await page.locator(".trophyline").count()) ? await page.locator(".trophyline").first().textContent() : "";
   check("trophée décerné pour la semaine passée (" + trophyTxt.trim().replace(/\s+/g, " ") + ")", trophyTxt.includes("👑"));
   check("compteur de trophées dans les stats", (await page.locator(".statgrid").textContent()).includes("Trophées"));
+  const streakRow = await page.evaluate(() => {
+    const c = Array.from(document.querySelectorAll(".statgrid .c")).find(el => el.textContent.includes("Série de victoires"));
+    return c ? { a: c.previousElementSibling.textContent, b: c.nextElementSibling.textContent } : null;
+  });
+  check("série de victoires hebdo : 1 semaine pour le vainqueur de l'unique semaine passée (" + JSON.stringify(streakRow) + ")",
+    streakRow && (streakRow.a === "1 sem." || streakRow.b === "1 sem."));
 
   // Pari de duel : mise, résolution sur une semaine passée, réclamation
   check("formulaire de mise affiché", (await page.locator("#betAdd").count()) === 1);

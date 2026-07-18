@@ -489,11 +489,39 @@ filtre d'univers actif, recommandant parfois un héros hors du filtre choisi.
 - Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
   attente — rien ne sera créé en base sans accord explicite).
 - Revoir la taille du fichier index.html (grossit à chaque itération).
-- Note libre a posteriori sur une entrée du Journal (la colonne `log.note`
-  existe déjà et ne sert qu'à des tags auto — la rendre éditable en place
-  permettrait un commentaire perso, comme pour les tâches/récompenses).
-- Série de victoires hebdomadaires du duel (dérivée de `trophyData()`, à
-  ajouter aux statistiques à côté du total de trophées).
-- Sauvegarde de Réglages → Chasseurs incohérente avec le reste (bouton
-  « Enregistrer » requis, alors que tâches/récompenses sauvegardent au blur) —
-  à aligner sur le même pattern `onchange`.
+
+## Itération 23 — 2026-07-18 (routine cloud)
+
+**Audit** : trois pistes en attente depuis l'itération 22, aucune ne
+nécessitant de changement de schéma — les trois ont été traitées.
+
+**Améliorations livrées :**
+- 📝 **Note libre sur une entrée du Journal** : bouton crayon ✏️ sur chaque
+  entrée (sauf les entrées « bouclier », techniques) ouvrant un champ
+  d'édition en place ; la note remplace l'éventuel tag auto (« ×2 »,
+  « 🔥+35% ») pour devenir un commentaire perso, synchronisée entre
+  téléphones via le même upsert que le reste (`log.note` existait déjà,
+  aucune migration). Correction de layout au passage : la ligne du journal
+  passe en `flex-wrap` et le nom de tâche tronque proprement (`ellipsis`)
+  pour que le bouton « Annuler » ne soit plus jamais poussé hors écran par
+  une note ou un nom de tâche longs — bug découvert pendant la validation
+  visuelle de cette même fonctionnalité, corrigé avant commit.
+- 🔥 **Série de victoires hebdomadaires** dans les statistiques du Duel
+  (« Série de victoires 🔥 ») : semaines écoulées consécutives (les plus
+  récentes d'abord) remportées par le même chasseur, dérivée de
+  `trophyData()`, stoppée à la première égalité ou défaite.
+- ✏️ **Réglages → Chasseurs aligné sur le pattern `onchange`** : nom, emoji
+  et couleur s'enregistrent séparément dès le changement de chaque champ
+  (comme les tâches et récompenses), suppression du bouton « Enregistrer »
+  devenu incohérent avec le reste de l'écran.
+- ✅ Tests : 159 assertions (+5 dans smoke.js : édition de note, persistance
+  après rechargement, valeur de la série de victoires calculée sur une
+  semaine passée injectée). Suite `sync-test.js` inchangée (7 assertions),
+  repassée intégralement après le correctif de layout. Validation visuelle
+  (captures 390×844) sur Journal (avant/pendant/après édition de note),
+  Duel (nouvelle ligne de stats) et Réglages (Chasseurs sans bouton).
+
+**Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
+- Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
+  attente — rien ne sera créé en base sans accord explicite).
+- Revoir la taille du fichier index.html (grossit à chaque itération).
