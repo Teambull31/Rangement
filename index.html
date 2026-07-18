@@ -275,6 +275,13 @@
     background: rgba(240,197,80,.08); border: 1px solid var(--gold); border-radius: 3px;
     padding: 9px 12px; margin-bottom: 12px; font-size: 14px; color: var(--ink);
   }
+  .daystat {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    background: color-mix(in oklab, var(--sys) 8%, transparent); border: 1px solid var(--line-glow);
+    border-radius: 3px; padding: 8px 12px; margin-bottom: 12px; font-size: 14px; color: var(--ink);
+  }
+  .daystat-by { margin-left: auto; font-size: 13px; color: var(--ink-dim); }
+  .uvcount { font-size: 12px; color: var(--ink-dim); font-weight: 400; }
   .betline { font-size: 15px; padding: 4px 0 10px; border-bottom: 1px dashed var(--line); margin-bottom: 8px; }
   .betline:last-child { border-bottom: none; margin-bottom: 0; }
   .betline.hot { border: 1px solid var(--gold); border-radius: 3px; padding: 10px 12px; background: rgba(240,197,80,.07); }
@@ -985,6 +992,17 @@ function renderTabs() {
 /* ---------- Quêtes ---------- */
 function suggestionsOn() { return localStorage.getItem("rangement-suggest") !== "off"; }
 
+// Bilan du jour (dérivé du journal) : affiché en tête de l'onglet Quêtes
+function todayStats() {
+  const k = dayKey(NOW());
+  const logs = S.log.filter(l => dayKey(l.ts) === k);
+  return {
+    n: logs.length,
+    xp: logs.reduce((a, l) => a + l.xp, 0),
+    by: S.players.map(p => ({ p, n: logs.filter(l => l.playerId === p.id).length })),
+  };
+}
+
 /* --- Rappel du soir (dans l'appli uniquement, aucune notification push) --- */
 function eveningReminderOn() { return localStorage.getItem("rangement-evening") !== "off"; }
 function eveningReminderHour() {
@@ -1153,6 +1171,7 @@ function vQuetes() {
   return `
   ${shouldShowEveningReminder() ? `<div class="evremind">${eveningReminderText()} <button id="evRemindOk">Plus tard</button></div>` : ""}
   ${bet ? `<div class="betremind">⚔️ Enjeu de la semaine : <b>${betRewardLabel(bet)}</b> — voir l'onglet Duel</div>` : ""}
+  ${(() => { const ts = todayStats(); return ts.n ? `<div class="daystat">☀️ Aujourd'hui : <b>${ts.n} quête${ts.n > 1 ? "s" : ""}</b> · <b>${ts.xp} XP</b> à deux <span class="daystat-by">${ts.by.map(x => esc(x.p.emoji) + " " + x.n).join(" · ")}</span></div>` : ""; })()}
   <section class="panel">
     <h2>Quêtes disponibles <small>— touche ton emoji quand c'est fait</small></h2>
     ${rows || '<p class="hint">Aucune quête. Ajoute des tâches dans Réglages.</p>'}
@@ -1419,6 +1438,7 @@ function vDuel() {
 
 /* ---------- Héros ---------- */
 let herosView = "p1"; // dont on parcourt la collection (session seulement)
+let herosUniverse = "all"; // filtre d'univers de la collection (session seulement)
 
 function vHeros() {
   const p = S.players.find(x => x.id === herosView) || S.players[0];
@@ -1453,8 +1473,10 @@ function vHeros() {
     curHtml = `<p class="hint">${esc(p.name)} n'incarne encore aucun héros — débloquez-en un ci-dessous et touchez « Incarner ».</p>`;
   }
 
-  const groups = UNIVERSES.map(u => {
-    const cards = CHARACTERS.filter(c => c.univers === u).map(c => {
+  const groups = UNIVERSES.filter(u => herosUniverse === "all" || u === herosUniverse).map(u => {
+    const all = CHARACTERS.filter(c => c.univers === u);
+    const nOk = all.filter(c => unlocked.has(c.id)).length;
+    const cards = all.map(c => {
       const isUnlocked = unlocked.has(c.id);
       const isCur = cur && cur.id === c.id;
       const tier = isUnlocked ? gearTier(c, st) : 0;
@@ -1471,8 +1493,14 @@ function vHeros() {
           : `<div class="charcard-cond">🔒 ${condProgress(c.cond, st)}</div>`}
       </div>`;
     }).join("");
-    return `<div class="day-h">${esc(u)}</div><div class="chargrid">${cards}</div>`;
+    return `<div class="day-h">${esc(u)} <span class="uvcount">${nOk}/${all.length}</span></div><div class="chargrid">${cards}</div>`;
   }).join("");
+
+  const universeFilter = `
+  <div class="filterrow" style="margin:8px 0 10px">
+    <button class="filterbtn ${herosUniverse === "all" ? "on" : ""}" data-hu="all">Tous</button>
+    ${UNIVERSES.map(u => `<button class="filterbtn ${herosUniverse === u ? "on" : ""}" data-hu="${esc(u)}">${esc(u)}</button>`).join("")}
+  </div>`;
 
   return `
   ${switcher}
@@ -1499,6 +1527,7 @@ function vHeros() {
   <section class="panel">
     <h2>Collection <small>— ${unlocked.size}/${CHARACTERS.length} débloqués</small></h2>
     <p class="hint">Plus un héros est légendaire, plus il se mérite : niveaux, quêtes, séries et trophées. Son équipement progresse ensuite avec vous. Chaque héros est représenté par son emblème.</p>
+    ${universeFilter}
     ${groups}
   </section>`;
 }
@@ -1730,7 +1759,7 @@ function vReglages() {
 }
 
 /* ================= Actions ================= */
-function toast(msg, actionLabel, actionFn) {
+function toast(msg, actionLabel, actionFn, ms) {
   const t = document.createElement("div");
   t.className = "toast";
   t.textContent = msg;
@@ -1742,7 +1771,12 @@ function toast(msg, actionLabel, actionFn) {
     t.appendChild(b);
   }
   $("#toastZone").appendChild(t);
-  setTimeout(() => t.remove(), actionLabel ? 5000 : 2200);
+  setTimeout(() => t.remove(), ms || (actionLabel ? 5000 : 2200));
+}
+
+// Bannière quand une nouvelle version de l'appli est prête (service worker mis à jour)
+function notifyUpdateAvailable() {
+  toast("⬆️ Nouvelle version de l'appli disponible", "Recharger", () => location.reload(), 30000);
 }
 
 /* ---------- Confettis (canvas, sobre, respecte le mouvement réduit) ---------- */
@@ -2105,6 +2139,8 @@ function bindView() {
   // Héros : sélecteur de joueur, incarnation, retrait
   document.querySelectorAll("[data-hv]").forEach(b =>
     b.onclick = () => { herosView = b.dataset.hv; render(); });
+  document.querySelectorAll("[data-hu]").forEach(b =>
+    b.onclick = () => { herosUniverse = b.dataset.hu; render(); });
   document.querySelectorAll("[data-equip]").forEach(b =>
     b.onclick = () => {
       const p = S.players.find(x => x.id === herosView);
@@ -2572,7 +2608,16 @@ if (!localStorage.getItem("rangement-onboard-v1")) {
 maybeSendStreakNotification();
 
 if ("serviceWorker" in navigator && location.protocol === "https:") {
-  navigator.serviceWorker.register("sw.js");
+  navigator.serviceWorker.register("sw.js").then(reg => {
+    reg.addEventListener("updatefound", () => {
+      const nw = reg.installing;
+      if (!nw) return;
+      nw.addEventListener("statechange", () => {
+        // "installed" avec un contrôleur déjà actif = nouvelle version en attente
+        if (nw.state === "installed" && navigator.serviceWorker.controller) notifyUpdateAvailable();
+      });
+    });
+  }).catch(() => {});
 }
 </script>
 </body>

@@ -64,6 +64,17 @@ const { APP_URL, launch, check, done } = require("./helpers");
   const bonusEqualsOverdue = await page.evaluate(() => bonusTaskId() === overdueTaskId());
   check("suggestion de tâche équitable affichée", bonusEqualsOverdue ? suggestedCount === 0 : suggestedCount === 1);
 
+  // Bandeau « Aujourd'hui » : bilan du jour en tête de l'onglet Quêtes
+  const dayTxt = (await page.locator(".daystat").count()) ? (await page.locator(".daystat").textContent()).trim() : "";
+  check("bandeau du jour affiché (" + dayTxt.replace(/\s+/g, " ") + ")", dayTxt.includes("Aujourd'hui") && dayTxt.includes("XP"));
+  check("répartition par joueur dans le bandeau du jour", (await page.locator(".daystat-by").textContent()).includes("⚔️"));
+
+  // Bannière de mise à jour PWA (invocation directe : pas de service worker en file://)
+  await page.evaluate(() => notifyUpdateAvailable());
+  const updBtn = page.locator(".toast-action", { hasText: "Recharger" });
+  check("bannière « Nouvelle version » avec bouton Recharger", (await updBtn.count()) === 1);
+  await page.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
+
   // Duel : graphique hebdomadaire + hauts faits
   await page.locator('[data-tab="duel"]').click();
   check("graphique XP par semaine présent", (await page.locator('svg[role="img"]').count()) === 1);
@@ -535,6 +546,14 @@ const { APP_URL, launch, check, done } = require("./helpers");
     await heroPage.evaluate(() => unlockedFeats("p1").every(f => !["hero1", "hero5", "heroH", "soul"].includes(f.id))));
   const nextTxt = await heroPage.locator("section.panel", { hasText: "Prochaine recrue" }).textContent();
   check("« Prochaine recrue » = Sein sur un compte frais (" + nextTxt.replace(/\s+/g, " ").trim().slice(0, 60) + ")", nextTxt.includes("Sein"));
+
+  // Filtre de la collection par univers
+  await heroPage.locator('[data-hu="One Piece"]').click();
+  check("filtre One Piece : 6 héros affichés, un seul univers",
+    (await heroPage.locator(".charcard").count()) === 6 && (await heroPage.locator(".day-h").count()) === 1);
+  check("compteur de déblocage par univers (0/6)", (await heroPage.locator(".day-h .uvcount").textContent()).trim() === "0/6");
+  await heroPage.locator('[data-hu="all"]').click();
+  check("filtre « Tous » : collection complète restaurée", (await heroPage.locator(".charcard").count()) === totalChars);
 
   // Grosse progression injectée : 310 quêtes réparties sur 15 jours (niveau 30, série 15, 2 trophées passés)
   await heroPage.evaluate(() => {

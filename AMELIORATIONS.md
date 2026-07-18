@@ -385,7 +385,7 @@ invisible, on ne voyait que « 🔥 N j » sans l'effet concret.
   des 3 DanMachi ; le grind du scénario de déblocage passe à 310 quêtes pour
   atteindre le niveau 30 (courbe : 15 080 XP cumulés).
 
-## Itération 20 — 2026-07-18 (après-midi)
+## Itération 20 — 2026-07-18 (routine cloud, 10h11)
 
 **Audit** : l'appli est une PWA complète (manifest + service worker) mais ne
 propose jamais de l'installer — aucune capture de `beforeinstallprompt`, ni
@@ -419,8 +419,38 @@ personnalisation entre les deux listes.
   « rien en parallèle ») ; reproduction isolée immédiate 1/1 OK, aucune
   correction applicative nécessaire — leçon retenue : ne plus lancer de
   moniteur/poll de fond pendant l'exécution des suites.
+## Itération 21 — 2026-07-18 (session interactive, en parallèle de l'it. 20)
+
+**Audit** : aucun retour immédiat sur « ce qu'on a fait aujourd'hui » depuis
+l'onglet principal (le calendrier et le duel sont dans un autre onglet) ; la
+collection de 30 héros sur 9 univers impose un long scroll sans filtre ; une
+PWA installée ne signalait jamais qu'une nouvelle version était prête (le
+service worker network-first se met à jour silencieusement au prochain
+démarrage seulement).
+
+**Améliorations livrées :**
+- ☀️ **Bandeau « Aujourd'hui »** en tête de l'onglet Quêtes : « 3 quêtes ·
+  75 XP à deux (⚔️ 2 · 🏹 1) » — dérivé du journal, absent si rien n'a été
+  fait (le rappel du soir prend alors le relais).
+- 🎴 **Filtre de la collection par univers** (chips « Tous / Frieren / … »)
+  + compteur de déblocage par univers dans chaque en-tête (« One Piece 0/6 »).
+  Filtre de session, comme le sélecteur de joueur.
+- ⬆️ **Bannière de mise à jour PWA** : quand le service worker détecte une
+  nouvelle version installée en attente, un toast « Nouvelle version de
+  l'appli disponible — Recharger » (30 s) permet de basculer immédiatement.
+  `toast()` accepte désormais une durée optionnelle.
+- ✅ Tests : +6 assertions — bandeau du jour et répartition par joueur,
+  bannière de mise à jour (invocation directe, pas de SW en file://), filtre
+  One Piece (6 héros, un seul univers), compteur 0/6, retour « Tous ».
+  Total après fusion avec l'it. 20 de la routine : 142 assertions.
+  Leçon d'orchestration : la routine 2 h et la session interactive ont
+  travaillé en même temps (départ décalé de la routine à 10h11) — toujours
+  re-puller avant de pousser, et les numéros d'itération se résolvent au
+  rebase.
 
 **Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
 - Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
   attente — rien ne sera créé en base sans accord explicite).
 - Revoir la taille du fichier index.html (grossit à chaque itération).
+- Bouclier de série façon Duolingo (gel dérivé du journal, à concevoir sans
+  stockage).
