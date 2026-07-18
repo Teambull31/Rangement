@@ -552,6 +552,9 @@ const { APP_URL, launch, check, done } = require("./helpers");
   check("filtre One Piece : 6 héros affichés, un seul univers",
     (await heroPage.locator(".charcard").count()) === 6 && (await heroPage.locator(".day-h").count()) === 1);
   check("compteur de déblocage par univers (0/6)", (await heroPage.locator(".day-h .uvcount").textContent()).trim() === "0/6");
+  const nextTxtOP = await heroPage.locator("section.panel", { hasText: "Prochaine recrue" }).textContent();
+  check("« Prochaine recrue » suit le filtre d'univers (Usopp attendu sur One Piece, pas Sein)",
+    nextTxtOP.includes("Usopp") && !nextTxtOP.includes("Sein"));
   await heroPage.locator('[data-hu="all"]').click();
   check("filtre « Tous » : collection complète restaurée", (await heroPage.locator(".charcard").count()) === totalChars);
 
@@ -628,6 +631,72 @@ const { APP_URL, launch, check, done } = require("./helpers");
     (await unlockPage.evaluate(() => S.players[0].characterId)) === "usopp"
     && (await unlockPage.locator(".hunter").first().locator(".charline").textContent()).includes("Usopp"));
   await unlockContext.close();
+
+  // Annuler une quête même après une modale spéciale (mistap sur le mauvais chasseur, etc.)
+  const undoModalContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const undoModalPage = await undoModalContext.newPage();
+  await undoModalPage.addInitScript(() => {
+    localStorage.setItem("rangement-onboard-v1", "1");
+    localStorage.setItem("rangement-recap", "off");
+  });
+  await undoModalPage.goto(APP_URL);
+  await undoModalPage.waitForSelector(".quest");
+  await undoModalPage.evaluate(() => {
+    S.log.push({ id: "pre-lvl", ts: Date.now() - 3600e3, playerId: "p1", taskName: "Vitres", icon: "🪟", xp: 95, note: "" });
+    save();
+  });
+  await undoModalPage.reload();
+  await undoModalPage.waitForSelector(".quest");
+  const preLvlXp = await undoModalPage.evaluate(() => totalXp("p1"));
+  await undoModalPage.locator(".quest").first().locator('[data-p="p1"]').click();
+  await undoModalPage.waitForTimeout(300);
+  const lvlModalTxt = await undoModalPage.locator(".sysbox").textContent();
+  check("montée de niveau déclenchée par la quête injectée (" + lvlModalTxt.replace(/\s+/g, " ").slice(0, 30) + ")", lvlModalTxt.includes("NIVEAU"));
+  check("bouton Annuler présent dans la modale de niveau", (await undoModalPage.locator("#veilExtra").count()) === 1);
+  await undoModalPage.locator("#veilExtra").click();
+  await undoModalPage.waitForTimeout(200);
+  check("XP revenue à sa valeur d'avant la quête après Annuler depuis la modale (" + preLvlXp + ")",
+    (await undoModalPage.evaluate(() => totalXp("p1"))) === preLvlXp);
+  await undoModalContext.close();
+
+  // Bouclier de série : gagné tous les 7 jours de série naturelle, comble automatiquement un jour manqué
+  const shieldContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const shieldPage = await shieldContext.newPage();
+  await shieldPage.addInitScript(() => {
+    localStorage.setItem("rangement-onboard-v1", "1");
+    localStorage.setItem("rangement-recap", "off");
+  });
+  await shieldPage.goto(APP_URL);
+  await shieldPage.waitForSelector(".quest");
+  await shieldPage.evaluate(() => {
+    // p1 : 7 jours consécutifs naturels se terminant avant-hier -> 1 bouclier gagné ; rien hier
+    for (let i = 2; i <= 8; i++) {
+      const d = new Date(); d.setDate(d.getDate() - i); d.setHours(12, 0, 0, 0);
+      S.log.push({ id: "nat1-" + i, ts: d.getTime(), playerId: "p1", taskName: "Vitres", icon: "🪟", xp: 20, note: "" });
+    }
+    // p2 : seulement 3 jours consécutifs naturels -> aucun bouclier gagné ; rien hier non plus
+    for (let i = 2; i <= 4; i++) {
+      const d = new Date(); d.setDate(d.getDate() - i); d.setHours(12, 0, 0, 0);
+      S.log.push({ id: "nat2-" + i, ts: d.getTime(), playerId: "p2", taskName: "Poubelles", icon: "🗑️", xp: 15, note: "" });
+    }
+    save();
+  });
+  await shieldPage.reload();
+  await shieldPage.waitForSelector(".quest");
+  check("1 bouclier gagné après 7 jours naturels consécutifs (p1)", (await shieldPage.evaluate(() => earnedShields("p1"))) === 1);
+  check("bouclier automatiquement utilisé pour combler hier (p1)",
+    (await shieldPage.evaluate(() => S.log.some(l => l.playerId === "p1" && l.note === "bouclier"))) === true);
+  check("série de p1 préservée et prolongée par le bouclier (8 j)", (await shieldPage.evaluate(() => streakOf("p1"))) === 8);
+  check("bouclier consommé après usage (0 disponible pour p1)", (await shieldPage.evaluate(() => availableShields("p1"))) === 0);
+  check("l'entrée bouclier ne compte pas comme une vraie quête (7, pas 8)", (await shieldPage.evaluate(() => featStats("p1").count)) === 7);
+  check("pas de bouclier gagné avec seulement 3 jours naturels (p2)", (await shieldPage.evaluate(() => earnedShields("p2"))) === 0);
+  check("série de p2 cassée normalement, aucun bouclier utilisé",
+    (await shieldPage.evaluate(() => S.log.some(l => l.playerId === "p2" && l.note === "bouclier"))) === false
+    && (await shieldPage.evaluate(() => streakOf("p2"))) === 0);
+  await shieldPage.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
+  await shieldPage.locator('[data-tab="duel"]').click();
+  check("compte de boucliers disponibles affiché dans Duel", (await shieldPage.locator(".statgrid").textContent()).includes("Boucliers"));
+  await shieldContext.close();
 
   // Mouvement réduit : aucune animation de confettis ne doit être créée
   const rmContext = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });

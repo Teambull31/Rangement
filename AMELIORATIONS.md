@@ -448,9 +448,52 @@ démarrage seulement).
   re-puller avant de pousser, et les numéros d'itération se résolvent au
   rebase.
 
+## Itération 22 — 2026-07-18 (routine cloud)
+
+**Audit** : un audit ciblé (agent dédié, lecture complète d'index.html face à
+l'historique des 21 itérations) a fait remonter la piste « bouclier de série »
+en attente depuis l'itération 11, plus deux frictions concrètes non couvertes :
+un mistap sur le mauvais chasseur devenait irrattrapable dès qu'une modale
+spéciale (NIVEAU/HAUT FAIT/OBJECTIF ATTEINT) s'affichait avant le toast
+« Annuler » ; et le panneau « Prochaine recrue » de l'onglet Héros ignorait le
+filtre d'univers actif, recommandant parfois un héros hors du filtre choisi.
+
+**Améliorations livrées :**
+- 🛡️ **Bouclier de série façon Duolingo** : un bouclier est gagné
+  automatiquement tous les 7 jours de série *naturelle* (hors jours déjà
+  protégés) ; s'il en reste un disponible et qu'une seule journée est
+  manquée, elle est comblée tout seul au chargement suivant (entrée de
+  journal `{ xp: 0, note: "bouclier" }`, id déterministe pour rester
+  idempotent entre les deux téléphones) — la série continue sans interruption.
+  N'alimente ni les hauts faits, ni le compteur « Quêtes accomplies », ni les
+  conditions de déblocage des héros (seule `streakOf` en tient compte).
+  Compte de boucliers disponibles affiché dans les statistiques du Duel, avec
+  rappel du fonctionnement. Zéro nouvelle colonne — dérivé du journal.
+- ⚡ **Annuler depuis n'importe quelle modale spéciale** : les fenêtres
+  NIVEAU, OBJECTIF ATTEINT et HAUT FAIT proposent désormais un bouton
+  « Annuler » (même mécanisme que le toast et que le bouton « Incarner » de
+  la modale HÉROS DÉBLOQUÉ) — un mistap n'oblige plus à aller chercher
+  l'entrée dans le Journal.
+- 🎯 **« Prochaine recrue » cohérente avec le filtre d'univers** : filtrer la
+  collection sur un univers (ex. One Piece) recalcule aussi la recrue
+  suggérée dans cet univers, au lieu d'afficher un héros d'un autre univers.
+- ✅ Tests : +12 assertions (152 au total : 145 dans smoke.js, 7 dans
+  sync-test.js) — cycle complet du bouclier (gagné après 7 jours naturels,
+  comblement automatique, série prolongée, consommation, exclusion du
+  décompte de quêtes, absence de déclenchement avec seulement 3 jours),
+  bouton Annuler depuis une modale de montée de niveau, cohérence de
+  « Prochaine recrue » avec le filtre d'univers. Validation visuelle
+  (captures 390×844) sur Quêtes, Duel et Héros filtré.
+
 **Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
 - Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
   attente — rien ne sera créé en base sans accord explicite).
 - Revoir la taille du fichier index.html (grossit à chaque itération).
-- Bouclier de série façon Duolingo (gel dérivé du journal, à concevoir sans
-  stockage).
+- Note libre a posteriori sur une entrée du Journal (la colonne `log.note`
+  existe déjà et ne sert qu'à des tags auto — la rendre éditable en place
+  permettrait un commentaire perso, comme pour les tâches/récompenses).
+- Série de victoires hebdomadaires du duel (dérivée de `trophyData()`, à
+  ajouter aux statistiques à côté du total de trophées).
+- Sauvegarde de Réglages → Chasseurs incohérente avec le reste (bouton
+  « Enregistrer » requis, alors que tâches/récompenses sauvegardent au blur) —
+  à aligner sur le même pattern `onchange`.
