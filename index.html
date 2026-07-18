@@ -775,10 +775,11 @@ function unlockedFeats(pid) {
 
 /* --- Héros à incarner : collection au mérite, difficultés selon la popularité --- */
 const RARITIES = {
-  B:  { label: "B",  col: "#8AA3C2" },
-  A:  { label: "A",  col: "#4DC3FF" },
-  S:  { label: "S",  col: "#8B7BFF" },
-  SS: { label: "SS", col: "#F0C550" },
+  B:   { label: "B",   col: "#8AA3C2" },
+  A:   { label: "A",   col: "#4DC3FF" },
+  S:   { label: "S",   col: "#8B7BFF" },
+  SS:  { label: "SS",  col: "#F0C550" },
+  GOD: { label: "GOD", col: "#FF5C6E" }, // divinité — au-dessus de SS
 };
 // cond : toutes les clés présentes doivent être atteintes (lvl, count, streak, trophies)
 const CHARACTERS = [
@@ -794,6 +795,10 @@ const CHARACTERS = [
   // Gachiakuta
   { id: "rudo",     name: "Rudo",        emoji: "🥾", univers: "Gachiakuta",        rarity: "A",  cond: { lvl: 8,  count: 20 },                  gear: ["Gants usés", "3R affûté", "Instrument géant"] },
   { id: "enjin",    name: "Enjin",       emoji: "🧹", univers: "Gachiakuta",        rarity: "S",  cond: { lvl: 14, streak: 5 },                  gear: ["Balai de nettoyeur", "Balai jinki", "Balai du capitaine"] },
+  // DanMachi
+  { id: "hestia",   name: "Hestia",      emoji: "🎀", univers: "DanMachi",          rarity: "B",  cond: { lvl: 5 },                              gear: ["Ruban divin", "Couteau de Hestia", "Faveur de la déesse"] },
+  { id: "bell",     name: "Bell Cranel", emoji: "🐇", univers: "DanMachi",          rarity: "A",  cond: { lvl: 9,  count: 22 },                  gear: ["Couteau du Minotaure", "Firebolt", "Argonaute"] },
+  { id: "aiz",      name: "Aiz Wallenstein", emoji: "⚜️", univers: "DanMachi",      rarity: "S",  cond: { lvl: 16, streak: 6 },                  gear: ["Désir", "Ariel", "Éveil du vent"] },
   // Black Clover
   { id: "noelle",   name: "Noelle",      emoji: "🌊", univers: "Black Clover",      rarity: "A",  cond: { lvl: 9,  count: 20 },                  gear: ["Baguette fêlée", "Robe de vaillance", "Armure marine"] },
   { id: "yuno",     name: "Yuno",        emoji: "🌪️", univers: "Black Clover",      rarity: "S",  cond: { lvl: 15, count: 40 },                  gear: ["Grimoire quatre-feuilles", "Esprit du vent", "Étoile polaire"] },
@@ -804,6 +809,8 @@ const CHARACTERS = [
   { id: "sanji",    name: "Sanji",       emoji: "🍳", univers: "One Piece",         rarity: "S",  cond: { lvl: 14, count: 35 },                  gear: ["Costume noir", "Diable Jambe", "Raid Suit"] },
   { id: "zoro",     name: "Zoro",        emoji: "🔱", univers: "One Piece",         rarity: "SS", cond: { lvl: 24, count: 70 },                  gear: ["Deux sabres", "Santoryu", "Enma"] },
   { id: "luffy",    name: "Luffy",       emoji: "👒", univers: "One Piece",         rarity: "SS", cond: { lvl: 28, count: 100, streak: 14, trophies: 2 }, gear: ["Gear 2", "Gear 4", "Gear 5"] },
+  // Boss final : divinité au-dessus de SS
+  { id: "yamato",   name: "Yamato",      emoji: "🐺", univers: "One Piece",         rarity: "GOD", cond: { lvl: 30, count: 120, streak: 15, trophies: 2 }, gear: ["Kanabō d'Oden", "Fruit du Loup divin", "Okuchi no Makami"] },
   // Bleach
   { id: "rukia",    name: "Rukia",       emoji: "🌨️", univers: "Bleach",            rarity: "S",  cond: { lvl: 13, streak: 5 },                  gear: ["Sode no Shirayuki", "Premier ban", "Bankai"] },
   { id: "byakuya",  name: "Byakuya",     emoji: "🌸", univers: "Bleach",            rarity: "S",  cond: { lvl: 16, count: 40 },                  gear: ["Senbonzakura", "Kageyoshi", "Senkei"] },
@@ -874,6 +881,7 @@ const GEAR_STEPS = {
   A:  [{ dl: 3, dc: 10 }, { dl: 6, dc: 20 },  { dl: 10, dc: 35 }],
   S:  [{ dl: 3, dc: 15 }, { dl: 7, dc: 30 },  { dl: 12, dc: 50 }],
   SS: [{ dl: 4, dc: 20 }, { dl: 8, dc: 40 },  { dl: 14, dc: 70 }],
+  GOD: [{ dl: 4, dc: 25 }, { dl: 9, dc: 50 }, { dl: 15, dc: 90 }],
 };
 function gearConds(ch) {
   return GEAR_STEPS[ch.rarity].map(s => ({ lvl: (ch.cond.lvl || 1) + s.dl, count: (ch.cond.count || 0) + s.dc }));

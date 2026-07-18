@@ -365,10 +365,27 @@ invisible, on ne voyait que « 🔥 N j » sans l'effet concret.
   multiplicateur sur la carte, heure de série stockée séparément, rappel de
   série visible avant l'heure générique, aucun rappel avant les deux heures.
 
+## Itération 19 — 2026-07-18 (matin, réponses utilisateur)
+
+**Ambiguïté résolue** : « gachiacuta dans macchi » voulait dire **DanMachi**
+(pas Dandadan). Demandes précises : ajouter des personnages de DanMachi, et
+**Yamato (One Piece) dans une rareté « GOD » au-dessus de SS**.
+
+**Améliorations livrées :**
+- 🏛️ **9ᵉ univers : DanMachi** — Hestia 🎀 (B, niv. 5), Bell Cranel 🐇
+  (A, niv. 9 · 22 quêtes), Aiz Wallenstein ⚜️ (S, niv. 16 · série 6 j),
+  chacun avec ses 3 paliers de stuff (Couteau du Minotaure → Argonaute, etc.).
+- 🐺 **Rareté GOD** (badge rouge #FF5C6E) : nouveau sommet de la collection —
+  **Yamato**, boss final au-dessus de Luffy : niv. 30 · 120 quêtes · série
+  15 j · 2 trophées. Stuff : Kanabō d'Oden → Fruit du Loup divin → Okuchi no
+  Makami. Paliers GEAR_STEPS dédiés à la rareté GOD.
+- La collection passe de 26 à **30 héros** ; tous les seuils dynamiques
+  (haut fait « Moitié du panthéon », compte de collection) suivent seuls.
+- ✅ Tests : 125 assertions (+3) — Yamato GOD boss final, badge GOD, présence
+  des 3 DanMachi ; le grind du scénario de déblocage passe à 310 quêtes pour
+  atteindre le niveau 30 (courbe : 15 080 XP cumulés).
+
 **Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
-- Ambiguïté à clarifier avec l'utilisateur : « gachiacuta dans macchi » —
-  Dandadan ? (à ajouter dès confirmation, la structure roster le permet en
-  quelques lignes).
-- Mode saison : remise à zéro rituelle avec palmarès archivé (table `seasons`
-  à proposer clairement avant d'y toucher).
+- Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
+  attente — rien ne sera créé en base sans accord explicite).
 - Revoir la taille du fichier index.html (grossit à chaque itération).

@@ -446,16 +446,25 @@ const { APP_URL, launch, check, done } = require("./helpers");
   check("collection complète affichée (" + totalChars + " héros)", (await heroPage.locator(".charcard").count()) === totalChars);
   check("compte fraîche : quasiment tout est verrouillé", (await heroPage.locator(".charcard.locked").count()) >= totalChars - 2);
   const luffyCond = await heroPage.locator('.charcard:has-text("Luffy") .charcard-cond').textContent();
-  check("Luffy est le plus dur à obtenir (" + luffyCond.trim() + ")", luffyCond.includes("28") && luffyCond.includes("100") && luffyCond.includes("trophée"));
+  check("Luffy reste un boss SS exigeant (" + luffyCond.trim() + ")", luffyCond.includes("28") && luffyCond.includes("100") && luffyCond.includes("trophée"));
   check("progression visible sur les héros verrouillés (" + luffyCond.trim() + ")", luffyCond.includes("1/28") && luffyCond.includes("0/100"));
+  const yamatoCond = await heroPage.locator('.charcard:has-text("Yamato") .charcard-cond').textContent();
+  check("Yamato (GOD) est le boss final au-dessus de SS (" + yamatoCond.trim() + ")",
+    yamatoCond.includes("30") && yamatoCond.includes("120") && yamatoCond.includes("trophée"));
+  check("rareté GOD affichée sur Yamato",
+    (await heroPage.locator('.charcard:has-text("Yamato") .rarity').textContent()).trim() === "GOD");
+  check("DanMachi présent dans la collection (Hestia, Bell, Aiz)",
+    (await heroPage.locator('.charcard:has-text("Hestia")').count()) === 1
+    && (await heroPage.locator('.charcard:has-text("Bell Cranel")').count()) === 1
+    && (await heroPage.locator('.charcard:has-text("Aiz Wallenstein")').count()) === 1);
   check("hauts faits héros verrouillés sur un compte frais",
     await heroPage.evaluate(() => unlockedFeats("p1").every(f => !["hero1", "hero5", "heroH", "soul"].includes(f.id))));
   const nextTxt = await heroPage.locator("section.panel", { hasText: "Prochaine recrue" }).textContent();
   check("« Prochaine recrue » = Sein sur un compte frais (" + nextTxt.replace(/\s+/g, " ").trim().slice(0, 60) + ")", nextTxt.includes("Sein"));
 
-  // Grosse progression injectée : 300 quêtes réparties sur 15 jours (niveau ~29, série 15, 2 trophées passés)
+  // Grosse progression injectée : 310 quêtes réparties sur 15 jours (niveau 30, série 15, 2 trophées passés)
   await heroPage.evaluate(() => {
-    for (let i = 0; i < 300; i++) {
+    for (let i = 0; i < 310; i++) {
       const d = new Date(); d.setDate(d.getDate() - (i % 15)); d.setHours(10, 0, 0, 0);
       S.log.push({ id: "grind" + i, ts: d.getTime() + (i * 1000), playerId: "p1", taskName: "Vitres", icon: "🪟", xp: 50, note: "" });
     }
