@@ -1193,6 +1193,18 @@ async function sendTestNotification() {
   else toast("Échec de l'envoi — vérifie les réglages du navigateur");
 }
 
+/* --- Rappels vivants : jusqu'ici tout n'était évalué qu'au chargement ou lors d'un
+   render ; si l'appli restait ouverte (tablette posée, onglet du soir), le bandeau du
+   rappel et la notification n'apparaissaient jamais. Un tick par minute suffit. --- */
+let LAST_REMIND_STATE = null;
+function reminderTick() {
+  const due = shouldShowEveningReminder();
+  if (LAST_REMIND_STATE !== null && due !== LAST_REMIND_STATE && TAB === "quetes") scheduleRender();
+  LAST_REMIND_STATE = due;
+  maybeSendStreakNotification();
+  return due;
+}
+
 /* --- Récap hebdo du dimanche soir (dans l'appli, une fois par semaine) --- */
 function weeklyRecapOn() { return localStorage.getItem("rangement-recap") !== "off"; }
 function recapDismissedThisWeek() { return localStorage.getItem("rangement-recap-dismiss") === weekKey(NOW()); }
@@ -1240,11 +1252,18 @@ function betRewardLabel(b) {
   return r ? esc(r.icon) + " " + esc(r.name) : "🎁 Récompense";
 }
 
+// Tri des quêtes : ordre habituel (création) ou priorités critiques en tête — propre à l'appareil
+function questSortMode() { return localStorage.getItem("rangement-qsort") === "prio" ? "prio" : "habituel"; }
+const PRIO_ORDER = { critique: 0, haute: 1, normale: 2, basse: 3 };
+
 function vQuetes() {
   const bId = bonusTaskId();
   const suggestId = suggestionsOn() ? overdueTaskId() : null;
   const bet = activeBet();
-  const rows = S.tasks.map(t => {
+  const tasks = questSortMode() === "prio"
+    ? S.tasks.slice().sort((x, y) => PRIO_ORDER[x.prio] - PRIO_ORDER[y.prio])
+    : S.tasks;
+  const rows = tasks.map(t => {
     const p = PRIOS[t.prio], isB = t.id === bId, isSuggest = t.id === suggestId && !isB;
     const last = [...S.log].reverse().find(l => l.taskName === t.name);
     const lastP = last && S.players.find(pl => pl.id === last.playerId);
@@ -1270,9 +1289,12 @@ function vQuetes() {
   ${bet ? `<div class="betremind">⚔️ Enjeu de la semaine : <b>${betRewardLabel(bet)}</b> — voir l'onglet Duel</div>` : ""}
   ${(() => { const ts = todayStats(); return ts.n ? `<div class="daystat">☀️ Aujourd'hui : <b>${ts.n} quête${ts.n > 1 ? "s" : ""}</b> · <b>${ts.xp} XP</b> à deux <span class="daystat-by">${ts.by.map(x => esc(x.p.emoji) + " " + x.n).join(" · ")}</span></div>` : ""; })()}
   <section class="panel">
-    <h2>Quêtes disponibles <small>— touche ton emoji quand c'est fait</small></h2>
+    <div class="panelhead">
+      <h2 style="margin-bottom:0">Quêtes disponibles</h2>
+      <button class="linkbtn" id="qSortToggle">${questSortMode() === "prio" ? "Ordre habituel" : "Trier par priorité"}</button>
+    </div>
     ${rows || '<p class="hint">Aucune quête. Ajoute des tâches dans Réglages.</p>'}
-    <p class="hint">Bonus de série : +5&nbsp;% d'XP par jour d'activité consécutif (max +50&nbsp;%). La quête dorée rapporte le double aujourd'hui${suggestId ? ", et 👉 marque la tâche la plus en attente" : ""}.</p>
+    <p class="hint">Touche ton emoji quand c'est fait. Bonus de série : +5&nbsp;% d'XP par jour d'activité consécutif (max +50&nbsp;%). La quête dorée rapporte le double aujourd'hui${suggestId ? ", et 👉 marque la tâche la plus en attente" : ""}.</p>
   </section>`;
 }
 
@@ -2217,7 +2239,7 @@ function trapModal() {
   };
 }
 
-function sysModal(html, onClose, extra) {
+function sysModal(html, onClose, extra, okLabel) {
   // Le bouton retour (Android) doit fermer la modale, pas quitter l'appli :
   // une entrée d'historique est poussée à l'ouverture (une seule par chaîne de modales).
   if (!document.querySelector(".veil")) {
@@ -2229,8 +2251,8 @@ function sysModal(html, onClose, extra) {
       <div class="bang">Notification</div>
       ${html}
       <div class="frow" style="justify-content:center">
-        ${extra ? `<button class="btn" id="veilExtra">${extra.label}</button>` : ""}
-        <button class="btn ${extra ? "ghost" : ""}" id="veilOk">Continuer</button>
+        ${extra ? `<button class="btn ${extra.danger ? "danger" : ""}" id="veilExtra">${extra.label}</button>` : ""}
+        <button class="btn ${extra ? "ghost" : ""}" id="veilOk">${okLabel || "Continuer"}</button>
       </div>
     </div>
   </div>`;
@@ -2330,6 +2352,12 @@ function bindView() {
 
   const evRemindOk = $("#evRemindOk");
   if (evRemindOk) evRemindOk.onclick = () => { dismissEveningReminder(); render(); };
+
+  const qSort = $("#qSortToggle");
+  if (qSort) qSort.onclick = () => {
+    localStorage.setItem("rangement-qsort", questSortMode() === "prio" ? "habituel" : "prio");
+    render();
+  };
 
   // Héros : sélecteur de joueur, incarnation, retrait
   document.querySelectorAll("[data-hv]").forEach(b =>
@@ -2692,13 +2720,20 @@ function bindView() {
     };
     r.readAsText(f);
   };
+  // Remise à zéro : modale système cohérente avec le reste de l'appli (plus de confirm()
+  // natif). Échap et le bouton retour tombent sur « Garder nos données » — jamais sur l'effacement.
   const rst = $("#resetBtn");
   if (rst) rst.onclick = () => {
-    if (confirm("Remettre l'aventure à zéro pour vous deux ? Journal, niveaux, objectifs et récompenses gagnées seront effacés (les tâches et idées de récompenses sont conservées).")) {
-      S.log = []; S.won = []; S.objectives = [];
-      ["log", "won", "objectives"].forEach(t => queueOp({ table: t, type: "clear" }));
-      save(); render();
-    }
+    sysModal(`
+      <div class="big" style="color:var(--crit)">REMISE À ZÉRO</div>
+      <div class="sub" style="text-align:left">Journal, niveaux, objectifs et récompenses gagnées seront <b>effacés pour vous deux</b>.<br><br>Les tâches et idées de récompenses sont conservées. Pensez à <b>Exporter</b> d'abord si vous voulez une sauvegarde.</div>`,
+      null,
+      { label: "Tout effacer", danger: true, onclick: () => {
+          S.log = []; S.won = []; S.objectives = [];
+          ["log", "won", "objectives"].forEach(t => queueOp({ table: t, type: "clear" }));
+          save(); render(); toast("L'aventure repart de zéro");
+        } },
+      "Garder nos données");
   };
 }
 
@@ -2849,6 +2884,8 @@ if (!localStorage.getItem("rangement-onboard-v1")) {
 }
 if (applyStreakShields()) render(); // repli mode local (sans Supabase) ou avant la première synchro
 maybeSendStreakNotification();
+LAST_REMIND_STATE = shouldShowEveningReminder(); // état de départ des rappels vivants
+setInterval(reminderTick, 60000);
 
 if ("serviceWorker" in navigator && location.protocol === "https:") {
   navigator.serviceWorker.register("sw.js").then(reg => {

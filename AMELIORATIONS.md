@@ -661,3 +661,49 @@ autre onglet.
   `#objectifs` restaurent désormais ces onglets (attente sur `.hunter` puis
   navigation explicite). Reproduction isolée systématique avant chaque
   correctif (règle 2), validation visuelle de la pastille.
+
+## Itération 27 — 2026-07-18 (session interactive, soir)
+
+**Audit** : relecture complète d'index.html face à l'historique des 26
+itérations. Trois frictions concrètes, aucune ne demandant de changement de
+schéma : la remise à zéro passait par un `confirm()` natif — seule
+interaction hors du design « Système », sans rappel d'exporter avant, et
+hors de portée du piège clavier/bouton retour des modales (it. 25/26) ; la
+liste des quêtes suivait uniquement l'ordre de création, sans moyen de
+faire remonter les priorités critiques ; et les rappels (bandeau du soir,
+notification de série) n'étaient évalués qu'au chargement ou lors d'un
+render — appli laissée ouverte, ils n'apparaissaient jamais.
+
+**Améliorations livrées :**
+- 🛑 **Remise à zéro en modale système** : plus de `confirm()` natif. La
+  modale rappelle ce qui sera effacé et conseille d'**Exporter** d'abord ;
+  l'action par défaut est « Garder nos données » (bouton principal, Échap
+  et bouton retour y tombent — l'effacement ne peut pas arriver par
+  accident), « Tout effacer » est un bouton danger distinct. `sysModal()`
+  gagne un libellé de bouton « Continuer » personnalisable et une variante
+  danger pour le bouton extra — réutilisables pour toute confirmation
+  destructive à venir.
+- 🔀 **Tri des quêtes par priorité** : bouton « Trier par priorité » /
+  « Ordre habituel » en tête de l'onglet Quêtes — les critiques remontent,
+  ordre stable à priorité égale, préférence propre à l'appareil
+  (localStorage `rangement-qsort`), bonus du jour et suggestion inchangés.
+- ⏰ **Rappels vivants** : un tick par minute (`reminderTick()`) réévalue
+  le rappel du soir — appli restée ouverte (tablette posée, onglet du
+  soir), le bandeau apparaît désormais quand l'heure est franchie et la
+  notification navigateur part, sans recharger ni naviguer. Re-render
+  seulement au changement d'état et sur l'onglet Quêtes (aucun rafraîchi
+  parasite pendant la saisie grâce à `scheduleRender`).
+- ✅ Tests : 211 assertions au total (204 dans smoke.js +11, 7 dans
+  sync-test.js) — tri par priorité (activation, persistance après
+  rechargement, retour à l'ordre habituel), remise à zéro (modale à la
+  place du confirm, « Garder nos données » n'efface rien, « Tout effacer »
+  vide le journal en conservant les tâches), bandeau du soir absent
+  rappel coupé puis apparu via un `reminderTick()` déclenché à la main.
+  Validation visuelle (captures 390×844) : tri activé (critiques en tête),
+  modale de remise à zéro, bandeau du soir apparu via le tick.
+
+**Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
+- Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
+  attente — rien ne sera créé en base sans accord explicite).
+- Revoir la taille du fichier index.html (grossit à chaque itération,
+  maintenant ~2 900 lignes).

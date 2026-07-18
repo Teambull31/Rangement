@@ -958,6 +958,69 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
     Array.isArray(manifest.shortcuts) && manifest.shortcuts.length === 3
     && manifest.shortcuts.every(s => s.url.includes("#") && s.icons && s.icons.length));
 
+  // Itération 27 : tri des quêtes, remise à zéro en modale système, rappels vivants
+  const it27Context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const it27Page = await it27Context.newPage();
+  await it27Page.addInitScript(() => {
+    localStorage.setItem("rangement-onboard-v1", "1");
+    localStorage.setItem("rangement-recap", "off");
+    localStorage.setItem("rangement-evening", "off");
+  });
+  await it27Page.goto(APP_URL);
+  await it27Page.waitForSelector(".quest");
+
+  // Tri des quêtes par priorité (toggle propre à l'appareil)
+  check("ordre habituel par défaut (Vaisselle en tête)",
+    (await it27Page.locator(".quest .qname").first().textContent()).includes("Vaisselle"));
+  await it27Page.locator("#qSortToggle").click();
+  await it27Page.waitForTimeout(100);
+  check("tri par priorité : une quête critique passe en tête",
+    (await it27Page.locator(".quest .chip").first().textContent()).includes("Critique"));
+  await it27Page.reload();
+  await it27Page.waitForSelector(".quest");
+  check("tri par priorité conservé après rechargement",
+    (await it27Page.locator(".quest .chip").first().textContent()).includes("Critique"));
+  await it27Page.locator("#qSortToggle").click();
+  await it27Page.waitForTimeout(100);
+  check("retour à l'ordre habituel",
+    (await it27Page.locator(".quest .qname").first().textContent()).includes("Vaisselle"));
+
+  // Remise à zéro : modale système (plus de confirm() natif), action sûre par défaut
+  await it27Page.evaluate(() => {
+    S.log.push({ id: "it27", ts: Date.now(), playerId: "p1", taskName: "Vitres", icon: "🪟", xp: 50, note: "" });
+    save(); render();
+  });
+  await it27Page.locator('[data-tab="reglages"]').click();
+  await it27Page.locator("#resetBtn").click();
+  await it27Page.waitForSelector(".sysbox");
+  check("remise à zéro : modale système à la place du confirm natif",
+    (await it27Page.locator(".sysbox").textContent()).includes("REMISE À ZÉRO"));
+  check("bouton sûr « Garder nos données » présent",
+    (await it27Page.locator("#veilOk").textContent()).includes("Garder"));
+  await it27Page.locator("#veilOk").click();
+  await it27Page.waitForTimeout(150);
+  check("« Garder nos données » : journal intact", (await it27Page.evaluate(() => S.log.length)) === 1);
+  await it27Page.locator("#resetBtn").click();
+  await it27Page.waitForSelector("#veilExtra");
+  await it27Page.locator("#veilExtra").click();
+  await it27Page.waitForTimeout(150);
+  check("« Tout effacer » : journal vidé, tâches conservées",
+    (await it27Page.evaluate(() => S.log.length === 0 && S.tasks.length === 13)));
+
+  // Rappels vivants : le bandeau du soir apparaît via le tick, sans recharger ni naviguer
+  await it27Page.locator('[data-tab="quetes"]').click();
+  check("bandeau du soir absent quand le rappel est coupé", (await it27Page.locator(".evremind").count()) === 0);
+  await it27Page.evaluate(() => {
+    localStorage.setItem("rangement-evening", "on");
+    localStorage.setItem("rangement-evening-hour", "0");
+    localStorage.removeItem("rangement-evening-dismiss");
+    reminderTick();
+  });
+  await it27Page.waitForTimeout(150);
+  check("le tick fait apparaître le bandeau du soir sur l'onglet Quêtes",
+    (await it27Page.locator(".evremind").count()) === 1);
+  await it27Context.close();
+
   await browser.close();
   done();
 })();
