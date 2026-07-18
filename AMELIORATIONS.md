@@ -583,3 +583,47 @@ cours.
   attente — rien ne sera créé en base sans accord explicite).
 - Revoir la taille du fichier index.html (grossit à chaque itération,
   maintenant ~2 800 lignes).
+
+## Itération 25 — 2026-07-18 (routine cloud)
+
+**Audit** : un audit ciblé (agent dédié, lecture complète d'index.html face à
+l'historique des 24 itérations) a fait remonter trois frictions concrètes,
+aucune ne nécessitant de changement de schéma : les modales système
+(`sysModal`, onboarding) ne posaient jamais le focus clavier à l'ouverture,
+ne le piégeaient pas (Tab pouvait sortir vers la barre d'onglets derrière) et
+n'avaient pas de raccourci Échap ; les défis de l'onglet Objectifs restaient
+la seule liste éditable (nom, cible) alors que tâches (it. 14) et
+récompenses (it. 20) le sont déjà en place ; le thème par défaut au premier
+lancement ignorait la préférence système clair/sombre de l'appareil malgré
+l'existence du thème clair « Aube » depuis l'itération 16.
+
+**Améliorations livrées :**
+- ⌨️ **Accessibilité clavier des modales système** : nouvelle fonction
+  `trapModal()` (appelée par `sysModal` et l'onboarding) qui pose le focus
+  sur le premier bouton à l'ouverture, piège Tab/Shift+Tab dans `.sysbox`
+  (boucle entre les boutons sans pouvoir sortir vers l'app derrière), et
+  mappe Échap sur l'action « Continuer » — jamais sur « Annuler », pour
+  qu'Échap ne puisse jamais annuler une quête par accident.
+- ✏️ **Défis éditables en place** : nom et cible modifiables directement sur
+  chaque défi actif de l'onglet Objectifs (`data-oname`/`data-otarget`),
+  même mécanique `onchange` + upsert que tâches et récompenses (valeur vide
+  → restauration de l'ancienne). Colonnes `name`/`target` déjà existantes en
+  base, aucune migration.
+- 🌗 **Thème par défaut selon la préférence système** : au tout premier
+  lancement (avant tout choix explicite), `curTheme()` retient désormais
+  « Aube » (clair) si l'appareil est en mode clair, « Système » (sombre)
+  sinon — au lieu d'imposer systématiquement le sombre. Le premier choix
+  explicite de l'utilisateur dans Réglages écrase ensuite ce défaut comme
+  avant.
+- ✅ Tests : 192 assertions au total (185 dans smoke.js +10, 7 dans
+  sync-test.js inchangée) — focus initial + piège du Tab + retour Shift+Tab
+  sur la modale de montée de niveau (2 boutons), Échap ferme la modale du
+  haut fait de la première quête, défi édité en place (nom + cible,
+  restauration sur nom vide), thème Aube choisi automatiquement sur un
+  contexte Playwright en `colorScheme: "light"` sans réglage préalable, et
+  thème Système conservé sur `colorScheme: "dark"`. Deux tests existants de
+  l'itération 17 (`:has-text("Sprint de la semaine")`) ont été adaptés au
+  nouveau rendu en `<input>` (valeur plutôt que texte), sans changement de
+  comportement pour l'utilisateur. Validation visuelle (captures 390×844) :
+  thème Aube sur compte frais en mode clair, défi éditable dans Objectifs,
+  modale « HÉROS DÉBLOQUÉ » avec focus/boutons visibles.

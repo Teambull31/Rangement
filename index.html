@@ -1608,7 +1608,12 @@ function vObjectifs() {
     const done = prog >= o.target;
     return `
     <div class="obj ${done ? "done" : ""}">
-      <div class="oname">${done ? "✅ " : ""}${esc(o.name)}</div>
+      ${done
+        ? `<div class="oname">✅ ${esc(o.name)}</div>`
+        : `<div class="frow" style="margin-bottom:6px">
+             <input type="text" data-oname="${o.id}" value="${esc(o.name)}" maxlength="60" class="grow" style="min-width:0" aria-label="Nom du défi">
+             <input type="number" data-otarget="${o.id}" value="${o.target}" min="1" inputmode="numeric" style="flex:0 0 78px" aria-label="Cible">
+           </div>`}
       <div class="oreward">🎁 ${rw ? esc(rw.icon + " " + rw.name) : "Récompense au choix"}</div>
       <div class="obar"><i style="width:${pct}%"></i></div>
       <div class="onums">
@@ -2139,6 +2144,32 @@ function shareHeroCard(p) {
   shareCanvasCard(buildHeroCard(p), "rangement-heros", "Rangement — Carte de héros", `${p.name} incarne ${ch.name} ! 🎴`);
 }
 
+// Piège le focus clavier dans la modale système affichée (Tab/Shift+Tab restent dans
+// .sysbox), pose le focus initial sur le premier élément et mappe Échap sur l'action
+// « Continuer » (jamais sur « Annuler » : Échap ne doit pas pouvoir annuler une quête).
+function trapModal() {
+  const box = $(".sysbox");
+  if (!box) return;
+  const focusable = () => Array.from(box.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'))
+    .filter(el => !el.disabled && el.offsetParent !== null);
+  const list = focusable();
+  if (list.length) list[0].focus();
+  box.onkeydown = e => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      const safe = $("#veilOk") || $("#obNext");
+      if (safe) safe.click();
+      return;
+    }
+    if (e.key !== "Tab") return;
+    const items = focusable();
+    if (!items.length) return;
+    const first = items[0], last = items[items.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  };
+}
+
 function sysModal(html, onClose, extra) {
   $("#modal").innerHTML = `
   <div class="veil" id="veil">
@@ -2153,6 +2184,7 @@ function sysModal(html, onClose, extra) {
   </div>`;
   $("#veilOk").onclick = () => { $("#modal").innerHTML = ""; if (onClose) onClose(); };
   if (extra) $("#veilExtra").onclick = () => { $("#modal").innerHTML = ""; extra.onclick(); };
+  trapModal();
 }
 
 // Enchaîne plusieurs modales système à la suite (ex. niveau + objectif atteint sur la même
@@ -2350,6 +2382,26 @@ function bindView() {
     save(); queueOp({ table: "objectives", type: "upsert", row: toRow.objectives(o) });
     render(); toast("Défi lancé ⚔️");
   };
+  document.querySelectorAll("[data-oname]").forEach(inp =>
+    inp.onchange = () => {
+      const o = S.objectives.find(x => x.id === inp.dataset.oname);
+      if (!o) return;
+      const v = inp.value.trim();
+      if (!v) { inp.value = o.name; return; }
+      o.name = v;
+      save(); queueOp({ table: "objectives", type: "upsert", row: toRow.objectives(o) });
+      render();
+    });
+  document.querySelectorAll("[data-otarget]").forEach(inp =>
+    inp.onchange = () => {
+      const o = S.objectives.find(x => x.id === inp.dataset.otarget);
+      if (!o) return;
+      const v = parseInt(inp.value, 10);
+      if (!v || v < 1) { inp.value = o.target; return; }
+      o.target = v;
+      save(); queueOp({ table: "objectives", type: "upsert", row: toRow.objectives(o) });
+      render();
+    });
   document.querySelectorAll("[data-claim]").forEach(b =>
     b.onclick = () => {
       const o = S.objectives.find(x => x.id === b.dataset.claim);
@@ -2609,7 +2661,13 @@ const THEMES = {
                        gold: "#9C7C0C", ok: "#1F8F5F", crit: "#CC3344", high: "#C2601A",
                        navbg: "rgba(255,255,255,.92)", logoTop: "#33475F" } },
 };
-function curTheme() { return localStorage.getItem("rangement-theme") || "systeme"; }
+function curTheme() {
+  const stored = localStorage.getItem("rangement-theme");
+  if (stored) return stored;
+  // Jamais choisi : respecte la préférence système clair/sombre de l'appareil au premier lancement.
+  const prefersLight = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches;
+  return prefersLight ? "aube" : "systeme";
+}
 function applyTheme(id) {
   const t = THEMES[id] || THEMES.systeme;
   const r = document.documentElement.style;
@@ -2669,6 +2727,7 @@ function onboarding() {
         </div>
       </div>
     </div>`;
+    trapModal();
     $("#obSkip").onclick = finish;
     $("#obNext").onclick = () => {
       if (step === 1) {

@@ -24,6 +24,9 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await page.waitForTimeout(300);
   const featModal = (await page.locator(".sysbox").count()) ? (await page.locator(".sysbox").textContent()) : "";
   check("haut fait débloqué à la première quête", featModal.includes("HAUT FAIT"));
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(150);
+  check("Échap ferme la modale système (équivalent à Continuer)", (await page.locator(".sysbox").count()) === 0);
   await closeModals(page);
   const xpText = (await page.locator(".hunter").first().locator(".xpnums").first().textContent()).trim();
   check("XP créditée après une quête (" + xpText + ")", /^[1-9]\d*\/100 XP/.test(xpText));
@@ -177,17 +180,32 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
     && (await page.locator("#objTarget").inputValue()) === "300");
   await page.locator("#objAdd").click();
   await page.waitForTimeout(200);
-  check("défi préréglé lancé", (await page.locator('.obj:has-text("Sprint de la semaine")').count()) === 1);
+  check("défi préréglé lancé", (await page.locator('[data-oname]').count()) === 1
+    && (await page.locator('[data-oname]').inputValue()) === "Sprint de la semaine");
 
   // Abandonner un défi avec filet de rattrapage (toast « Annuler »)
   const sprintObjId = await page.evaluate(() => S.objectives.find(o => o.name === "Sprint de la semaine").id);
   await page.locator(`[data-delobj="${sprintObjId}"]`).click();
   await page.waitForTimeout(150);
-  check("défi abandonné disparaît de la liste", (await page.locator('.obj:has-text("Sprint de la semaine")').count()) === 0);
+  check("défi abandonné disparaît de la liste", (await page.locator(`[data-oname="${sprintObjId}"]`).count()) === 0);
   check("toast « Annuler » proposé après abandon de défi", (await page.locator(".toast-action").count()) === 1);
   await page.locator(".toast-action").click();
   await page.waitForTimeout(150);
-  check("défi restauré après Annuler", (await page.locator('.obj:has-text("Sprint de la semaine")').count()) === 1);
+  check("défi restauré après Annuler", (await page.locator(`[data-oname="${sprintObjId}"]`).count()) === 1);
+
+  // Défi éditable en place (nom + cible), même mécanique que tâches/récompenses
+  await page.fill(`[data-oname="${sprintObjId}"]`, "Sprint du week-end");
+  await page.locator(`[data-oname="${sprintObjId}"]`).evaluate(el => el.blur());
+  await page.waitForTimeout(200);
+  check("nom du défi modifié en place", (await page.evaluate(id => S.objectives.find(o => o.id === id).name, sprintObjId)) === "Sprint du week-end");
+  await page.fill(`[data-otarget="${sprintObjId}"]`, "450");
+  await page.locator(`[data-otarget="${sprintObjId}"]`).evaluate(el => el.blur());
+  await page.waitForTimeout(200);
+  check("cible du défi modifiée en place", (await page.evaluate(id => S.objectives.find(o => o.id === id).target, sprintObjId)) === 450);
+  await page.fill(`[data-oname="${sprintObjId}"]`, "");
+  await page.locator(`[data-oname="${sprintObjId}"]`).evaluate(el => el.blur());
+  await page.waitForTimeout(200);
+  check("nom vide restaure l'ancien nom du défi", (await page.evaluate(id => S.objectives.find(o => o.id === id).name, sprintObjId)) === "Sprint du week-end");
 
   // Récompenses éditables en place (nom + icône), comme les tâches
   const rw0 = await page.evaluate(() => S.rewards[0].id);
@@ -350,6 +368,23 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await page.waitForTimeout(150);
   check("retour au thème sombre : fond restauré",
     (await page.evaluate(() => getComputedStyle(document.body).backgroundColor)) === "rgb(6, 10, 19)");
+
+  // Thème par défaut au premier lancement : suit la préférence système clair/sombre
+  const lightCtx = await browser.newContext({ colorScheme: "light", viewport: { width: 390, height: 844 } });
+  const lightPage = await lightCtx.newPage();
+  await lightPage.goto(APP_URL);
+  await lightPage.waitForSelector(".hunter");
+  check("compte frais + appareil en mode clair -> thème Aube choisi automatiquement",
+    (await lightPage.evaluate(() => localStorage.getItem("rangement-theme"))) === "aube");
+  await lightCtx.close();
+
+  const darkCtx = await browser.newContext({ colorScheme: "dark", viewport: { width: 390, height: 844 } });
+  const darkPage = await darkCtx.newPage();
+  await darkPage.goto(APP_URL);
+  await darkPage.waitForSelector(".hunter");
+  check("compte frais + appareil en mode sombre -> thème Système par défaut",
+    (await darkPage.evaluate(() => localStorage.getItem("rangement-theme"))) === "systeme");
+  await darkCtx.close();
 
   // Installation PWA : panneau visible tant que l'appli n'est pas installée
   await page.locator('[data-tab="reglages"]').click();
@@ -738,6 +773,22 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   const lvlModalTxt = await undoModalPage.locator(".sysbox").textContent();
   check("montée de niveau déclenchée par la quête injectée (" + lvlModalTxt.replace(/\s+/g, " ").slice(0, 30) + ")", lvlModalTxt.includes("NIVEAU"));
   check("bouton Annuler présent dans la modale de niveau", (await undoModalPage.locator("#veilExtra").count()) === 1);
+
+  // Accessibilité clavier des modales système : focus initial + piège du Tab
+  const initialFocusId = await undoModalPage.evaluate(() => document.activeElement && document.activeElement.id);
+  check("focus posé sur le premier bouton à l'ouverture de la modale (" + initialFocusId + ")", initialFocusId === "veilExtra");
+  await undoModalPage.keyboard.press("Tab");
+  check("Tab avance vers le bouton suivant de la modale",
+    (await undoModalPage.evaluate(() => document.activeElement.id)) === "veilOk");
+  await undoModalPage.keyboard.press("Tab");
+  check("Tab boucle vers le premier bouton (piège de focus)",
+    (await undoModalPage.evaluate(() => document.activeElement.id)) === "veilExtra");
+  await undoModalPage.keyboard.press("Shift+Tab");
+  check("Shift+Tab boucle vers le dernier bouton",
+    (await undoModalPage.evaluate(() => document.activeElement.id)) === "veilOk");
+  await undoModalPage.keyboard.press("Shift+Tab");
+  check("focus revenu sur le premier bouton", (await undoModalPage.evaluate(() => document.activeElement.id)) === "veilExtra");
+
   await undoModalPage.locator("#veilExtra").click();
   await undoModalPage.waitForTimeout(200);
   check("XP revenue à sa valeur d'avant la quête après Annuler depuis la modale (" + preLvlXp + ")",
