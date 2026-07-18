@@ -144,7 +144,14 @@
     border-top: 2px solid transparent; min-width: 0;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .tabs button .ico { display: block; font-size: 18px; margin-bottom: 2px; }
+  .tabs button .ico { display: block; font-size: 18px; margin-bottom: 2px; position: relative; width: fit-content; margin-inline: auto; }
+  .tabdot {
+    position: absolute; top: -4px; right: -12px;
+    background: var(--gold); color: var(--abyss);
+    font-size: 10px; font-weight: 700; font-family: var(--body);
+    border-radius: 8px; min-width: 15px; height: 15px; line-height: 15px;
+    text-align: center; padding: 0 3px;
+  }
   .tabs button.on { color: var(--sys); border-top-color: var(--sys); }
 
   /* ---------- Panels / sections ---------- */
@@ -984,6 +991,44 @@ const TABS = [
   { id: "journal",   label: "Journal",   ico: "📜" },
   { id: "reglages",  label: "Réglages",  ico: "⚙️" },
 ];
+const validTab = id => TABS.some(t => t.id === id);
+// Lien profond : #duel, #heros… (raccourcis d'icône PWA, liens partagés)
+{ const h0 = location.hash.slice(1); if (validTab(h0)) TAB = h0; }
+
+// Navigation avec historique : le bouton retour (Android) revient à l'onglet
+// précédent, ou ferme la modale système ouverte, au lieu de quitter l'appli.
+function navTab(id) {
+  if (id !== TAB) {
+    TAB = id;
+    try { history.pushState({ tab: id }, "", "#" + id); } catch (e) {}
+  }
+  render(); // re-render aussi sur l'onglet courant (rafraîchissement attendu de longue date)
+}
+window.addEventListener("popstate", () => {
+  if (document.querySelector(".veil")) {
+    // une modale est ouverte : le retour la ferme (Continuer) et on reste sur place
+    try { history.pushState({ modal: true }, "", location.href); } catch (e) {}
+    const ok = document.getElementById("veilOk");
+    if (ok) ok.click();
+    return;
+  }
+  const h = location.hash.slice(1);
+  const target = validTab(h) ? h : "quetes";
+  if (target !== TAB) { TAB = target; render(); }
+});
+
+// Pastilles « à réclamer » : défis complétés non réclamés, paris résolus en attente
+function claimableCounts() {
+  const cur = weekKey(NOW());
+  const { byWeek } = trophyData();
+  const objN = S.objectives.filter(o => !o.claimed && objProgress(o) >= o.target).length;
+  const betN = (S.bets || []).filter(b => {
+    if (b.claimed || b.week >= cur) return false;
+    const x = byWeek[b.week] || { a: 0, b: 0 };
+    return x.a !== x.b;
+  }).length;
+  return { objectifs: objN, duel: betN };
+}
 
 function render() {
   renderHeader();
@@ -1032,11 +1077,13 @@ function renderDuo() {
 }
 
 function renderTabs() {
-  $("#tabs").innerHTML = TABS.map(t =>
-    `<button class="${TAB === t.id ? "on" : ""}" data-tab="${t.id}"><span class="ico">${t.ico}</span>${t.label}</button>`
-  ).join("");
+  const cl = claimableCounts();
+  $("#tabs").innerHTML = TABS.map(t => {
+    const n = cl[t.id] || 0;
+    return `<button class="${TAB === t.id ? "on" : ""}" data-tab="${t.id}" ${n ? `title="${n} à réclamer"` : ""}><span class="ico">${t.ico}${n ? `<span class="tabdot">${n}</span>` : ""}</span>${t.label}</button>`;
+  }).join("");
   document.querySelectorAll("#tabs button").forEach(b =>
-    b.onclick = () => { TAB = b.dataset.tab; render(); });
+    b.onclick = () => navTab(b.dataset.tab));
 }
 
 /* ---------- Quêtes ---------- */
@@ -2171,6 +2218,11 @@ function trapModal() {
 }
 
 function sysModal(html, onClose, extra) {
+  // Le bouton retour (Android) doit fermer la modale, pas quitter l'appli :
+  // une entrée d'historique est poussée à l'ouverture (une seule par chaîne de modales).
+  if (!document.querySelector(".veil")) {
+    try { history.pushState({ modal: true }, "", location.href); } catch (e) {}
+  }
   $("#modal").innerHTML = `
   <div class="veil" id="veil">
     <div class="sysbox" role="alertdialog" aria-modal="true">

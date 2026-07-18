@@ -627,3 +627,37 @@ l'existence du thème clair « Aube » depuis l'itération 16.
   comportement pour l'utilisateur. Validation visuelle (captures 390×844) :
   thème Aube sur compte frais en mode clair, défi éditable dans Objectifs,
   modale « HÉROS DÉBLOQUÉ » avec focus/boutons visibles.
+
+## Itération 26 — 2026-07-18 (session interactive, soir)
+
+**Audit** : en PWA installée, le bouton retour Android quittait l'appli au
+lieu de fermer une modale ou de revenir à l'onglet précédent ; l'icône
+n'offrait aucun raccourci d'appui long ; et rien ne signalait qu'un défi
+complété ou un pari gagné attendait sa réclamation quand on était sur un
+autre onglet.
+
+**Améliorations livrées :**
+- ◀️ **Bouton retour apprivoisé + navigation par hash** : chaque changement
+  d'onglet écrit `#duel`, `#journal`… dans l'historique — « retour » revient
+  à l'onglet précédent ; si une modale système est ouverte, « retour » la
+  ferme (équivalent « Continuer », jamais « Annuler ») et on reste sur
+  place. Recharger l'appli restaure l'onglet courant, et les liens profonds
+  (`…#heros`) ouvrent directement le bon onglet. Un clic sur l'onglet déjà
+  actif re-rend la vue comme avant (contrat conservé — un no-op silencieux
+  a été attrapé par la suite de tests sur l'historique des notifications).
+- 📱 **Raccourcis d'icône PWA** (manifest `shortcuts`) : appui long sur
+  l'icône installée → « Duel de la semaine », « Collection de héros »,
+  « Journal de chasse », via les liens profonds ci-dessus.
+- 🔴 **Pastille « à réclamer »** sur la barre d'onglets : compteur doré sur
+  Objectifs (défis complétés non réclamés) et sur Duel (paris résolus en
+  attente), recalculé à chaque rendu — dérivé de l'état, zéro stockage.
+- ✅ Tests : 202 assertions au total (195 dans smoke.js +10, 7 dans
+  sync-test.js) — lien profond `#duel`, hash écrit au changement d'onglet,
+  retour vers l'onglet précédent, retour qui ferme la modale sans changer
+  d'onglet, 3 raccourcis du manifest en lien profond, pastilles Objectifs
+  (valeur affichée, ≥ 1 : le défi d'onboarding « Semaine de choc » peut
+  aussi être complété dans le flux) et Duel (apparition + disparition après
+  réclamation). Deux tests existants adaptés : les reload sous `#heros`/
+  `#objectifs` restaurent désormais ces onglets (attente sur `.hunter` puis
+  navigation explicite). Reproduction isolée systématique avant chaque
+  correctif (règle 2), validation visuelle de la pastille.

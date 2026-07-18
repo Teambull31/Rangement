@@ -162,6 +162,9 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await page.locator('[data-tab="objectifs"]').click();
   check("objectif surprise affiché 🎲", (await page.locator(".obj .oreward").last().textContent()).includes("surprise"));
   check("bouton de réclamation présent", (await page.locator("[data-claim]").count()) > 0);
+  const objDot = (await page.locator('#tabs [data-tab="objectifs"] .tabdot').count())
+    ? await page.locator('#tabs [data-tab="objectifs"] .tabdot').textContent() : "0";
+  check("pastille « à réclamer » sur l'onglet Objectifs (" + objDot + ")", Number(objDot) >= 1);
   await page.locator("[data-claim]").last().click();
   check("confettis affichés à la réclamation d'une récompense", (await page.locator("#confetti").count()) === 1);
   await page.waitForTimeout(200);
@@ -483,6 +486,8 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await page.waitForSelector(".hunter");
   await page.locator('[data-tab="duel"]').click();
   check("pari résolu avec vainqueur", (await page.locator("[data-claimbet]").count()) === 1);
+  check("pastille « à réclamer » sur l'onglet Duel",
+    (await page.locator('#tabs [data-tab="duel"] .tabdot').textContent()) === "1");
   await page.locator("[data-claimbet]").click();
   check("confettis affichés à la réclamation d'un pari", (await page.locator("#confetti").count()) === 1);
   await page.waitForTimeout(200);
@@ -491,6 +496,8 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   if (await page.locator("#veilOk").count()) await page.locator("#veilOk").click();
   await page.locator('[data-tab="objectifs"]').click();
   check("enjeu ajouté aux récompenses gagnées", (await page.locator(".wonline").count()) === 2);
+  check("pastille Duel disparue après réclamation du pari",
+    (await page.locator('#tabs [data-tab="duel"] .tabdot').count()) === 0);
 
   // Réglages : interrupteurs son et suggestion (propres à l'appareil)
   await page.locator('[data-tab="reglages"]').click();
@@ -687,8 +694,8 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
     save();
   });
   await heroPage.reload();
-  await heroPage.waitForSelector(".quest");
-  await heroPage.locator('[data-tab="heros"]').click();
+  await heroPage.waitForSelector(".hunter"); // le hash #heros restaure l'onglet Héros au reload
+  await heroPage.locator('[data-tab="heros"]').click().catch(() => {});
   const unlockedCount = await heroPage.evaluate(() => unlockedCharIds("p1").length);
   check("gros grind -> collection complète débloquée (" + unlockedCount + "/" + totalChars + ")", unlockedCount === totalChars);
   check("hauts faits héros débloqués par le grind",
@@ -818,6 +825,8 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
     save();
   });
   await chainPage.reload();
+  await chainPage.waitForSelector(".hunter"); // le hash #objectifs restaure cet onglet au reload
+  await chainPage.locator('[data-tab="quetes"]').click();
   await chainPage.waitForSelector(".quest");
 
   // Premier essai : Annuler sur le tout premier jalon (NIVEAU) doit interrompre toute la chaîne
@@ -912,6 +921,42 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await rmPage.locator("[data-claim]").last().click();
   check("aucun confetti créé avec le mouvement réduit", (await rmPage.locator("#confetti").count()) === 0);
   await rmContext.close();
+
+  // Navigation : lien profond par hash, bouton retour (onglets et modales), raccourcis PWA
+  const navContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const navPage = await navContext.newPage();
+  await navPage.addInitScript(() => {
+    localStorage.setItem("rangement-onboard-v1", "1");
+    localStorage.setItem("rangement-recap", "off");
+    localStorage.setItem("rangement-evening", "off");
+  });
+  await navPage.goto(APP_URL + "#duel");
+  await navPage.waitForSelector(".hunter");
+  check("lien profond #duel ouvre l'onglet Duel",
+    (await navPage.locator("#tabs button.on").getAttribute("data-tab")) === "duel");
+  await navPage.locator('[data-tab="journal"]').click();
+  check("le changement d'onglet écrit le hash",
+    (await navPage.evaluate(() => location.hash)) === "#journal");
+  await navPage.goBack();
+  await navPage.waitForTimeout(150);
+  check("bouton retour : revient à l'onglet précédent (Duel)",
+    (await navPage.locator("#tabs button.on").getAttribute("data-tab")) === "duel");
+  await navPage.evaluate(() => sysModal("<b>test retour</b>"));
+  check("modale ouverte pour le test du retour", (await navPage.locator(".veil").count()) === 1);
+  await navPage.goBack();
+  await navPage.waitForTimeout(150);
+  check("bouton retour : ferme la modale au lieu de quitter, onglet conservé",
+    (await navPage.locator(".veil").count()) === 0
+    && (await navPage.locator("#tabs button.on").getAttribute("data-tab")) === "duel");
+  await navContext.close();
+
+  // Raccourcis d'icône PWA déclarés dans le manifest
+  const fs = require("fs");
+  const path = require("path");
+  const manifest = JSON.parse(fs.readFileSync(path.resolve(__dirname, "..", "manifest.webmanifest"), "utf8"));
+  check("3 raccourcis PWA dans le manifest, tous en lien profond par hash",
+    Array.isArray(manifest.shortcuts) && manifest.shortcuts.length === 3
+    && manifest.shortcuts.every(s => s.url.includes("#") && s.icons && s.icons.length));
 
   await browser.close();
   done();
