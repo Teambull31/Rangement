@@ -385,6 +385,41 @@ invisible, on ne voyait que « 🔥 N j » sans l'effet concret.
   des 3 DanMachi ; le grind du scénario de déblocage passe à 310 quêtes pour
   atteindre le niveau 30 (courbe : 15 080 XP cumulés).
 
+## Itération 20 — 2026-07-18 (après-midi)
+
+**Audit** : l'appli est une PWA complète (manifest + service worker) mais ne
+propose jamais de l'installer — aucune capture de `beforeinstallprompt`, ni
+d'instructions iOS ; le réglage de notification navigateur (it. 10) ne peut
+être vérifié qu'en attendant le soir, sans retour immédiat ; les récompenses
+(onglet Objectifs) ne pouvaient être qu'ajoutées/supprimées, alors que les
+tâches sont éditables en place depuis l'itération 14 — incohérence de
+personnalisation entre les deux listes.
+
+**Améliorations livrées :**
+- 📲 **Bouton d'installation de l'application** (Réglages) : capture
+  `beforeinstallprompt` et propose « Installer sur cet appareil » en un tap
+  quand le navigateur le permet (Android/desktop) ; sur iPhone/iPad, affiche
+  les étapes Safari (Partager → Sur l'écran d'accueil) faute d'API ; masqué
+  dès que l'app tourne déjà en mode standalone.
+- 🧪 **Bouton « Tester la notification »** : visible dès que la notification
+  navigateur est activée, envoie un appel immédiat (indépendant de l'anti-
+  doublon quotidien et de l'heure du rappel) pour confirmer tout de suite que
+  le navigateur autorise bien l'envoi, avec trace dans l'historique.
+- ✏️ **Récompenses éditables en place** : nom et icône modifiables
+  directement dans « Idées de récompenses » (Objectifs), même mécanique que
+  les tâches (valeur vide → restauration de l'ancienne), synchronisé entre
+  téléphones.
+- ✅ Tests : 136 assertions (+11) — panneau d'installation affiché/masqué
+  (standalone simulé via `matchMedia`), invite native captée et déclenchée
+  (`beforeinstallprompt` simulé), bouton de test de notification (appel
+  immédiat + historique), édition de récompense (nom, icône, restauration
+  sur champ vidé). Un flake de contention CPU a fait échouer une assertion
+  du rappel du soir lors d'un premier passage où des boucles de surveillance
+  tournaient en tâche de fond en parallèle du test (violation de la règle
+  « rien en parallèle ») ; reproduction isolée immédiate 1/1 OK, aucune
+  correction applicative nécessaire — leçon retenue : ne plus lancer de
+  moniteur/poll de fond pendant l'exécution des suites.
+
 **Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
 - Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
   attente — rien ne sera créé en base sans accord explicite).

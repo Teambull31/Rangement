@@ -159,6 +159,25 @@ const { APP_URL, launch, check, done } = require("./helpers");
   await page.waitForTimeout(200);
   check("défi préréglé lancé", (await page.locator('.obj:has-text("Sprint de la semaine")').count()) === 1);
 
+  // Récompenses éditables en place (nom + icône), comme les tâches
+  const rw0 = await page.evaluate(() => S.rewards[0].id);
+  await page.fill(`[data-rwname="${rw0}"]`, "Soirée jeux vidéo");
+  await page.locator(`[data-rwname="${rw0}"]`).evaluate(el => el.blur());
+  await page.waitForTimeout(200);
+  check("récompense renommée depuis Objectifs", (await page.evaluate(() => S.rewards[0].name)) === "Soirée jeux vidéo");
+  await page.fill(`[data-rwicon="${rw0}"]`, "🕹️");
+  await page.locator(`[data-rwicon="${rw0}"]`).evaluate(el => el.blur());
+  await page.waitForTimeout(200);
+  check("icône de récompense modifiée", (await page.evaluate(() => S.rewards[0].icon)) === "🕹️");
+  check("nouveau nom et icône visibles dans la liste des récompenses (champs remplis après rendu)",
+    (await page.locator(`[data-rwname="${rw0}"]`).inputValue()) === "Soirée jeux vidéo"
+    && (await page.locator(`[data-rwicon="${rw0}"]`).inputValue()) === "🕹️");
+  await page.fill(`[data-rwname="${rw0}"]`, "");
+  await page.locator(`[data-rwname="${rw0}"]`).evaluate(el => el.blur());
+  await page.waitForTimeout(200);
+  check("nom vide restaure l'ancien nom (pas d'écrasement par une chaîne vide)",
+    (await page.evaluate(() => S.rewards[0].name)) === "Soirée jeux vidéo");
+
   // Journal + annulation
   await page.locator('[data-tab="journal"]').click();
   const before = await page.locator(".logline").count();
@@ -248,6 +267,54 @@ const { APP_URL, launch, check, done } = require("./helpers");
   await page.waitForTimeout(150);
   check("retour au thème sombre : fond restauré",
     (await page.evaluate(() => getComputedStyle(document.body).backgroundColor)) === "rgb(6, 10, 19)");
+
+  // Installation PWA : panneau visible tant que l'appli n'est pas installée
+  await page.locator('[data-tab="reglages"]').click();
+  const installPanel = page.locator('section.panel', { hasText: "Installer l'application" });
+  check("panneau d'installation affiché (non installée)", (await installPanel.count()) === 1);
+  check("instructions génériques par défaut (pas d'invite native captée en test)",
+    (await installPanel.textContent()).includes("Installable depuis le menu"));
+
+  // Bannière masquée en mode standalone (déjà installée)
+  const standaloneContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const standalonePage = await standaloneContext.newPage();
+  await standalonePage.addInitScript(() => {
+    localStorage.setItem("rangement-onboard-v1", "1");
+    localStorage.setItem("rangement-recap", "off");
+    const orig = window.matchMedia.bind(window);
+    window.matchMedia = (q) => q.includes("standalone")
+      ? { matches: true, media: q, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {} }
+      : orig(q);
+  });
+  await standalonePage.goto(APP_URL);
+  await standalonePage.waitForSelector(".quest");
+  await standalonePage.locator('[data-tab="reglages"]').click();
+  check("panneau d'installation masqué en mode standalone",
+    (await standalonePage.locator('section.panel', { hasText: "Installer l'application" }).count()) === 0);
+  await standaloneContext.close();
+
+  // Invite d'installation native captée (beforeinstallprompt) : bouton direct au lieu des instructions
+  const installContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const installPage = await installContext.newPage();
+  await installPage.addInitScript(() => {
+    localStorage.setItem("rangement-onboard-v1", "1");
+    localStorage.setItem("rangement-recap", "off");
+  });
+  await installPage.goto(APP_URL);
+  await installPage.waitForSelector(".quest");
+  await installPage.evaluate(() => {
+    window.__installChoice = null;
+    const evt = new Event("beforeinstallprompt", { cancelable: true });
+    evt.prompt = () => { window.__installChoice = "prompted"; };
+    evt.userChoice = Promise.resolve({ outcome: "accepted" });
+    window.dispatchEvent(evt);
+  });
+  await installPage.locator('[data-tab="reglages"]').click();
+  check("bouton d'installation natif affiché quand le navigateur le propose", (await installPage.locator("#installBtn").count()) === 1);
+  await installPage.locator("#installBtn").click();
+  await installPage.waitForTimeout(150);
+  check("clic sur « Installer » déclenche l'invite native", (await installPage.evaluate(() => window.__installChoice)) === "prompted");
+  await installContext.close();
 
   // Mur des trophées : vide cette semaine, puis rempli avec une semaine passée injectée
   await page.locator('[data-tab="duel"]').click();
@@ -430,6 +497,13 @@ const { APP_URL, launch, check, done } = require("./helpers");
   check("historique vidé par « Effacer l'historique »",
     (await notifPage.locator(".notifhistline").count()) === 0
     && (await notifPage.evaluate(() => localStorage.getItem("rangement-notif-log"))) === null);
+
+  // Bouton « Tester la notification » : renvoie tout de suite, sans attendre le rappel du soir ni son anti-doublon
+  await notifPage.locator("#testNotifBtn").click();
+  await notifPage.waitForTimeout(150);
+  const calls3 = await notifPage.evaluate(() => window.__notifCalls.length);
+  check("bouton « Tester la notification » envoie un appel immédiat (" + calls3 + ")", calls3 === 2);
+  check("l'historique affiche l'entrée de test", (await notifPage.locator(".notifhistline").textContent()).includes("🧪"));
   await notifContext.close();
 
   // Héros : collection, déblocage au mérite, incarnation, stuff

@@ -1046,15 +1046,12 @@ function pushNotifHistory(body) {
   h.push({ ts: NOW(), body });
   localStorage.setItem("rangement-notif-log", JSON.stringify(h.slice(-14)));
 }
-async function maybeSendStreakNotification() {
-  if (!notifsOn() || notifiedToday() || Notification.permission !== "granted" || !shouldShowEveningReminder()) return;
-  const body = eveningReminderTextPlain();
-  const title = "⚔️ Rangement — ne perds pas ta série !";
+async function sendBrowserNotification(title, body, tag) {
   let sent = false;
   try {
     const reg = navigator.serviceWorker && (await navigator.serviceWorker.getRegistration());
     if (reg && reg.showNotification) {
-      await reg.showNotification(title, { body, icon: "icons/icon-192.png", badge: "icons/icon-192.png", tag: "rangement-streak" });
+      await reg.showNotification(title, { body, icon: "icons/icon-192.png", badge: "icons/icon-192.png", tag });
       sent = true;
     }
   } catch (e) { /* pas de service worker actif -> repli sur Notification() */ }
@@ -1062,7 +1059,23 @@ async function maybeSendStreakNotification() {
     try { new Notification(title, { body, icon: "icons/icon-192.png" }); sent = true; }
     catch (e) { /* notification indisponible sur cet appareil, tant pis */ }
   }
+  return sent;
+}
+async function maybeSendStreakNotification() {
+  if (!notifsOn() || notifiedToday() || Notification.permission !== "granted" || !shouldShowEveningReminder()) return;
+  const body = eveningReminderTextPlain();
+  const sent = await sendBrowserNotification("⚔️ Rangement — ne perds pas ta série !", body, "rangement-streak");
   if (sent) { markNotifiedToday(); pushNotifHistory(body); }
+}
+// Test manuel depuis Réglages : vérifie tout de suite que le navigateur autorise bien l'envoi.
+async function sendTestNotification() {
+  if (!notifsSupported() || Notification.permission !== "granted") {
+    toast("Autorisation refusée — active la notification d'abord");
+    return;
+  }
+  const sent = await sendBrowserNotification("⚔️ Rangement — test", "Ceci est une notification de test.", "rangement-test");
+  if (sent) { pushNotifHistory("🧪 Test : notification envoyée avec succès"); toast("Notification de test envoyée"); render(); }
+  else toast("Échec de l'envoi — vérifie les réglages du navigateur");
 }
 
 /* --- Récap hebdo du dimanche soir (dans l'appli, une fois par semaine) --- */
@@ -1549,7 +1562,11 @@ function vObjectifs() {
   </section>
   <section class="panel">
     <h2>Idées de récompenses</h2>
-    ${S.rewards.map(r => `<div class="mgline"><span class="grow">${esc(r.icon)} ${esc(r.name)}</span><button class="x" data-delrw="${r.id}" aria-label="Supprimer">✕</button></div>`).join("")}
+    ${S.rewards.map(r => `<div class="mgline">
+      <input type="text" data-rwicon="${r.id}" value="${esc(r.icon)}" maxlength="4" style="flex:0 0 44px" aria-label="Icône de la récompense">
+      <input type="text" data-rwname="${r.id}" value="${esc(r.name)}" maxlength="50" class="grow" style="min-width:0" aria-label="Nom de la récompense">
+      <button class="x" data-delrw="${r.id}" aria-label="Supprimer">✕</button>
+    </div>`).join("")}
     <div class="frow" style="margin-top:10px">
       <input type="text" id="rwIcon" placeholder="🎁" maxlength="4" style="flex:0 0 64px">
       <input type="text" id="rwName" placeholder="Nouvelle récompense (ex : Week-end surprise)" maxlength="50">
@@ -1605,6 +1622,16 @@ function vJournal() {
 /* ---------- Réglages ---------- */
 function vReglages() {
   return `
+  ${!isStandaloneApp() ? `
+  <section class="panel">
+    <h2>Installer l'application</h2>
+    ${deferredInstallPrompt
+      ? `<button class="btn" id="installBtn">📲 Installer sur cet appareil</button>
+         <p class="hint">Un raccourci sur l'écran d'accueil, en plein écran, comme une vraie appli.</p>`
+      : isIOSDevice()
+        ? `<p class="hint">Sur iPhone/iPad : touche <b>Partager</b> ⬆️ dans Safari, puis <b>Sur l'écran d'accueil</b>.</p>`
+        : `<p class="hint">Installable depuis le menu de ton navigateur (souvent ⋮ → « Installer l'application » ou « Ajouter à l'écran d'accueil »).</p>`}
+  </section>` : ""}
   <section class="panel">
     <h2>Chasseurs</h2>
     ${S.players.map(p => `
@@ -1677,6 +1704,7 @@ function vReglages() {
       <span>Notification du navigateur${notifsSupported() ? "" : " (non disponible sur cet appareil)"}</span>
     </div>
     <p class="hint">En plus du rappel dans l'appli : une vraie notification système, une fois par jour, si votre navigateur le permet. Sur iPhone, Safari ne le supporte pas hors app installée avec un service de notifications push — le rappel dans l'appli reste le plus fiable partout.</p>
+    ${notifsOn() ? `<button class="btn ghost" id="testNotifBtn" style="margin-bottom:10px">🧪 Tester la notification</button>` : ""}
     ${notifsOn() ? `
     <div class="notifhist">
       ${notifHistory().length
@@ -2233,6 +2261,29 @@ function bindView() {
       save(); queueOp({ table: "rewards", type: "delete", id: b.dataset.delrw });
       render();
     });
+  document.querySelectorAll("[data-rwname], [data-rwicon]").forEach(inp =>
+    inp.onchange = () => {
+      const id = inp.dataset.rwname || inp.dataset.rwicon;
+      const isName = !!inp.dataset.rwname;
+      const r = S.rewards.find(x => x.id === id);
+      if (!r) return;
+      const v = inp.value.trim();
+      if (!v) { inp.value = isName ? r.name : r.icon; return; }
+      if (isName) r.name = v; else r.icon = v;
+      save(); queueOp({ table: "rewards", type: "upsert", row: toRow.rewards(r) });
+      render();
+    });
+
+  // Installation PWA
+  const installBtn = $("#installBtn");
+  if (installBtn) installBtn.onclick = async () => {
+    if (!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    const choice = await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    render();
+    toast(choice.outcome === "accepted" ? "Installation en cours…" : "Installation annulée");
+  };
 
   // Réglages
   const sp = $("#savePlayers");
@@ -2338,6 +2389,8 @@ function bindView() {
     localStorage.removeItem("rangement-notif-log");
     render();
   };
+  const testNotifBtn = $("#testNotifBtn");
+  if (testNotifBtn) testNotifBtn.onclick = () => sendTestNotification();
 
   // Données
   const ex = $("#exportBtn");
@@ -2492,6 +2545,19 @@ function chime(kind) {
     });
   } catch (e) { /* audio indisponible, tant pis */ }
 }
+
+/* ---------- Installation PWA ---------- */
+let deferredInstallPrompt = null;
+function isStandaloneApp() {
+  return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true;
+}
+function isIOSDevice() { return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream; }
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  if (TAB === "reglages") render();
+});
+window.addEventListener("appinstalled", () => { deferredInstallPrompt = null; if (TAB === "reglages") render(); });
 
 applyTheme(curTheme());
 render();
