@@ -176,6 +176,8 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
 
   // Presets de défi : un tap remplit le formulaire ; rythme hebdo affiché
   check("rythme hebdo du duo affiché", (await page.locator('section.panel', { hasText: "Nouveau défi" }).textContent()).includes("XP par semaine"));
+  check("selects du formulaire de défi ont un aria-label pour lecteur d'écran",
+    (await page.locator("#objType[aria-label]").count()) === 1 && (await page.locator("#objReward[aria-label]").count()) === 1);
   await page.locator('[data-objpreset="sprint"]').click();
   check("preset Sprint : formulaire prérempli",
     (await page.locator("#objName").inputValue()) === "Sprint de la semaine"
@@ -201,10 +203,13 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await page.locator(`[data-oname="${sprintObjId}"]`).evaluate(el => el.blur());
   await page.waitForTimeout(200);
   check("nom du défi modifié en place", (await page.evaluate(id => S.objectives.find(o => o.id === id).name, sprintObjId)) === "Sprint du week-end");
+  check("toast de confirmation après édition d'un défi (cohérence avec Chasseurs)", (await page.locator(".toast", { hasText: "Défis mis à jour" }).count()) === 1);
+  await page.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
   await page.fill(`[data-otarget="${sprintObjId}"]`, "450");
   await page.locator(`[data-otarget="${sprintObjId}"]`).evaluate(el => el.blur());
   await page.waitForTimeout(200);
   check("cible du défi modifiée en place", (await page.evaluate(id => S.objectives.find(o => o.id === id).target, sprintObjId)) === 450);
+  await page.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
   await page.fill(`[data-oname="${sprintObjId}"]`, "");
   await page.locator(`[data-oname="${sprintObjId}"]`).evaluate(el => el.blur());
   await page.waitForTimeout(200);
@@ -216,6 +221,8 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await page.locator(`[data-rwname="${rw0}"]`).evaluate(el => el.blur());
   await page.waitForTimeout(200);
   check("récompense renommée depuis Objectifs", (await page.evaluate(() => S.rewards[0].name)) === "Soirée jeux vidéo");
+  check("toast de confirmation après édition d'une récompense (cohérence avec Chasseurs)", (await page.locator(".toast", { hasText: "Récompenses mises à jour" }).count()) === 1);
+  await page.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
   await page.fill(`[data-rwicon="${rw0}"]`, "🕹️");
   await page.locator(`[data-rwicon="${rw0}"]`).evaluate(el => el.blur());
   await page.waitForTimeout(200);
@@ -223,11 +230,21 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   check("nouveau nom et icône visibles dans la liste des récompenses (champs remplis après rendu)",
     (await page.locator(`[data-rwname="${rw0}"]`).inputValue()) === "Soirée jeux vidéo"
     && (await page.locator(`[data-rwicon="${rw0}"]`).inputValue()) === "🕹️");
+  await page.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
   await page.fill(`[data-rwname="${rw0}"]`, "");
   await page.locator(`[data-rwname="${rw0}"]`).evaluate(el => el.blur());
   await page.waitForTimeout(200);
   check("nom vide restaure l'ancien nom (pas d'écrasement par une chaîne vide)",
     (await page.evaluate(() => S.rewards[0].name)) === "Soirée jeux vidéo");
+
+  // Ajout d'une récompense en appuyant sur Entrée (clavier mobile, sans toucher le bouton +)
+  await page.fill("#rwIcon", "🎯");
+  await page.fill("#rwName", "Test récompense entrée");
+  await page.locator("#rwName").press("Enter");
+  await page.waitForTimeout(200);
+  check("récompense ajoutée via Entrée", (await page.evaluate(() => S.rewards.some(r => r.name === "Test récompense entrée"))) === true);
+  check("toast de confirmation après ajout de récompense", (await page.locator(".toast", { hasText: "Récompense ajoutée" }).count()) === 1);
+  await page.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
 
   // Suppression d'une récompense avec filet de rattrapage (toast « Annuler »)
   const rwCountBefore = await page.locator("[data-delrw]").count();
@@ -284,6 +301,8 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await page.waitForTimeout(200);
   check("note affichée en chip doré après édition", (await page.locator(".logline .chip.gold", { hasText: "Bien fait !" }).count()) === 1);
   check("champ d'édition refermé après validation", (await page.locator(".jnote-edit").count()) === 0);
+  check("toast de confirmation après édition d'une note de journal", (await page.locator(".toast", { hasText: "Note enregistrée" }).count()) === 1);
+  await page.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
   await page.reload();
   await page.waitForSelector(".hunter");
   await page.locator('[data-tab="journal"]').click();
@@ -319,14 +338,28 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await page.locator(`[data-tname="${t0}"]`).evaluate(el => el.blur());
   await page.waitForTimeout(200);
   check("tâche renommée depuis Réglages", (await page.evaluate(() => S.tasks[0].name)) === "Vitres du salon");
+  check("toast de confirmation après édition d'une tâche (cohérence avec Chasseurs)", (await page.locator(".toast", { hasText: "Quêtes mises à jour" }).count()) === 1);
+  await page.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
   await page.fill(`[data-ticon="${t0}"]`, "🫧");
   await page.locator(`[data-ticon="${t0}"]`).evaluate(el => el.blur());
   await page.waitForTimeout(200);
   check("icône de tâche modifiée", (await page.evaluate(() => S.tasks[0].icon)) === "🫧");
+  await page.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
   await page.locator('[data-tab="quetes"]').click();
   const renamedQuest = page.locator(".quest", { hasText: "Vitres du salon" });
   check("nouveau nom et icône visibles sur l'onglet Quêtes",
     (await renamedQuest.count()) === 1 && (await renamedQuest.textContent()).includes("🫧"));
+
+  // Ajout d'une tâche en appuyant sur Entrée (clavier mobile, sans toucher le bouton Ajouter)
+  await page.locator('[data-tab="reglages"]').click();
+  check("select de priorité (ajout) a un aria-label pour lecteur d'écran", (await page.locator("#tPrio[aria-label]").count()) === 1);
+  await page.fill("#tIcon", "🪣");
+  await page.fill("#tName", "Test tâche entrée");
+  await page.locator("#tName").press("Enter");
+  await page.waitForTimeout(200);
+  check("tâche ajoutée via Entrée", (await page.evaluate(() => S.tasks.some(t => t.name === "Test tâche entrée"))) === true);
+  check("toast de confirmation après ajout de tâche", (await page.locator(".toast", { hasText: "Quête ajoutée" }).count()) === 1);
+  await page.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
 
   // Suppression d'une tâche avec filet de rattrapage (toast « Annuler »), même mécanique
   await page.locator('[data-tab="reglages"]').click();
@@ -371,6 +404,16 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await page.waitForTimeout(150);
   check("retour au thème sombre : fond restauré",
     (await page.evaluate(() => getComputedStyle(document.body).backgroundColor)) === "rgb(6, 10, 19)");
+
+  // Chips de priorité : couleur suivant désormais le thème (contraste corrigé en Aube, it. 28)
+  await page.locator('[data-theme="aube"]').click();
+  await page.waitForTimeout(150);
+  const prioBasseAube = (await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--prio-basse").trim())).toLowerCase();
+  check("chip « basse » suit le thème clair Aube (" + prioBasseAube + ")", prioBasseAube === "#4a6483");
+  await page.locator('[data-theme="monarque"]').click();
+  await page.waitForTimeout(150);
+  const prioBasseDark = (await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--prio-basse").trim())).toLowerCase();
+  check("chip « basse » revient à la teinte sombre par défaut (" + prioBasseDark + ")", prioBasseDark === "#8aa3c2");
 
   // Thème par défaut au premier lancement : suit la préférence système clair/sombre
   const lightCtx = await browser.newContext({ colorScheme: "light", viewport: { width: 390, height: 844 } });
@@ -467,6 +510,7 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
 
   // Pari de duel : mise, résolution sur une semaine passée, réclamation
   check("formulaire de mise affiché", (await page.locator("#betAdd").count()) === 1);
+  check("select de récompense misée a un aria-label pour lecteur d'écran", (await page.locator("#betReward[aria-label]").count()) === 1);
   await page.locator("#betAdd").click();
   await page.waitForTimeout(200);
   check("enjeu actif affiché", (await page.locator(".betline.hot").count()) === 1);
@@ -892,6 +936,8 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   check("série de p1 préservée et prolongée par le bouclier (8 j)", (await shieldPage.evaluate(() => streakOf("p1"))) === 8);
   check("bouclier consommé après usage (0 disponible pour p1)", (await shieldPage.evaluate(() => availableShields("p1"))) === 0);
   check("l'entrée bouclier ne compte pas comme une vraie quête (7, pas 8)", (await shieldPage.evaluate(() => featStats("p1").count)) === 7);
+  check("l'entrée bouclier n'inflate pas non plus un défi « nombre de quêtes » à deux (bug corrigé, it. 28)",
+    (await shieldPage.evaluate(() => objProgress({ type: "count", createdAt: Date.now() - 20 * 86400000 }))) === 10);
   check("pas de bouclier gagné avec seulement 3 jours naturels (p2)", (await shieldPage.evaluate(() => earnedShields("p2"))) === 0);
   check("série de p2 cassée normalement, aucun bouclier utilisé",
     (await shieldPage.evaluate(() => S.log.some(l => l.playerId === "p2" && l.note === "bouclier"))) === false

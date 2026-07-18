@@ -707,3 +707,55 @@ render — appli laissée ouverte, ils n'apparaissaient jamais.
   attente — rien ne sera créé en base sans accord explicite).
 - Revoir la taille du fichier index.html (grossit à chaque itération,
   maintenant ~2 900 lignes).
+
+## Itération 28 — 2026-07-18 (routine cloud)
+
+**Audit** : un audit ciblé (agent dédié, lecture complète d'index.html face à
+l'historique des 27 itérations) a fait remonter cinq frictions, dont un vrai
+bug de confiance dans les défis et un oubli de contraste dans le thème clair
+introduit à l'itération 16 — aucune ne nécessitant de changement de schéma.
+
+**Améliorations livrées :**
+- 🐛 **Bug corrigé — le bouclier de série gonflait les défis « nombre de
+  quêtes »** : `objProgress()` comptait l'entrée de journal technique du
+  bouclier (introduite à l'itération 22) comme une vraie quête accomplie
+  dans un défi de type « 20 quêtes à deux », alors qu'aucune tâche n'avait
+  été faite ce jour-là — contrairement aux hauts faits et aux statistiques
+  du Duel, qui excluaient déjà correctement le bouclier. Un seul filtre
+  oublié, maintenant aligné sur le reste de l'appli.
+- 🎨 **Chips de priorité lisibles en thème clair « Aube »** : `PRIOS`
+  codait ses quatre couleurs en hexadécimal brut, en dehors du système de
+  variables CSS mis en place à l'itération 16 pour adapter les couleurs au
+  thème clair — contraste réel jusqu'à 1,9:1 sur fond blanc (seuil WCAG AA :
+  4,5:1), bien en dessous du seuil sur les quatre priorités. Nouvelles
+  variables `--prio-basse`/`--prio-normale` (avec surcharges Aube), les
+  priorités « haute »/« critique » réutilisent désormais `--high`/`--crit`
+  qui avaient déjà leurs surcharges — les quatre priorités suivent
+  maintenant les 5 thèmes.
+- ✨ **Cohérence des écrans d'édition en place** : les quatre écrans qui
+  suivaient le même pattern que Réglages → Chasseurs (tâches, récompenses,
+  défis, notes du Journal) ne donnaient auparavant aucun retour visuel après
+  un `onchange` — désormais un `toast()` court confirme l'enregistrement,
+  comme sur l'écran Chasseurs. Au passage : Entrée valide désormais les
+  formulaires courts d'ajout (tâche, récompense, défi), comme le clavier
+  « Terminé » du mobile le laisse penser ; et les quatre `<select>` de
+  création sans libellé (`#tPrio`, `#objType`, `#objReward`, `#betReward`)
+  ont gagné un `aria-label` pour les lecteurs d'écran.
+- ✅ Tests : 225 assertions au total (218 dans smoke.js +14, 7 dans
+  sync-test.js inchangée) — bouclier n'inflatant plus un défi « count »
+  (calcul direct sur `objProgress`), chips de priorité suivant le thème
+  (variable CSS vérifiée en Aube puis au retour au thème sombre), toast de
+  confirmation sur les quatre écrans (défi, récompense, tâche, note de
+  journal — un piège de test découvert et corrigé en route : deux édition
+  consécutives sur le même écran déclenchent deux toasts au même texte,
+  d'où une vérification après chaque édition plutôt qu'à la fin des deux),
+  ajout via Entrée pour tâche et récompense, quatre `aria-label` présents.
+  Validation visuelle (captures 390×844) : chips de priorité contrastées en
+  thème Aube sur l'onglet Quêtes, toast « Quêtes mises à jour » visible
+  après renommage d'une tâche dans Réglages.
+
+**Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
+- Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
+  attente — rien ne sera créé en base sans accord explicite).
+- Revoir la taille du fichier index.html (grossit à chaque itération,
+  maintenant ~2 950 lignes).

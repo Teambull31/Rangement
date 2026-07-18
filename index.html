@@ -30,6 +30,8 @@
     --gold: #F0C550;
     --crit: #FF5C6E;
     --high: #FF9D5C;
+    --prio-basse: #8AA3C2;
+    --prio-normale: #4DC3FF;
     --ok: #5CE0A5;
     --ink: #D9E7F7;
     --ink-dim: #8AA3C2;
@@ -491,10 +493,10 @@
 /* ================= State ================= */
 const KEY = "rangement-sl-v2";
 const PRIOS = {
-  basse:    { label: "Basse",    xp: 10, col: "#8AA3C2" },
-  normale:  { label: "Normale",  xp: 20, col: "#4DC3FF" },
-  haute:    { label: "Haute",    xp: 35, col: "#FF9D5C" },
-  critique: { label: "Critique", xp: 50, col: "#FF5C6E" },
+  basse:    { label: "Basse",    xp: 10, col: "var(--prio-basse)" },
+  normale:  { label: "Normale",  xp: 20, col: "var(--prio-normale)" },
+  haute:    { label: "Haute",    xp: 35, col: "var(--high)" },
+  critique: { label: "Critique", xp: 50, col: "var(--crit)" },
 };
 const uid = () => Math.random().toString(36).slice(2, 10);
 
@@ -975,12 +977,19 @@ function objProgress(o) {
   const f = l => l.ts >= o.createdAt;
   return o.type === "xp"
     ? S.log.filter(f).reduce((a, l) => a + l.xp, 0)
-    : S.log.filter(f).length;
+    : S.log.filter(f).filter(l => l.note !== "bouclier").length;
 }
 
 /* ================= Rendering ================= */
 const $ = sel => document.querySelector(sel);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+// Entrée valide un formulaire d'ajout court, comme le ferait le bouton "Terminé" du clavier mobile.
+function bindEnter(ids, btn) {
+  ids.forEach(id => {
+    const el = $(id);
+    if (el) el.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); btn && btn.click(); } };
+  });
+}
 let TAB = "quetes";
 
 const TABS = [
@@ -1365,7 +1374,7 @@ function betSection() {
     ? `<div class="betline hot">⚔️ Enjeu de la semaine : <b>${betRewardLabel(active)}</b><br>
        <span class="hint">Le vainqueur du duel dimanche soir l'emporte. Bonne chasse !</span></div>`
     : `<div class="frow" style="margin-top:4px">
-        <select id="betReward">
+        <select id="betReward" aria-label="Récompense misée">
           ${S.rewards.map(r => `<option value="${r.id}">${esc(r.icon)} ${esc(r.name)}</option>`).join("")}
           <option value="__random__">🎲 Surprise (tirage au sort)</option>
         </select>
@@ -1713,14 +1722,14 @@ function vObjectifs() {
     </div>
     <div class="frow"><input type="text" id="objName" placeholder="Nom du défi (ex : Opération appart nickel)" maxlength="60"></div>
     <div class="frow">
-      <select id="objType">
+      <select id="objType" aria-label="Type d'objectif">
         <option value="xp">XP cumulés à deux</option>
         <option value="count">Nombre de quêtes à deux</option>
       </select>
       <input type="number" id="objTarget" placeholder="Cible (ex : 300)" min="1" inputmode="numeric">
     </div>
     <div class="frow">
-      <select id="objReward">
+      <select id="objReward" aria-label="Récompense">
         ${S.rewards.map(r => `<option value="${r.id}">${esc(r.icon)} ${esc(r.name)}</option>`).join("")}
         <option value="__random__">🎲 Surprise (tirage au sort)</option>
       </select>
@@ -1832,7 +1841,7 @@ function vReglages() {
       <input type="text" id="tName" placeholder="Nouvelle tâche" maxlength="50">
     </div>
     <div class="frow">
-      <select id="tPrio">${Object.entries(PRIOS).map(([k, v]) => `<option value="${k}">${v.label} · ${v.xp} XP</option>`).join("")}</select>
+      <select id="tPrio" aria-label="Priorité">${Object.entries(PRIOS).map(([k, v]) => `<option value="${k}">${v.label} · ${v.xp} XP</option>`).join("")}</select>
       <button class="btn" id="tAdd">Ajouter</button>
     </div>
   </section>
@@ -2429,7 +2438,7 @@ function bindView() {
         l.note = noteInput.value.trim().slice(0, 40);
         save(); queueOp({ table: "log", type: "upsert", row: toRow.log(l) });
       }
-      render();
+      render(); if (l) toast("Note enregistrée");
     };
     noteInput.onblur = commit;
     noteInput.onkeydown = e => {
@@ -2462,6 +2471,7 @@ function bindView() {
     save(); queueOp({ table: "objectives", type: "upsert", row: toRow.objectives(o) });
     render(); toast("Défi lancé ⚔️");
   };
+  bindEnter(["#objName", "#objTarget"], objAdd);
   document.querySelectorAll("[data-oname]").forEach(inp =>
     inp.onchange = () => {
       const o = S.objectives.find(x => x.id === inp.dataset.oname);
@@ -2470,7 +2480,7 @@ function bindView() {
       if (!v) { inp.value = o.name; return; }
       o.name = v;
       save(); queueOp({ table: "objectives", type: "upsert", row: toRow.objectives(o) });
-      render();
+      render(); toast("Défis mis à jour");
     });
   document.querySelectorAll("[data-otarget]").forEach(inp =>
     inp.onchange = () => {
@@ -2480,7 +2490,7 @@ function bindView() {
       if (!v || v < 1) { inp.value = o.target; return; }
       o.target = v;
       save(); queueOp({ table: "objectives", type: "upsert", row: toRow.objectives(o) });
-      render();
+      render(); toast("Défis mis à jour");
     });
   document.querySelectorAll("[data-claim]").forEach(b =>
     b.onclick = () => {
@@ -2553,8 +2563,9 @@ function bindView() {
     const r = { id: uid(), name, icon: $("#rwIcon").value.trim() || "🎁" };
     S.rewards.push(r);
     save(); queueOp({ table: "rewards", type: "upsert", row: toRow.rewards(r) });
-    render();
+    render(); toast("Récompense ajoutée");
   };
+  bindEnter(["#rwName", "#rwIcon"], rwAdd);
   document.querySelectorAll("[data-delrw]").forEach(b =>
     b.onclick = () => deleteWithUndo("rewards", b.dataset.delrw, "Récompense supprimée"));
   document.querySelectorAll("[data-rwname], [data-rwicon]").forEach(inp =>
@@ -2567,7 +2578,7 @@ function bindView() {
       if (!v) { inp.value = isName ? r.name : r.icon; return; }
       if (isName) r.name = v; else r.icon = v;
       save(); queueOp({ table: "rewards", type: "upsert", row: toRow.rewards(r) });
-      render();
+      render(); toast("Récompenses mises à jour");
     });
 
   // Installation PWA
@@ -2611,6 +2622,7 @@ function bindView() {
     save(); queueOp({ table: "tasks", type: "upsert", row: toRow.tasks(t) });
     render(); toast("Quête ajoutée");
   };
+  bindEnter(["#tName", "#tIcon"], tAdd);
   document.querySelectorAll("[data-deltask]").forEach(b =>
     b.onclick = () => deleteWithUndo("tasks", b.dataset.deltask, "Quête supprimée"));
   document.querySelectorAll("[data-tprio]").forEach(sel =>
@@ -2632,7 +2644,7 @@ function bindView() {
       if (!v) { inp.value = isName ? t.name : t.icon; return; }
       if (isName) t.name = v; else t.icon = v;
       save(); queueOp({ table: "tasks", type: "upsert", row: toRow.tasks(t) });
-      render();
+      render(); toast("Quêtes mises à jour");
     });
 
   // Apparence
@@ -2746,6 +2758,7 @@ const THEMES = {
   aube:     { label: "Aube",     sys: "#0E7AC0", sysDim: "#0A5A8F", glow: "#9FC2E4", mana: "#6D5BD0",
               light: { abyss: "#EAF0F9", panel: "#FFFFFF", panel2: "#F4F8FE", line: "#C9D8EE", ink: "#16263F", inkDim: "#54688A", field: "#FFFFFF",
                        gold: "#9C7C0C", ok: "#1F8F5F", crit: "#CC3344", high: "#C2601A",
+                       prioBasse: "#4A6483", prioNormale: "#1471B0",
                        navbg: "rgba(255,255,255,.92)", logoTop: "#33475F" } },
 };
 function curTheme() {
@@ -2765,7 +2778,7 @@ function applyTheme(id) {
   // Thème clair : bascule du fond, des panneaux et des encres (sinon retour aux défauts sombres)
   const L = t.light;
   const vars = { "--abyss": "abyss", "--panel": "panel", "--panel-2": "panel2", "--line": "line", "--ink": "ink", "--ink-dim": "inkDim", "--field": "field",
-                 "--gold": "gold", "--ok": "ok", "--crit": "crit", "--high": "high",
+                 "--gold": "gold", "--ok": "ok", "--crit": "crit", "--high": "high", "--prio-basse": "prioBasse", "--prio-normale": "prioNormale",
                  "--navbg": "navbg", "--logo-top": "logoTop" };
   for (const [cssVar, key] of Object.entries(vars)) {
     if (L && L[key]) r.setProperty(cssVar, L[key]); else r.removeProperty(cssVar);
