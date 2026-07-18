@@ -1443,6 +1443,7 @@ function vDuel() {
     ["XP total", totalXp(a.id), totalXp(b.id), " XP"],
     ["Quêtes accomplies", taskCount(a.id, l => l.note !== "bouclier"), taskCount(b.id, l => l.note !== "bouclier"), ""],
     ["Série en cours", streakOf(a.id), streakOf(b.id), " j"],
+    ["Meilleure série 🏆", bestStreakOf(a.id), bestStreakOf(b.id), " j"],
     ["Boucliers 🛡️ disponibles", availableShields(a.id), availableShields(b.id), ""],
     ["Trophées 👑", trophies.winsA, trophies.winsB, ""],
     ["Série de victoires 🔥", trophies.streakA, trophies.streakB, " sem."],
@@ -1679,7 +1680,7 @@ function vJournal() {
   const q = journalFilter.q.trim().toLowerCase();
   const filtered = S.log.filter(l => {
     if (journalFilter.player !== "all" && l.playerId !== journalFilter.player) return false;
-    if (q && !l.taskName.toLowerCase().includes(q)) return false;
+    if (q && !l.taskName.toLowerCase().includes(q) && !(l.note || "").toLowerCase().includes(q)) return false;
     return true;
   });
 
@@ -1841,6 +1842,22 @@ function toast(msg, actionLabel, actionFn, ms) {
   }
   $("#toastZone").appendChild(t);
   setTimeout(() => t.remove(), ms || (actionLabel ? 5000 : 2200));
+}
+
+// Supprime un élément d'une collection (tâche, récompense, défi) avec un filet de
+// rattrapage : un mistap n'oblige plus à tout retaper, comme pour le journal.
+function deleteWithUndo(table, id, msg) {
+  const idx = S[table].findIndex(x => x.id === id);
+  if (idx < 0) return;
+  const item = S[table][idx];
+  S[table].splice(idx, 1);
+  save(); queueOp({ table, type: "delete", id });
+  render();
+  toast(msg, "Annuler", () => {
+    S[table].splice(Math.min(idx, S[table].length), 0, item);
+    save(); queueOp({ table, type: "upsert", row: toRow[table](item) });
+    render();
+  });
 }
 
 // Bannière quand une nouvelle version de l'appli est prête (service worker mis à jour)
@@ -2138,6 +2155,21 @@ function sysModal(html, onClose, extra) {
   if (extra) $("#veilExtra").onclick = () => { $("#modal").innerHTML = ""; extra.onclick(); };
 }
 
+// Enchaîne plusieurs modales système à la suite (ex. niveau + objectif atteint sur la même
+// quête) : chaque « Continuer » affiche la suivante. Un bouton « Annuler » interrompt la
+// chaîne (la quête est annulée, les jalons suivants n'ont plus lieu d'être montrés).
+function playMilestones(queue, i) {
+  i = i || 0;
+  if (i >= queue.length) return;
+  const m = queue[i];
+  chime(m.chime);
+  sysModal(m.html, () => playMilestones(queue, i + 1),
+    m.extra ? { label: m.extra.label, onclick: () => {
+      m.extra.onclick();
+      if (!m.extra.stop) playMilestones(queue, i + 1);
+    } } : null);
+}
+
 function doTask(taskId, playerId) {
   const t = S.tasks.find(x => x.id === taskId);
   const p = S.players.find(x => x.id === playerId);
@@ -2172,38 +2204,39 @@ function doTask(taskId, playerId) {
     render(); toast("Action annulée");
   };
 
-  if (newChar) {
-    chime("level");
-    sysModal(`
-      <div class="big gold">HÉROS DÉBLOQUÉ</div>
+  // Plusieurs jalons peuvent tomber sur la même quête (ex. niveau + objectif atteint) :
+  // ils s'enchaînent tous à la suite au lieu que les suivants soient silencieusement perdus.
+  const queue = [];
+  if (newChar) queue.push({
+    chime: "level",
+    html: `<div class="big gold">HÉROS DÉBLOQUÉ</div>
       <div class="sub"><span style="font-size:40px">${newChar.emoji}</span><br><b>${esc(newChar.name)}</b> (${esc(newChar.univers)}) rejoint la collection de <b>${esc(p.name)}</b> !</div>`,
-      null,
-      { label: "Incarner 🎴", onclick: () => equipChar(p, newChar) });
-  } else if (after > before) {
-    chime("level");
+    extra: { label: "Incarner 🎴", onclick: () => equipChar(p, newChar) },
+  });
+  if (after > before) {
     const rk = rankOf(after);
-    sysModal(`
-      <div class="big">NIVEAU ${after}</div>
-      <div class="sub">${esc(p.emoji)} <b>${esc(p.name)}</b> monte en puissance !<br>Rang actuel : <b class="${rk.s ? "gold" : ""}">${rk.r}</b></div>`,
-      null,
-      { label: "Annuler", onclick: undoTask });
-  } else if (objsAfter > objsBefore) {
-    chime("level");
-    sysModal(`
-      <div class="big gold">OBJECTIF ATTEINT</div>
-      <div class="sub">Un défi commun est terminé.<br>Allez le réclamer dans l'onglet <b>Objectifs</b> 🎁</div>`,
-      null,
-      { label: "Annuler", onclick: undoTask });
-  } else if (newFeat) {
-    chime("feat");
-    sysModal(`
-      <div class="big gold">HAUT FAIT</div>
-      <div class="sub">${esc(p.emoji)} <b>${esc(p.name)}</b> débloque :<br><span style="font-size:26px">${newFeat.icon}</span><br><b>${esc(newFeat.name)}</b></div>`,
-      null,
-      { label: "Annuler", onclick: undoTask });
-  } else {
-    toast(`${p.emoji} ${p.name} +${xp} XP`, "Annuler", undoTask);
+    queue.push({
+      chime: "level",
+      html: `<div class="big">NIVEAU ${after}</div>
+        <div class="sub">${esc(p.emoji)} <b>${esc(p.name)}</b> monte en puissance !<br>Rang actuel : <b class="${rk.s ? "gold" : ""}">${rk.r}</b></div>`,
+      extra: { label: "Annuler", onclick: undoTask, stop: true },
+    });
   }
+  if (objsAfter > objsBefore) queue.push({
+    chime: "level",
+    html: `<div class="big gold">OBJECTIF ATTEINT</div>
+      <div class="sub">Un défi commun est terminé.<br>Allez le réclamer dans l'onglet <b>Objectifs</b> 🎁</div>`,
+    extra: { label: "Annuler", onclick: undoTask, stop: true },
+  });
+  if (newFeat) queue.push({
+    chime: "feat",
+    html: `<div class="big gold">HAUT FAIT</div>
+      <div class="sub">${esc(p.emoji)} <b>${esc(p.name)}</b> débloque :<br><span style="font-size:26px">${newFeat.icon}</span><br><b>${esc(newFeat.name)}</b></div>`,
+    extra: { label: "Annuler", onclick: undoTask, stop: true },
+  });
+
+  if (queue.length) playMilestones(queue);
+  else toast(`${p.emoji} ${p.name} +${xp} XP`, "Annuler", undoTask);
 }
 
 function bindView() {
@@ -2338,11 +2371,7 @@ function bindView() {
         <div class="sub">${surprise ? "🎲 Le sort a désigné :" : "Vous avez gagné :"}<br><b>${esc(rw.icon)} ${esc(rw.name)}</b><br>Profitez-en bien, vous l'avez mérité 💙</div>`);
     });
   document.querySelectorAll("[data-delobj]").forEach(b =>
-    b.onclick = () => {
-      S.objectives = S.objectives.filter(o => o.id !== b.dataset.delobj);
-      save(); queueOp({ table: "objectives", type: "delete", id: b.dataset.delobj });
-      render();
-    });
+    b.onclick = () => deleteWithUndo("objectives", b.dataset.delobj, "Défi abandonné"));
 
   // Pari de duel
   const betAdd = $("#betAdd");
@@ -2395,11 +2424,7 @@ function bindView() {
     render();
   };
   document.querySelectorAll("[data-delrw]").forEach(b =>
-    b.onclick = () => {
-      S.rewards = S.rewards.filter(r => r.id !== b.dataset.delrw);
-      save(); queueOp({ table: "rewards", type: "delete", id: b.dataset.delrw });
-      render();
-    });
+    b.onclick = () => deleteWithUndo("rewards", b.dataset.delrw, "Récompense supprimée"));
   document.querySelectorAll("[data-rwname], [data-rwicon]").forEach(inp =>
     inp.onchange = () => {
       const id = inp.dataset.rwname || inp.dataset.rwicon;
@@ -2455,11 +2480,7 @@ function bindView() {
     render(); toast("Quête ajoutée");
   };
   document.querySelectorAll("[data-deltask]").forEach(b =>
-    b.onclick = () => {
-      S.tasks = S.tasks.filter(t => t.id !== b.dataset.deltask);
-      save(); queueOp({ table: "tasks", type: "delete", id: b.dataset.deltask });
-      render();
-    });
+    b.onclick = () => deleteWithUndo("tasks", b.dataset.deltask, "Quête supprimée"));
   document.querySelectorAll("[data-tprio]").forEach(sel =>
     sel.onchange = () => {
       const t = S.tasks.find(x => x.id === sel.dataset.tprio);

@@ -525,3 +525,61 @@ nécessitant de changement de schéma — les trois ont été traitées.
 - Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
   attente — rien ne sera créé en base sans accord explicite).
 - Revoir la taille du fichier index.html (grossit à chaque itération).
+
+## Itération 24 — 2026-07-18 (routine cloud)
+
+**Audit** : un audit ciblé (agent dédié, lecture complète d'index.html face à
+l'historique des 23 itérations) a fait remonter trois frictions concrètes,
+aucune ne nécessitant de changement de schéma : les suppressions de tâches,
+récompenses et défis étaient instantanées et sans filet (contrairement au
+Journal et aux quêtes accomplies, annulables depuis un toast) ; une seule
+modale système s'affichait quand plusieurs jalons tombaient sur la même
+quête (ex. niveau + objectif atteint), les suivants étant perdus en
+silence ; la recherche du Journal ignorait les notes libres ajoutées à
+l'itération 23 ; et le meilleur score de série (`bestStreakOf`, déjà
+calculé pour les hauts faits) n'était jamais montré à côté de la série en
+cours.
+
+**Améliorations livrées :**
+- ↩️ **Suppressions avec filet de rattrapage** : supprimer une tâche, une
+  récompense ou abandonner un défi affiche désormais un toast « Annuler »
+  (5 s), comme pour une quête accomplie — un mistap ne demande plus de
+  tout retaper. Une seule fonction (`deleteWithUndo`) factorise les trois
+  cas, ré-insère l'élément à sa position d'origine et repropage l'upsert
+  vers Supabase en cas d'annulation.
+- 🔗 **Enchaînement des jalons simultanés** : quand une quête déclenche
+  plusieurs événements à la fois (montée de niveau, objectif atteint, haut
+  fait, héros débloqué), toutes les modales s'affichent désormais à la
+  suite (« Continuer » passe à la suivante) au lieu qu'une seule priorité
+  masque les autres. « Annuler » sur n'importe quel jalon interrompt toute
+  la chaîne et annule la quête, comme avant.
+- 🏆 **Record de meilleure série** affiché dans les statistiques du Duel
+  (« Meilleure série 🏆 »), à côté de la série en cours — dérivé de
+  `bestStreakOf`, déjà calculé pour les hauts faits, zéro nouvelle donnée.
+- 🔍 **Recherche du Journal étendue aux notes libres** : chercher un mot
+  d'une note perso (ex. « bien joué ») retrouve désormais l'entrée
+  correspondante, pas seulement par nom de tâche.
+- ✅ Tests : 182 assertions au total (175 dans smoke.js +23, 7 dans
+  sync-test.js inchangée) — suppression avec annulation pour les tâches,
+  récompenses et défis (dont la disparition immédiate de l'onglet Quêtes) ;
+  enchaînement complet des trois modales sur un scénario à trois jalons
+  simultanés construit précisément (niveau + objectif + haut fait), avec
+  vérification qu'« Annuler » sur le premier jalon interrompt bien toute la
+  chaîne (aucune modale suivante, quête bien annulée) ; recherche du
+  Journal par note ; ligne « Meilleure série » dans les stats du Duel.
+  Deux faux échecs (montée de niveau attendue vs haut fait affiché, et
+  tout le bloc bouclier de série) sont apparus lors d'un premier passage où
+  deux boucles de surveillance (Monitor) tournaient en tâche de fond en
+  parallèle du test — reproduction isolée immédiate, tout repasse au vert
+  sans aucune correction applicative ; leçon reconfirmée (déjà notée aux
+  itérations 15/20/22) : ne jamais laisser de moniteur actif pendant une
+  suite de tests, y compris un simple `pgrep` en boucle. Validation visuelle
+  (captures 390×844) : suppression de tâche et abandon de défi avec toast
+  Annuler, les trois modales de la chaîne l'une après l'autre, ligne
+  Meilleure série dans Duel, recherche Journal par note.
+
+**Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
+- Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
+  attente — rien ne sera créé en base sans accord explicite).
+- Revoir la taille du fichier index.html (grossit à chaque itération,
+  maintenant ~2 800 lignes).

@@ -13,6 +13,17 @@ async function launch() {
   return { browser, page, errors };
 }
 
+// Ferme toutes les modales système enchaînées (plusieurs jalons peuvent tomber sur la
+// même quête depuis l'itération 24 : niveau + objectif + haut fait à la suite).
+async function closeModals(page, max) {
+  for (let i = 0; i < (max || 6); i++) {
+    const ok = page.locator("#veilOk");
+    if (!(await ok.count())) return;
+    await ok.click();
+    await page.waitForTimeout(80);
+  }
+}
+
 let failures = 0;
 function check(label, ok) {
   console.log((ok ? "  ✅ " : "  ❌ ") + label);
@@ -23,4 +34,4 @@ function done() {
   console.log("Tous les tests passent.");
 }
 
-module.exports = { APP_URL, launch, check, done };
+module.exports = { APP_URL, launch, check, done, closeModals };

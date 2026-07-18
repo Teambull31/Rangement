@@ -1,5 +1,5 @@
 /* Test de fumée : parcours complet de l'appli en mode local (sans Supabase). */
-const { APP_URL, launch, check, done } = require("./helpers");
+const { APP_URL, launch, check, done, closeModals } = require("./helpers");
 
 (async () => {
   const { browser, page, errors } = await launch();
@@ -24,7 +24,7 @@ const { APP_URL, launch, check, done } = require("./helpers");
   await page.waitForTimeout(300);
   const featModal = (await page.locator(".sysbox").count()) ? (await page.locator(".sysbox").textContent()) : "";
   check("haut fait débloqué à la première quête", featModal.includes("HAUT FAIT"));
-  if (await page.locator("#veilOk").count()) await page.locator("#veilOk").click();
+  await closeModals(page);
   const xpText = (await page.locator(".hunter").first().locator(".xpnums").first().textContent()).trim();
   check("XP créditée après une quête (" + xpText + ")", /^[1-9]\d*\/100 XP/.test(xpText));
   const streakTxt = (await page.locator(".hunter").first().locator(".streak").textContent()).trim();
@@ -33,7 +33,7 @@ const { APP_URL, launch, check, done } = require("./helpers");
   // Deuxième quête : toast avec bouton Annuler
   await page.locator(".quest").nth(1).locator('[data-p="p1"]').click();
   await page.waitForTimeout(300);
-  if (await page.locator("#veilOk").count()) await page.locator("#veilOk").click(); // haut fait lève-tôt/oiseau de nuit selon l'heure
+  await closeModals(page); // haut fait lève-tôt/oiseau de nuit selon l'heure
   const undoBtn = page.locator(".toast-action");
   if (await undoBtn.count()) {
     check("toast avec bouton Annuler affiché", true);
@@ -50,10 +50,13 @@ const { APP_URL, launch, check, done } = require("./helpers");
   let levelUpSeen = false;
   for (let i = 0; i < 8; i++) {
     await page.locator(".quest").nth(i % nQuests).locator('[data-p="p1"]').click();
-    if (await page.locator("#veilOk").count()) {
+    for (let j = 0; j < 6; j++) {
+      const ok = page.locator("#veilOk");
+      if (!(await ok.count())) break;
       const txt = await page.locator(".sysbox").textContent();
       if (txt.includes("NIVEAU")) levelUpSeen = true;
-      await page.locator("#veilOk").click();
+      await ok.click();
+      await page.waitForTimeout(40);
     }
     await page.waitForTimeout(60);
   }
@@ -144,9 +147,15 @@ const { APP_URL, launch, check, done } = require("./helpers");
   await page.waitForTimeout(200);
   await page.locator('[data-tab="quetes"]').click();
   await page.locator(".quest").first().locator('[data-p="p2"]').click();
-  const modal = page.locator("#veilOk");
-  await modal.waitFor({ timeout: 2000 }).catch(() => {});
-  if (await modal.count()) await modal.click();
+  // Cette quête complète à la fois l'objectif (XP à deux) et débloque « Première quête »
+  // pour p2 : deux modales s'enchaînent depuis l'itération 24 (au lieu qu'une seule
+  // s'affiche et fasse perdre l'autre jalon en silence).
+  await page.waitForSelector(".sysbox", { timeout: 2000 }).catch(() => {});
+  const firstMilestone = (await page.locator(".sysbox").count()) ? await page.locator(".sysbox").textContent() : "";
+  check("premier jalon de la file (" + firstMilestone.replace(/\s+/g, " ").trim().slice(0, 40) + ")",
+    firstMilestone.includes("OBJECTIF ATTEINT") || firstMilestone.includes("HAUT FAIT"));
+  await closeModals(page);
+  check("jalons enchaînés bien tous fermés (aucune modale ne bloque la suite)", (await page.locator(".sysbox").count()) === 0);
   await page.locator('[data-tab="objectifs"]').click();
   check("objectif surprise affiché 🎲", (await page.locator(".obj .oreward").last().textContent()).includes("surprise"));
   check("bouton de réclamation présent", (await page.locator("[data-claim]").count()) > 0);
@@ -170,6 +179,16 @@ const { APP_URL, launch, check, done } = require("./helpers");
   await page.waitForTimeout(200);
   check("défi préréglé lancé", (await page.locator('.obj:has-text("Sprint de la semaine")').count()) === 1);
 
+  // Abandonner un défi avec filet de rattrapage (toast « Annuler »)
+  const sprintObjId = await page.evaluate(() => S.objectives.find(o => o.name === "Sprint de la semaine").id);
+  await page.locator(`[data-delobj="${sprintObjId}"]`).click();
+  await page.waitForTimeout(150);
+  check("défi abandonné disparaît de la liste", (await page.locator('.obj:has-text("Sprint de la semaine")').count()) === 0);
+  check("toast « Annuler » proposé après abandon de défi", (await page.locator(".toast-action").count()) === 1);
+  await page.locator(".toast-action").click();
+  await page.waitForTimeout(150);
+  check("défi restauré après Annuler", (await page.locator('.obj:has-text("Sprint de la semaine")').count()) === 1);
+
   // Récompenses éditables en place (nom + icône), comme les tâches
   const rw0 = await page.evaluate(() => S.rewards[0].id);
   await page.fill(`[data-rwname="${rw0}"]`, "Soirée jeux vidéo");
@@ -189,6 +208,20 @@ const { APP_URL, launch, check, done } = require("./helpers");
   check("nom vide restaure l'ancien nom (pas d'écrasement par une chaîne vide)",
     (await page.evaluate(() => S.rewards[0].name)) === "Soirée jeux vidéo");
 
+  // Suppression d'une récompense avec filet de rattrapage (toast « Annuler »)
+  const rwCountBefore = await page.locator("[data-delrw]").count();
+  const rw1 = await page.evaluate(() => S.rewards[1].id);
+  const rw1Name = await page.evaluate(() => S.rewards[1].name);
+  await page.locator(`[data-delrw="${rw1}"]`).click();
+  await page.waitForTimeout(150);
+  check("récompense supprimée immédiatement de la liste", (await page.locator("[data-delrw]").count()) === rwCountBefore - 1);
+  check("toast « Annuler » proposé après suppression", (await page.locator(".toast-action").count()) === 1);
+  await page.locator(".toast-action").click();
+  await page.waitForTimeout(150);
+  check("récompense restaurée après Annuler",
+    (await page.locator("[data-delrw]").count()) === rwCountBefore
+    && (await page.evaluate(id => S.rewards.find(r => r.id === id) ? S.rewards.find(r => r.id === id).name : null, rw1)) === rw1Name);
+
   // Journal + annulation
   await page.locator('[data-tab="journal"]').click();
   const before = await page.locator(".logline").count();
@@ -199,7 +232,7 @@ const { APP_URL, launch, check, done } = require("./helpers");
   // Recherche et filtre du Journal (une entrée fraîche pour Chasseuse : l'undo précédent a pu vider les siennes)
   await page.locator('[data-tab="quetes"]').click();
   await page.locator(".quest").nth(2).locator('[data-p="p2"]').click();
-  if (await page.locator("#veilOk").count()) await page.locator("#veilOk").click();
+  await closeModals(page);
   await page.locator('[data-tab="journal"]').click();
   const totalLines = await page.locator(".logline").count();
   await page.fill("#journalSearch", "vitres");
@@ -235,6 +268,14 @@ const { APP_URL, launch, check, done } = require("./helpers");
   await page.locator('[data-tab="journal"]').click();
   check("note du journal conservée après rechargement", (await page.locator(".logline .chip.gold", { hasText: "Bien fait !" }).count()) === 1);
 
+  // La recherche du Journal filtre aussi sur les notes libres, pas seulement le nom de tâche
+  await page.fill("#journalSearch", "bien fait");
+  await page.waitForTimeout(150);
+  const noteMatches = await page.locator(".logline").count();
+  check("recherche filtre aussi sur la note libre (\"bien fait\" → " + noteMatches + " résultat(s))", noteMatches === 1);
+  await page.fill("#journalSearch", "");
+  await page.waitForTimeout(150);
+
   // Réglages : renommage + couleur enregistrés au changement (onchange), sans bouton
   await page.locator('[data-tab="reglages"]').click();
   await page.fill('[data-pname="p1"]', "Max");
@@ -265,6 +306,22 @@ const { APP_URL, launch, check, done } = require("./helpers");
   const renamedQuest = page.locator(".quest", { hasText: "Vitres du salon" });
   check("nouveau nom et icône visibles sur l'onglet Quêtes",
     (await renamedQuest.count()) === 1 && (await renamedQuest.textContent()).includes("🫧"));
+
+  // Suppression d'une tâche avec filet de rattrapage (toast « Annuler »), même mécanique
+  await page.locator('[data-tab="reglages"]').click();
+  const taskCountBefore = await page.locator("[data-deltask]").count();
+  const tLast = await page.evaluate(() => S.tasks[S.tasks.length - 1].id);
+  const tLastName = await page.evaluate(() => S.tasks[S.tasks.length - 1].name);
+  await page.locator(`[data-deltask="${tLast}"]`).click();
+  await page.waitForTimeout(150);
+  check("tâche supprimée immédiatement de Réglages", (await page.locator("[data-deltask]").count()) === taskCountBefore - 1);
+  check("tâche disparue de l'onglet Quêtes après suppression", (await page.locator(".quest", { hasText: tLastName }).count()) === 0);
+  check("toast « Annuler » proposé après suppression de tâche", (await page.locator(".toast-action").count()) === 1);
+  await page.locator(".toast-action").click();
+  await page.waitForTimeout(150);
+  check("tâche restaurée après Annuler",
+    (await page.locator("[data-deltask]").count()) === taskCountBefore
+    && (await page.evaluate(id => S.tasks.some(t => t.id === id), tLast)) === true);
 
   // Thèmes : application + persistance
   await page.locator('[data-tab="reglages"]').click();
@@ -356,6 +413,13 @@ const { APP_URL, launch, check, done } = require("./helpers");
   const trophyTxt = (await page.locator(".trophyline").count()) ? await page.locator(".trophyline").first().textContent() : "";
   check("trophée décerné pour la semaine passée (" + trophyTxt.trim().replace(/\s+/g, " ") + ")", trophyTxt.includes("👑"));
   check("compteur de trophées dans les stats", (await page.locator(".statgrid").textContent()).includes("Trophées"));
+  const bestStreakRow = await page.evaluate(() => {
+    const c = Array.from(document.querySelectorAll(".statgrid .c")).find(el => el.textContent.includes("Meilleure série"));
+    return c ? { a: c.previousElementSibling.textContent, b: c.nextElementSibling.textContent } : null;
+  });
+  const expectedBest = await page.evaluate(() => ({ a: bestStreakOf("p1") + " j", b: bestStreakOf("p2") + " j" }));
+  check("record de meilleure série affiché dans les stats (" + JSON.stringify(bestStreakRow) + ")",
+    bestStreakRow && bestStreakRow.a === expectedBest.a && bestStreakRow.b === expectedBest.b);
   const streakRow = await page.evaluate(() => {
     const c = Array.from(document.querySelectorAll(".statgrid .c")).find(el => el.textContent.includes("Série de victoires"));
     return c ? { a: c.previousElementSibling.textContent, b: c.nextElementSibling.textContent } : null;
@@ -680,6 +744,64 @@ const { APP_URL, launch, check, done } = require("./helpers");
     (await undoModalPage.evaluate(() => totalXp("p1"))) === preLvlXp);
   await undoModalContext.close();
 
+  // Enchaînement de plusieurs jalons simultanés (niveau + objectif + haut fait sur la même quête) :
+  // aucun n'est plus perdu en silence, et Annuler en cours de chaîne l'interrompt entièrement.
+  const chainContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const chainPage = await chainContext.newPage();
+  await chainPage.addInitScript(() => {
+    localStorage.setItem("rangement-onboard-v1", "1");
+    localStorage.setItem("rangement-recap", "off");
+  });
+  await chainPage.goto(APP_URL);
+  await chainPage.waitForSelector(".quest");
+  await chainPage.locator('[data-tab="objectifs"]').click();
+  await chainPage.fill("#objName", "Chaîne test");
+  await chainPage.fill("#objTarget", "95");
+  await chainPage.locator("#objAdd").click();
+  await chainPage.waitForTimeout(150);
+  await chainPage.evaluate(() => {
+    // 9 quêtes déjà faites (91 XP au total) : à 9 du seuil « 10 quêtes » et du niveau 2 (100 XP),
+    // à 4 XP de l'objectif (95) — la 10e quête, quelle qu'elle soit, franchit les trois à la fois.
+    const amounts = [10, 10, 10, 10, 10, 10, 10, 10, 11];
+    amounts.forEach((xp, i) => S.log.push({ id: "chain" + i, ts: Date.now() + i, playerId: "p1", taskName: "Test", icon: "🧪", xp, note: "" }));
+    save();
+  });
+  await chainPage.reload();
+  await chainPage.waitForSelector(".quest");
+
+  // Premier essai : Annuler sur le tout premier jalon (NIVEAU) doit interrompre toute la chaîne
+  await chainPage.locator(".quest").first().locator('[data-p="p1"]').click();
+  await chainPage.waitForSelector(".sysbox");
+  const chainModal1 = await chainPage.locator(".sysbox").textContent();
+  check("premier jalon de la file : montée de niveau (" + chainModal1.replace(/\s+/g, " ").trim().slice(0, 20) + ")", chainModal1.includes("NIVEAU"));
+  await chainPage.locator("#veilExtra").click(); // Annuler
+  await chainPage.waitForTimeout(200);
+  check("Annuler sur le 1er jalon interrompt toute la chaîne (aucune autre modale)", (await chainPage.locator(".sysbox").count()) === 0);
+  const revertedState = await chainPage.evaluate(() => ({ count: featStats("p1").count, hasQ10: unlockedFeats("p1").some(f => f.id === "q10") }));
+  check("quête bien annulée (retour à 9 quêtes)", revertedState.count === 9);
+  check("haut fait « 10 quêtes » non débloqué après l'annulation en chaîne", revertedState.hasQ10 === false);
+
+  // Deuxième essai, même quête : enchaîner les trois modales avec « Continuer »
+  await chainPage.locator(".quest").first().locator('[data-p="p1"]').click();
+  await chainPage.waitForSelector(".sysbox");
+  check("jalon 1/3 : NIVEAU", (await chainPage.locator(".sysbox").textContent()).includes("NIVEAU"));
+  await chainPage.locator("#veilOk").click();
+  await chainPage.waitForTimeout(150);
+  check("jalon 2/3 : OBJECTIF ATTEINT", (await chainPage.locator(".sysbox").textContent()).includes("OBJECTIF ATTEINT"));
+  await chainPage.locator("#veilOk").click();
+  await chainPage.waitForTimeout(150);
+  check("jalon 3/3 : HAUT FAIT", (await chainPage.locator(".sysbox").textContent()).includes("HAUT FAIT"));
+  await chainPage.locator("#veilOk").click();
+  await chainPage.waitForTimeout(150);
+  check("chaîne terminée, aucune modale ne reste", (await chainPage.locator(".sysbox").count()) === 0);
+  const finalState = await chainPage.evaluate(() => {
+    const o = S.objectives.find(x => x.name === "Chaîne test");
+    return { count: featStats("p1").count, lvl: levelInfo(totalXp("p1")).lvl, objDone: objProgress(o) >= o.target };
+  });
+  check("les trois jalons ont bien tous eu lieu (" + JSON.stringify(finalState) + ")",
+    finalState.count === 10 && finalState.lvl === 2 && finalState.objDone === true);
+  await chainContext.close();
+
   // Bouclier de série : gagné tous les 7 jours de série naturelle, comble automatiquement un jour manqué
   const shieldContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const shieldPage = await shieldContext.newPage();
@@ -734,7 +856,7 @@ const { APP_URL, launch, check, done } = require("./helpers");
   await rmPage.waitForTimeout(150);
   await rmPage.locator('[data-tab="quetes"]').click();
   await rmPage.locator(".quest").first().locator('[data-p="p1"]').click();
-  if (await rmPage.locator("#veilOk").count()) await rmPage.locator("#veilOk").click();
+  await closeModals(rmPage); // premier objectif + « Première quête » s'enchaînent
   await rmPage.locator('[data-tab="objectifs"]').click();
   await rmPage.locator("[data-claim]").last().click();
   check("aucun confetti créé avec le mouvement réduit", (await rmPage.locator("#confetti").count()) === 0);
