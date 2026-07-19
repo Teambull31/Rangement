@@ -840,11 +840,11 @@ function unlockedFeats(pid) {
 
 /* --- Héros à incarner : collection au mérite, difficultés selon la popularité --- */
 const RARITIES = {
-  B:   { label: "B",   col: "#8AA3C2" },
-  A:   { label: "A",   col: "#4DC3FF" },
-  S:   { label: "S",   col: "#8B7BFF" },
-  SS:  { label: "SS",  col: "#F0C550" },
-  GOD: { label: "GOD", col: "#FF5C6E" }, // divinité — au-dessus de SS
+  B:   { label: "B",   col: "var(--ink-dim)" },
+  A:   { label: "A",   col: "var(--sys)" },
+  S:   { label: "S",   col: "var(--mana)" },
+  SS:  { label: "SS",  col: "var(--gold)" },
+  GOD: { label: "GOD", col: "var(--crit)" }, // divinité — au-dessus de SS
 };
 // cond : toutes les clés présentes doivent être atteintes (lvl, count, streak, trophies)
 const CHARACTERS = [
@@ -958,7 +958,11 @@ function gearTier(ch, st) {
 function charOf(p) {
   return p && p.characterId ? CHARACTERS.find(c => c.id === p.characterId) || null : null;
 }
+// Emoji personnel du joueur, mémorisé sur cet appareil avant la première incarnation
+// d'un héros, pour pouvoir le restaurer réellement au retrait (au lieu de le perdre).
+function baseEmojiKey(pid) { return "rangement-baseemoji-" + pid; }
 function equipChar(p, c) {
+  if (!p.characterId) localStorage.setItem(baseEmojiKey(p.id), p.emoji);
   p.characterId = c.id;
   p.emoji = c.emoji;
   save(); queueOp({ table: "players", type: "upsert", row: toRow.players(p) });
@@ -1740,7 +1744,7 @@ function vObjectifs() {
   }).join("");
 
   const wonRows = S.won.slice().reverse().map(w =>
-    `<div class="wonline"><span>${esc(w.icon)} ${esc(w.name)}</span><span class="d">${new Date(w.ts).toLocaleDateString("fr-FR")}</span></div>`
+    `<div class="wonline"><span>${esc(w.icon)} ${esc(w.name)}</span><span class="d">${new Date(w.ts).toLocaleDateString("fr-FR")} <button class="notebtn" data-delwon="${w.id}" aria-label="Retirer de l'historique">✕</button></span></div>`
   ).join("");
 
   return `
@@ -2038,7 +2042,14 @@ function cardColors() {
   return {
     abyss: col("--abyss", "#060A13"), panel: col("--panel", "#0C1526"), line: col("--line", "#1C3252"),
     sys: col("--sys", "#4DC3FF"), gold: col("--gold", "#F0C550"), ink: col("--ink", "#D9E7F7"), inkDim: col("--ink-dim", "#8AA3C2"),
+    mana: col("--mana", "#8B7BFF"), crit: col("--crit", "#FF5C6E"),
   };
+}
+// RARITIES.*.col est une référence CSS ("var(--x)") pour suivre les 5 thèmes à l'écran ;
+// le canvas ne résout pas les variables CSS, il faut sa couleur déjà calculée.
+function rarityCardColor(rarity, c) {
+  const byRarity = { B: c.inkDim, A: c.sys, S: c.mana, SS: c.gold, GOD: c.crit };
+  return byRarity[rarity] || c.inkDim;
 }
 function cardCanvas(W, H, c) {
   const canvas = document.createElement("canvas");
@@ -2178,7 +2189,7 @@ function buildHeroCard(p) {
   const ch = charOf(p);
   const c = cardColors();
   const { panel, gold, ink, inkDim } = c;
-  const rcol = RARITIES[ch.rarity].col;
+  const rcol = rarityCardColor(ch.rarity, c);
   const st = charStats(p.id);
   const tier = gearTier(ch, st);
   const li = levelInfo(totalXp(p.id));
@@ -2463,8 +2474,10 @@ function bindView() {
     const p = S.players.find(x => x.id === herosView);
     if (!p) return;
     p.characterId = null;
+    const baseEmoji = localStorage.getItem(baseEmojiKey(p.id));
+    if (baseEmoji) p.emoji = baseEmoji;
     save(); queueOp({ table: "players", type: "upsert", row: toRow.players(p) });
-    render(); toast("Héros retiré — modifie ton emoji dans Réglages si besoin");
+    render(); toast(baseEmoji ? "Héros retiré — emoji personnel restauré" : "Héros retiré");
   };
 
   // Duel : bascule graphique / tableau
@@ -2596,6 +2609,8 @@ function bindView() {
     });
   document.querySelectorAll("[data-delobj]").forEach(b =>
     b.onclick = () => deleteWithUndo("objectives", b.dataset.delobj, "Défi abandonné"));
+  document.querySelectorAll("[data-delwon]").forEach(b =>
+    b.onclick = () => deleteWithUndo("won", b.dataset.delwon, "Récompense retirée de l'historique"));
 
   // Pari de duel
   const betAdd = $("#betAdd");
@@ -2693,7 +2708,7 @@ function bindView() {
       if (!p) return;
       const v = inp.value.trim();
       if (!v) { inp.value = isName ? p.name : p.emoji; return; }
-      if (isName) p.name = v; else p.emoji = v;
+      if (isName) p.name = v; else { p.emoji = v; if (!p.characterId) localStorage.setItem(baseEmojiKey(p.id), v); }
       save(); queueOp({ table: "players", type: "upsert", row: toRow.players(p) });
       render(); toast("Chasseurs mis à jour");
     });

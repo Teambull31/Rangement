@@ -186,6 +186,17 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   const wonTxt = (await page.locator(".wonline").count()) === 1 ? await page.locator(".wonline").textContent() : "";
   check("récompense gagnée listée (réelle, pas 🎲) : " + wonTxt.trim().split("\n")[0], wonTxt !== "" && !wonTxt.includes("🎲"));
 
+  // Suppression d'une récompense gagnée avec filet de rattrapage (it. 33) : "won" était
+  // la seule liste sans bouton de suppression malgré deleteWithUndo généralisé (it. 24/30).
+  check("bouton de suppression présent sur la récompense gagnée", (await page.locator("[data-delwon]").count()) === 1);
+  await page.locator("[data-delwon]").click();
+  await page.waitForTimeout(150);
+  check("récompense gagnée supprimée de la liste", (await page.locator(".wonline").count()) === 0);
+  check("toast « Annuler » proposé après suppression d'une récompense gagnée", (await page.locator(".toast-action").count()) === 1);
+  await page.locator(".toast-action").click();
+  await page.waitForTimeout(150);
+  check("récompense gagnée restaurée après Annuler", (await page.locator(".wonline").count()) === 1);
+
   // Presets de défi : un tap remplit le formulaire ; rythme hebdo affiché
   check("rythme hebdo du duo affiché", (await page.locator('section.panel', { hasText: "Nouveau défi" }).textContent()).includes("XP par semaine"));
   check("selects du formulaire de défi ont un aria-label pour lecteur d'écran",
@@ -446,10 +457,24 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await page.waitForTimeout(150);
   const prioBasseAube = (await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--prio-basse").trim())).toLowerCase();
   check("chip « basse » suit le thème clair Aube (" + prioBasseAube + ")", prioBasseAube === "#4a6483");
+
+  // Badges de rareté (Héros) : suivaient un hex figé identique à --ink-dim/--sys/--mana/
+  // --gold/--crit mais sans jamais relire ces variables -> même défaut de contraste que
+  // les chips de priorité avant l'it. 28, jamais corrigé pour la rareté (it. 33).
+  await page.locator('[data-tab="heros"]').click();
+  await page.waitForTimeout(100);
+  const rarityBAube = await page.locator(".rarity").first().evaluate(el => getComputedStyle(el).color);
+  check("badge de rareté B suit --ink-dim en Aube, contraste corrigé (" + rarityBAube + ")", rarityBAube === "rgb(84, 104, 138)");
+  await page.locator('[data-tab="reglages"]').click();
   await page.locator('[data-theme="monarque"]').click();
   await page.waitForTimeout(150);
   const prioBasseDark = (await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--prio-basse").trim())).toLowerCase();
   check("chip « basse » revient à la teinte sombre par défaut (" + prioBasseDark + ")", prioBasseDark === "#8aa3c2");
+  await page.locator('[data-tab="heros"]').click();
+  await page.waitForTimeout(100);
+  const rarityBDark = await page.locator(".rarity").first().evaluate(el => getComputedStyle(el).color);
+  check("badge de rareté B suit --ink-dim en thème sombre (" + rarityBDark + ")", rarityBDark === "rgb(138, 163, 194)");
+  await page.locator('[data-tab="reglages"]').click();
 
   // Thème par défaut au premier lancement : suit la préférence système clair/sombre
   const lightCtx = await browser.newContext({ colorScheme: "light", viewport: { width: 390, height: 844 } });
@@ -823,6 +848,7 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
     (await heroPage.locator("section.panel", { hasText: "Prochaine recrue" }).count()) === 0);
 
   // Incarner Frieren : avatar + stuff
+  const p1EmojiBefore = await heroPage.evaluate(() => S.players[0].emoji);
   await heroPage.locator('.charcard:has-text("Frieren") [data-equip]').click();
   await heroPage.waitForTimeout(200);
   check("héros incarné visible sur la carte du chasseur", (await heroPage.locator(".hunter").first().locator(".charline").textContent()).includes("Frieren"));
@@ -841,11 +867,14 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await heroPage.waitForSelector(".hunter");
   check("héros conservé après rechargement", (await heroPage.locator(".hunter").first().locator(".charline").count()) === 1);
 
-  // Reprendre son emoji : le héros est retiré
+  // Reprendre son emoji : le héros est retiré ET l'emoji personnel réellement restauré
+  // (it. 33 — le bouton le promettait depuis l'it. 12 sans jamais le faire, l'utilisateur
+  // devait retaper son ancien emoji à la main).
   await heroPage.locator('[data-tab="heros"]').click();
   await heroPage.locator("#unequipBtn").click();
   await heroPage.waitForTimeout(200);
   check("héros retiré", (await heroPage.locator(".hunter").first().locator(".charline").count()) === 0);
+  check("emoji personnel réellement restauré (" + p1EmojiBefore + ")", (await heroPage.evaluate(() => S.players[0].emoji)) === p1EmojiBefore);
   await heroContext.close();
 
   // Déblocage en direct : juste sous le seuil d'Usopp (niv. 4), une quête le franchit

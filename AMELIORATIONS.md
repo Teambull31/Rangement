@@ -1044,3 +1044,77 @@ Aucune des trois ne nécessitait de changement de schéma.
   paramétrée.
 - Revoir la taille du fichier index.html (grossit à chaque itération,
   maintenant ~3 020 lignes).
+
+## Itération 33 — 2026-07-19 (routine cloud)
+
+**Audit** : un audit ciblé (agent dédié, lecture complète d'index.html face
+à l'historique des 32 itérations) a fait remonter cinq frictions, aucune ne
+nécessitant de changement de schéma — trois traitées cette fois (un bug de
+contraste, une incohérence de suppression, un bouton qui ne tenait pas sa
+promesse), deux notées en pistes (pari sans annulation possible avant la
+fin de la semaine, `aria-pressed` manquant sur trois bascules `linkbtn`).
+
+**Améliorations livrées :**
+- 🐛 **Bug corrigé — badges de rareté (Héros) illisibles en thème clair
+  Aube** : `RARITIES` codait ses 5 couleurs en hexadécimal brut, or ce
+  sont exactement les valeurs *sombres* de `--ink-dim`/`--sys`/`--mana`/
+  `--gold`/`--crit` — la rareté B (`#8AA3C2`) reproduisait très exactement
+  le défaut de contraste corrigé pour les chips de priorité à l'itération
+  28 (≈1,9:1 sur blanc, sous le seuil AA 4,5:1), jamais traité pour la
+  rareté. Les 5 raretés pointent désormais vers ces variables déjà
+  éprouvées et déjà munies de surcharges Aube (`var(--ink-dim)`, `var(--sys)`,
+  `var(--mana)`, `var(--gold)`, `var(--crit)`) — suivent donc automatiquement
+  les 5 thèmes existants. Comme le canvas ne résout pas les variables CSS,
+  la carte de héros partageable (introduite à l'itération 15) utilise
+  désormais `rarityCardColor()`, qui résout la couleur réelle via
+  `cardColors()` (étendue à `mana`/`crit`) avant de l'appliquer au contexte
+  2D — sans quoi le cadre et le nom du héros auraient disparu de l'export.
+- ↩️ **Récompenses gagnées supprimables** : la liste « Récompenses gagnées »
+  (onglet Objectifs) était la seule de l'appli sans aucun bouton, malgré
+  `deleteWithUndo` déjà généralisé aux tâches/récompenses/défis (it. 24) et
+  au Journal (it. 30) — impossible de retirer une récompense effectivement
+  consommée dans la vraie vie sans une remise à zéro complète. Bouton ✕
+  discret sur chaque ligne, réutilisant `deleteWithUndo("won", …)` tel quel
+  (aucune nouvelle logique de synchro).
+- 🐛 **Bug corrigé — « Reprendre son emoji personnel » ne restaurait rien** :
+  ce bouton de retrait de héros (it. 12) écrasait l'emoji personnel de
+  façon irréversible dès la première incarnation, sans jamais le
+  mémoriser — au retrait, l'utilisateur devait retaper son emoji à la main
+  (le toast le disait explicitement : « modifie ton emoji dans Réglages si
+  besoin »). L'emoji d'origine est maintenant mémorisé sur l'appareil
+  (`localStorage`, une seule fois, avant la première incarnation) et
+  réellement restauré au retrait ; resynchronisé si l'utilisateur modifie
+  son emoji personnel dans Réglages pendant qu'aucun héros n'est incarné.
+  Zéro colonne Supabase — propre à chaque téléphone, comme les autres
+  préférences d'appareil.
+- ✅ Tests : 266 assertions au total (259 dans smoke.js +7, 7 dans
+  sync-test.js inchangée) — badge de rareté B suivant `--ink-dim` vérifié
+  en thème sombre et en Aube (couleur RGB exacte des deux côtés), cycle
+  complet de suppression/restauration d'une récompense gagnée (bouton,
+  disparition, toast Annuler, réapparition), emoji personnel du chasseur
+  capturé avant incarnation puis vérifié réellement restauré après
+  retrait du héros. Deux flakes rencontrés lors des passages complets
+  isolés (grind héros à 0/30, puis scénario Annuler de la modale HÉROS
+  DÉBLOQUÉ), chacun sur du code non touché par cette itération et
+  disparus dès le passage isolé suivant (aucune correction applicative
+  nécessaire) — cohérent avec le pattern déjà documenté aux itérations
+  15/20/22/24/31/32. Validation visuelle (captures 390×844) : collection
+  Héros en thème sombre et en Aube (badges de rareté contrastés dans les
+  deux), onglet Objectifs avec le bouton ✕ sur une récompense gagnée.
+
+**Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
+- Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
+  attente — rien ne sera créé en base sans accord explicite).
+- Un enjeu de duel misé ne peut être ni annulé ni changé avant la fin de
+  la semaine (contrairement à sa réclamation, annulable depuis
+  l'itération 32) — ajouter un bouton « Annuler l'enjeu » réutilisant
+  `deleteWithUndo("bets", …)`.
+- `aria-pressed` manquant sur trois bascules `linkbtn` à état binaire non
+  couvertes par l'itération 31 : tri des quêtes (`#qSortToggle`), bascule
+  graphique/tableau du XP hebdo (`#chartViewToggle`) et bascule
+  calendrier/tableau (`#calViewToggle`).
+- Factoriser les fonctions `playerBlock` dupliquées dans les trois cartes
+  canvas partageables (trophées, duel, héros) en une fonction commune
+  paramétrée.
+- Revoir la taille du fichier index.html (grossit à chaque itération,
+  maintenant ~3 030 lignes).
