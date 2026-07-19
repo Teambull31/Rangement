@@ -1399,3 +1399,83 @@ unique structurellement différent).
   paramétré.
 - Revoir la taille du fichier index.html (grossit à chaque itération,
   maintenant ~3 090 lignes).
+
+## Itération 38 — 2026-07-19 (routine cloud)
+
+**Audit** : un audit ciblé (agent dédié, lecture complète d'index.html face à
+l'historique des 37 itérations) a fait remonter un vrai bug de contraste sur
+les composants les plus vus de l'appli, la piste couleur identique déjà
+notée depuis l'itération 37, et une friction mineure sur la recherche du
+Journal — les trois retenues, aucune ne nécessitant de changement de schéma.
+Deux autres pistes explorées par l'agent et notées pour la suite : le
+renommage d'une tâche casse silencieusement l'appariement par nom du
+journal (badge « dernier », suggestion équitable, répartition des tâches),
+et la factorisation `playerBlock` déjà identifiée aux itérations 36/37.
+
+**Améliorations livrées :**
+- 🐛 **Bug corrigé — modales système et toasts illisibles en thème clair
+  Aube** : `.sysbox` (fenêtres « NIVEAU X », « HAUT FAIT », onboarding,
+  remise à zéro, import…) et `.toast` (chaque « +XP », chaque
+  confirmation) codaient leur fond en dur (`#0E1B30`, un navy quasi noir),
+  jamais couvert par `applyTheme()` qui ne touche que les variables de
+  fond/panneaux. Le texte hérite de `--ink`, qui devient sombre (`#16263F`)
+  en Aube — posé sur un fond navy resté sombre, il devenait quasiment
+  invisible. Contrairement au fond de page, aux chips, aux badges et au
+  graphique XP déjà corrigés aux itérations 16/28/33/34/36, ces deux
+  composants — les plus vus de toute l'appli — n'avaient jamais été
+  couverts. Nouvelles variables `--modalbg`/`--toastbg`, ajoutées à la
+  boucle de `applyTheme()` avec une surcharge claire pour Aube ; aucun
+  changement sur les 4 thèmes sombres (la valeur par défaut reste
+  identique à l'ancien code en dur).
+- ⚠️ **Alerte si les deux chasseurs choisissent la même couleur** (Réglages
+  → Chasseurs, et onboarding « VOS CHASSEURS ») : piste notée en attente
+  depuis l'itération 37 — rien ne comparait `players[0].color` et
+  `players[1].color`, alors que la couleur pilote toute la distinction
+  visuelle du duel (carte, boutons de quête, barre et graphique XP, cartes
+  canvas partageables). Nouvelle fonction `samePlayerColor()` utilisée dans
+  Réglages (recalculée à chaque re-rendu, donc réactive au changement) ;
+  dans l'onboarding, un écouteur dédié sur les deux champs `<input
+  type=color>` bascule l'affichage d'un avertissement en direct, sans
+  attendre l'étape suivante.
+- ✕ **Bouton d'effacement rapide sur la recherche du Journal** : une fois
+  une recherche tapée, il fallait effacer le champ caractère par
+  caractère (les filtres par joueur, eux, ont des boutons en un tap
+  depuis l'origine). Petit bouton « ✕ » superposé au champ, visible
+  uniquement quand il contient du texte, qui vide le filtre et rend le
+  focus au champ.
+- ✅ Tests : 315 assertions au total (308 dans smoke.js +14, 7 dans
+  sync-test.js inchangée) — fond du toast et de la modale système vérifiés
+  blancs en thème Aube (`getComputedStyle` sur `background-color` et
+  `background-image`) puis revérifiés navy sombre inchangé en thème
+  Monarque (non-régression) ; alerte de couleur identique apparaît/
+  disparaît correctement selon les couleurs des deux chasseurs (Réglages) ;
+  bouton d'effacement de recherche présent seulement avec du texte, vide
+  le champ et restaure toutes les lignes du journal, disparaît une fois le
+  champ vide. Un run complet lancé en tâche de fond avant toute
+  modification s'est révélé bloqué sans progression réelle (0 s de CPU
+  utile sur plusieurs minutes malgré un process actif) — interrompu plutôt
+  que d'attendre indéfiniment ; un second run isolé et propre lancé après
+  toutes les modifications a progressé normalement de bout en bout jusqu'à
+  « Tous les tests passent. », sans aucun échec, jamais en parallèle d'un
+  autre processus. `sync-test.js` repassée seule juste après, verte du
+  premier coup. Validation visuelle (captures 390×844) : avertissement
+  couleur identique en thème Aube, toast « Quête validée » et modale
+  « NIVEAU 2 » toutes deux bien contrastées en Aube (texte sombre sur fond
+  clair, alors qu'elles restaient sur un fond navy avant ce correctif),
+  champ de recherche du Journal avec bouton d'effacement visible.
+
+**Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
+- Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
+  attente — rien ne sera créé en base sans accord explicite).
+- Renommer une tâche (Réglages) casse silencieusement l'appariement par
+  nom dans le journal (`log.taskName` est dénormalisé, sans `taskId`) :
+  le badge « dernier : ⚔️/🏹 », la suggestion « à ton tour ? » et le
+  panneau « Répartition des tâches » repartent de zéro pour cette tâche
+  malgré l'historique existant. Correctif possible sans changement de
+  schéma : propager l'ancien nom vers le nouveau sur les entrées `S.log`
+  concernées au moment du renommage.
+- Factoriser les fonctions `playerBlock` dupliquées (trophées, duel — la
+  carte héros a un layout à sujet unique, distinct) en un helper commun
+  paramétré.
+- Revoir la taille du fichier index.html (grossit à chaque itération,
+  maintenant ~3 100 lignes).
