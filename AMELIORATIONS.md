@@ -874,3 +874,104 @@ en parallèle depuis l'itération 17.
   processus lourd. Validation visuelle (captures 390×844) : modale
   « OBJECTIF ATTEINT » nommant « Défi visuel », toast « Annuler » après
   suppression d'une entrée du Journal.
+
+**Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
+- Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
+  attente — rien ne sera créé en base sans accord explicite).
+- Modale « HÉROS DÉBLOQUÉ » sans bouton Annuler solo, `aria-pressed`
+  manquant sur les boutons à état (barre d'onglets, filtres, sélecteur de
+  thème) — état actif porté uniquement par la classe CSS `.on`, invisible
+  pour un lecteur d'écran (repéré à l'itération 30).
+- Revoir la taille du fichier index.html (grossit à chaque itération,
+  maintenant ~2 970 lignes).
+
+## Itération 31 — 2026-07-19 (routine cloud)
+
+**Audit** : un audit ciblé (agent dédié, lecture complète d'index.html face à
+l'historique des 30 itérations) a fait remonter cinq frictions, dont un vrai
+bug de confiance dans la remise à zéro et un trou d'accessibilité récurrent
+sur les boutons à état — aucune ne nécessitant de changement de schéma.
+
+**Améliorations livrées :**
+- 🐛 **Bug corrigé — la remise à zéro laissait des paris fantômes** :
+  « Tout effacer » vidait `log`, `won` et `objectives` mais oubliait `bets` —
+  un enjeu misé puis non réclamé avant la semaine suivante ressurgissait
+  après une remise à zéro complète, avec un bandeau « Égalité — l'enjeu est
+  retiré » incohérent juste après l'annonce « L'aventure repart de zéro ».
+  `S.bets` est désormais vidé avec le reste, et le texte de la modale
+  mentionne « paris » parmi les données effacées.
+- ♿ **`aria-pressed`/`aria-current` sur les boutons à état** : la barre
+  d'onglets, le sélecteur de joueur et le filtre d'univers de l'onglet
+  Héros, le filtre joueur du Journal et le sélecteur de thème ne
+  communiquaient leur état actif que par une couleur CSS — invisible pour
+  un lecteur d'écran. Ajout de `aria-current="page"` sur l'onglet actif et
+  `aria-pressed` sur les boutons de filtre/thème, dans la continuité du
+  travail d'accessibilité des itérations 25 et 28.
+- 📊 **Bascule tableau pour le calendrier d'activité** : comme le graphique
+  XP hebdo depuis l'itération 8, le calendrier d'activité (Duel) propose
+  désormais « Voir en tableau »/« Voir en calendrier » — liste des jours
+  avec au moins une quête (date, nombre, détail par joueur), pour qui
+  préfère lire des nombres ou utilise un lecteur d'écran (le détail par
+  jour n'existait auparavant que dans un `title` illisible au clavier).
+  `activityDays()` factorise le calcul, partagé par la heatmap et le
+  tableau.
+- 🔊 **Son sur la réclamation d'une récompense ou d'un pari** : les deux
+  moments de célébration (`RÉCOMPENSE`, `PARI REMPORTÉ`) avaient déjà
+  confettis et modale dorée mais restaient silencieux, contrairement à la
+  montée de niveau ou au haut fait — `chime("level")` ajouté aux deux
+  handlers de réclamation, réutilise l'interrupteur son existant.
+- ✅ Tests : 247 assertions au total (240 dans smoke.js +11, 7 dans
+  sync-test.js inchangée) — pari fantôme conservé après « Garder nos
+  données » puis effacé après « Tout effacer » ; `aria-current` sur
+  l'onglet actif/inactif ; `aria-pressed` sur le thème actif, le filtre
+  d'univers Héros et le filtre joueur du Journal ; bascule calendrier ↔
+  tableau (affichage par défaut, contenu du tableau, retour au calendrier).
+  Deux faux échecs sont apparus lors des premiers passages isolés de la
+  suite : le premier proche de minuit UTC (23h37) a fait échouer un
+  scénario de grind héros par timeout, le second — toujours proche de
+  minuit — a fait échouer tout le bloc bouclier de série ; deux échecs
+  différents sur du code non touché par cette itération, diagnostiqués
+  comme un flake de bascule de jour (la logique de série/bouclier repose
+  sur `new Date()` réel) plutôt qu'une régression — confirmé en relançant
+  la suite après minuit, où elle passe intégralement sans aucune
+  correction applicative. Leçon ajoutée à la règle « rien en parallèle » :
+  éviter aussi de lancer la suite à cheval sur minuit UTC quand la machine
+  s'en approche.
+  🔀 **Deux autres sessions ont livré leur propre « Itération 29 » et
+  « Itération 30 » en parallèle** de cette routine (numérotée en 31 après
+  rebase des trois séries de commits). Le rebase sur leur travail a
+  d'abord révélé un vrai bug de fusion : leur nouveau test (bouclier hors
+  calendrier) appelait `activityCalendar()` sans argument, une signature
+  que cette itération venait justement de changer (`activityCalendar({
+  WEEKS, days })`, via la factorisation `activityDays()`) — les deux
+  diffs ne se recouvraient pas textuellement (`git rebase` les a fusionnés
+  sans conflit signalé) mais le résultat plantait à l'exécution
+  (`TypeError` sur destructuring). Corrigé en adaptant l'appel du test à
+  la nouvelle signature ; leçon retenue — un rebase propre côté texte
+  n'exclut pas une incompatibilité sémantique entre deux diffs qui
+  touchent la même fonction sous des angles différents, à revérifier par
+  un passage de test complet après toute fusion. Un second flake
+  (dismission du rappel du soir perdue après un `reload()` immédiat,
+  `dismiss=null`) est apparu deux fois de suite avant la découverte du bug
+  ci-dessus, isolé cette fois d'une vraie régression par une exécution
+  propre sans processus concurrent — probable course entre l'écriture
+  `localStorage` et la navigation dans Chromium headless ; un court délai
+  (100 ms) ajouté avant le `reload()` du test a stabilisé le scénario.
+  Validation visuelle (captures 390×844) : calendrier et sa bascule
+  tableau dans Duel, modale de remise à zéro avec la mention « paris »
+  dans le texte effacé.
+
+**Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
+- Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
+  attente — rien ne sera créé en base sans accord explicite).
+- Modale « HÉROS DÉBLOQUÉ » sans bouton Annuler solo ; restaurer le focus
+  clavier sur la chaîne de jalons d'une quête nécessite de capturer
+  l'élément déclencheur avant le `render()` de `doTask()` et de le
+  retrouver après re-rendu (par attributs `data-do`/`data-p`, pas par
+  référence DOM) — repéré à l'itération 29, laissé pour une prochaine passe
+  dédiée à l'accessibilité clavier.
+- Factoriser les fonctions `playerBlock` dupliquées dans les trois cartes
+  canvas partageables (trophées, duel, héros) en une fonction commune
+  paramétrée.
+- Revoir la taille du fichier index.html (grossit à chaque itération,
+  maintenant ~2 990 lignes).

@@ -300,6 +300,9 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await page.waitForTimeout(150);
   const p2Lines = await page.locator(".logline").count();
   check("filtre par joueur (" + p2Lines + "/" + totalLines + ")", p2Lines > 0 && p2Lines < totalLines);
+  check("aria-pressed reflète le filtre joueur actif (Itération 31)",
+    (await page.locator('[data-jf]', { hasText: "Chasseuse" }).getAttribute("aria-pressed")) === "true"
+    && (await page.locator('[data-jf="all"]').getAttribute("aria-pressed")) === "false");
   await page.locator('[data-jf="all"]').click();
   await page.waitForTimeout(150);
   check("filtre « Tous » restaure toutes les lignes", (await page.locator(".logline").count()) === totalLines);
@@ -397,9 +400,15 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
 
   // Thèmes : application + persistance
   await page.locator('[data-tab="reglages"]').click();
+  check("onglet Réglages porte aria-current (Itération 31)",
+    (await page.locator('#tabs [data-tab="reglages"]').getAttribute("aria-current")) === "page"
+    && (await page.locator('#tabs [data-tab="quetes"]').getAttribute("aria-current")) === "false");
   await page.locator('[data-theme="monarque"]').click();
   const sysVar = (await page.evaluate(() => document.documentElement.style.getPropertyValue("--sys"))).trim().toLowerCase();
   check("thème appliqué (" + sysVar + ")", sysVar === "#8b7bff");
+  check("aria-pressed reflète le thème actif (Itération 31)",
+    (await page.locator('[data-theme="monarque"]').getAttribute("aria-pressed")) === "true"
+    && (await page.locator('[data-theme="aube"]').getAttribute("aria-pressed")) === "false");
   await page.reload();
   await page.waitForSelector(".hunter");
   const sysVar2 = (await page.evaluate(() => document.documentElement.style.getPropertyValue("--sys"))).trim().toLowerCase();
@@ -599,6 +608,7 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   check("rappel masqué après « Plus tard »", (await evPage.locator(".evremind").count()) === 0);
   const dismissStored = await evPage.evaluate(() => localStorage.getItem("rangement-evening-dismiss"));
   check("dismission écrite en stockage (" + dismissStored + ")", dismissStored !== null);
+  await evPage.waitForTimeout(100); // laisse le temps au localStorage de se committer avant le reload (évite un flake)
   await evPage.reload();
   await evPage.waitForSelector(".quest");
   const dismissAfterReload = await evPage.evaluate(() => localStorage.getItem("rangement-evening-dismiss"));
@@ -767,6 +777,9 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   check("filtre One Piece : 6 héros affichés, un seul univers",
     (await heroPage.locator(".charcard").count()) === 6 && (await heroPage.locator(".day-h").count()) === 1);
   check("compteur de déblocage par univers (0/6)", (await heroPage.locator(".day-h .uvcount").textContent()).trim() === "0/6");
+  check("aria-pressed reflète le filtre d'univers actif (Itération 31)",
+    (await heroPage.locator('[data-hu="One Piece"]').getAttribute("aria-pressed")) === "true"
+    && (await heroPage.locator('[data-hu="all"]').getAttribute("aria-pressed")) === "false");
   const nextTxtOP = await heroPage.locator("section.panel", { hasText: "Prochaine recrue" }).textContent();
   check("« Prochaine recrue » suit le filtre d'univers (Usopp attendu sur One Piece, pas Sein)",
     nextTxtOP.includes("Usopp") && !nextTxtOP.includes("Sein"));
@@ -994,11 +1007,23 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
       if (!shieldEntry) return false;
       const day = new Date(shieldEntry.ts);
       const label = day.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
-      return activityCalendar().includes(`${label} — 0 quête`);
+      return activityCalendar(activityDays()).includes(`${label} — 0 quête`);
     })) === true);
   await shieldPage.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
   await shieldPage.locator('[data-tab="duel"]').click();
   check("compte de boucliers disponibles affiché dans Duel", (await shieldPage.locator(".statgrid").textContent()).includes("Boucliers"));
+
+  // Itération 31 : bascule tableau pour le calendrier d'activité (parité avec le graphique XP hebdo)
+  check("calendrier affiché par défaut", (await shieldPage.locator(".cal").count()) === 1);
+  check("bouton de bascule du calendrier présent", (await shieldPage.locator("#calViewToggle").textContent()).includes("Voir en tableau"));
+  await shieldPage.locator("#calViewToggle").click();
+  await shieldPage.waitForTimeout(100);
+  check("bascule vers la vue tableau du calendrier", (await shieldPage.locator(".cal").count()) === 0 && (await shieldPage.locator(".datatable").count()) === 1);
+  check("le tableau liste les jours avec quêtes (p1 a bien joué)",
+    (await shieldPage.locator(".datatable tbody tr").count()) >= 7);
+  await shieldPage.locator("#calViewToggle").click();
+  await shieldPage.waitForTimeout(100);
+  check("retour à la vue calendrier", (await shieldPage.locator(".cal").count()) === 1);
   await shieldContext.close();
 
   // Mouvement réduit : aucune animation de confettis ne doit être créée
@@ -1088,6 +1113,7 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   // Remise à zéro : modale système (plus de confirm() natif), action sûre par défaut
   await it27Page.evaluate(() => {
     S.log.push({ id: "it27", ts: Date.now(), playerId: "p1", taskName: "Vitres", icon: "🪟", xp: 50, note: "" });
+    (S.bets ??= []).push({ id: "it27bet", week: weekKey(Date.now() - 30 * 86400000), rewardId: "__random__", createdAt: Date.now(), claimed: false });
     save(); render();
   });
   await it27Page.locator('[data-tab="reglages"]').click();
@@ -1102,12 +1128,15 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   check("« Garder nos données » : journal intact", (await it27Page.evaluate(() => S.log.length)) === 1);
   check("focus clavier restauré sur le bouton d'origine après fermeture de la modale (it. 29)",
     (await it27Page.evaluate(() => document.activeElement && document.activeElement.id)) === "resetBtn");
+  check("« Garder nos données » : pari fantôme conservé (avant remise à zéro)", (await it27Page.evaluate(() => S.bets.length)) === 1);
   await it27Page.locator("#resetBtn").click();
   await it27Page.waitForSelector("#veilExtra");
   await it27Page.locator("#veilExtra").click();
   await it27Page.waitForTimeout(150);
   check("« Tout effacer » : journal vidé, tâches conservées",
     (await it27Page.evaluate(() => S.log.length === 0 && S.tasks.length === 13)));
+  check("« Tout effacer » (Itération 31) : les paris en attente sont aussi effacés, plus de pari fantôme",
+    (await it27Page.evaluate(() => S.bets.length)) === 0);
 
   // Rappels vivants : le bandeau du soir apparaît via le tick, sans recharger ni naviguer
   await it27Page.locator('[data-tab="quetes"]').click();

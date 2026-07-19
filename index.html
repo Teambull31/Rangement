@@ -1089,7 +1089,8 @@ function renderTabs() {
   const cl = claimableCounts();
   $("#tabs").innerHTML = TABS.map(t => {
     const n = cl[t.id] || 0;
-    return `<button class="${TAB === t.id ? "on" : ""}" data-tab="${t.id}" ${n ? `title="${n} à réclamer"` : ""}><span class="ico">${t.ico}${n ? `<span class="tabdot">${n}</span>` : ""}</span>${t.label}</button>`;
+    const on = TAB === t.id;
+    return `<button class="${on ? "on" : ""}" data-tab="${t.id}" aria-current="${on ? "page" : "false"}" ${n ? `title="${n} à réclamer"` : ""}><span class="ico">${t.ico}${n ? `<span class="tabdot">${n}</span>` : ""}</span>${t.label}</button>`;
   }).join("");
   document.querySelectorAll("#tabs button").forEach(b =>
     b.onclick = () => navTab(b.dataset.tab));
@@ -1468,7 +1469,7 @@ function taskSplit() {
 }
 
 /* --- Calendrier d'activité (8 dernières semaines, dérivé du journal, zéro stockage) --- */
-function activityCalendar() {
+function activityDays() {
   const WEEKS = 8;
   const counts = {};
   for (const l of S.log) {
@@ -1481,10 +1482,9 @@ function activityCalendar() {
   const monday = new Date(); monday.setHours(0, 0, 0, 0);
   monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7)); // lundi de la semaine en cours
   const todayK = dayKey(NOW());
-  const rows = [];
+  const days = [];
   for (let w = WEEKS - 1; w >= 0; w--) {
     const start = new Date(monday); start.setDate(start.getDate() - w * 7);
-    const cells = [];
     for (let d = 0; d < 7; d++) {
       const day = new Date(start); day.setDate(start.getDate() + d);
       const k = dayKey(day.getTime());
@@ -1493,9 +1493,21 @@ function activityCalendar() {
       const lvl = day.getTime() > NOW() ? -1 : n === 0 ? 0 : n === 1 ? 1 : n <= 3 ? 2 : 3;
       const label = day.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
       const det = c ? S.players.map(p => c.byP[p.id] ? `${p.emoji} ${c.byP[p.id]}` : "").filter(Boolean).join(" · ") : "";
-      cells.push(`<span class="cal-cell${k === todayK ? " today" : ""}" data-lvl="${lvl}" title="${esc(label)} — ${n} quête${n > 1 ? "s" : ""}${det ? ` (${det})` : ""}"></span>`);
+      days.push({ weekStart: start, lvl, n, label, det, today: k === todayK });
     }
-    rows.push(`<div class="cal-row"><span class="cal-wk">${start.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span>${cells.join("")}</div>`);
+  }
+  return { WEEKS, days };
+}
+
+let calView = "cal"; // "cal" ou "table" — préférence de session, pas persistée
+function activityCalendar({ WEEKS, days }) {
+  const rows = [];
+  for (let i = 0; i < days.length; i += 7) {
+    const week = days.slice(i, i + 7);
+    const cells = week.map(day =>
+      `<span class="cal-cell${day.today ? " today" : ""}" data-lvl="${day.lvl}" title="${esc(day.label)} — ${day.n} quête${day.n > 1 ? "s" : ""}${day.det ? ` (${day.det})` : ""}"></span>`
+    ).join("");
+    rows.push(`<div class="cal-row"><span class="cal-wk">${week[0].weekStart.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span>${cells}</div>`);
   }
   return `
   <div class="cal" role="img" aria-label="Calendrier d'activité des ${WEEKS} dernières semaines : plus la case est dorée, plus il y a eu de quêtes ce jour-là">
@@ -1503,6 +1515,21 @@ function activityCalendar() {
     ${rows.join("")}
   </div>
   <div class="cal-legend"><span class="hint">moins</span><span class="cal-cell" data-lvl="0"></span><span class="cal-cell" data-lvl="1"></span><span class="cal-cell" data-lvl="2"></span><span class="cal-cell" data-lvl="3"></span><span class="hint">plus</span></div>`;
+}
+
+function activityTable({ days }) {
+  const withQuests = days.filter(d => d.n > 0).slice().reverse();
+  if (!withQuests.length) return '<p class="hint">Aucune quête accomplie sur les 8 dernières semaines.</p>';
+  return `
+  <div class="tblwrap">
+    <table class="datatable">
+      <caption class="sr-only">Jours avec au moins une quête accomplie, 8 dernières semaines</caption>
+      <thead><tr><th scope="col">Jour</th><th scope="col">Quêtes</th><th scope="col">Détail</th></tr></thead>
+      <tbody>
+        ${withQuests.map(d => `<tr><th scope="row">${esc(d.label)}</th><td>${d.n}</td><td>${esc(d.det || "—")}</td></tr>`).join("")}
+      </tbody>
+    </table>
+  </div>`;
 }
 
 function featSection() {
@@ -1557,8 +1584,11 @@ function vDuel() {
     ${chartView === "chart" ? weekChart() : weekTable(a, b, weekChartData().data)}
   </section>
   <section class="panel">
-    <h2>Calendrier d'activité <small>— 8 dernières semaines, à deux</small></h2>
-    ${activityCalendar()}
+    <div class="panelhead">
+      <h2 style="margin-bottom:0">Calendrier d'activité <small>— 8 dernières semaines, à deux</small></h2>
+      <button class="linkbtn" id="calViewToggle">${calView === "cal" ? "Voir en tableau" : "Voir en calendrier"}</button>
+    </div>
+    ${calView === "cal" ? activityCalendar(activityDays()) : activityTable(activityDays())}
   </section>
   <section class="panel">
     <h2>Statistiques</h2>
@@ -1597,7 +1627,7 @@ function vHeros() {
 
   const switcher = `
   <div class="filterrow" style="margin-bottom:12px">
-    ${S.players.map(pl => `<button class="filterbtn ${herosView === pl.id ? "on" : ""}" data-hv="${pl.id}">${esc(pl.emoji)} ${esc(pl.name)}</button>`).join("")}
+    ${S.players.map(pl => `<button class="filterbtn ${herosView === pl.id ? "on" : ""}" aria-pressed="${herosView === pl.id}" data-hv="${pl.id}">${esc(pl.emoji)} ${esc(pl.name)}</button>`).join("")}
   </div>`;
 
   let curHtml;
@@ -1646,8 +1676,8 @@ function vHeros() {
 
   const universeFilter = `
   <div class="filterrow" style="margin:8px 0 10px">
-    <button class="filterbtn ${herosUniverse === "all" ? "on" : ""}" data-hu="all">Tous</button>
-    ${UNIVERSES.map(u => `<button class="filterbtn ${herosUniverse === u ? "on" : ""}" data-hu="${esc(u)}">${esc(u)}</button>`).join("")}
+    <button class="filterbtn ${herosUniverse === "all" ? "on" : ""}" aria-pressed="${herosUniverse === "all"}" data-hu="all">Tous</button>
+    ${UNIVERSES.map(u => `<button class="filterbtn ${herosUniverse === u ? "on" : ""}" aria-pressed="${herosUniverse === u}" data-hu="${esc(u)}">${esc(u)}</button>`).join("")}
   </div>`;
 
   return `
@@ -1777,8 +1807,8 @@ function vJournal() {
     <input type="text" id="journalSearch" placeholder="Rechercher une tâche…" value="${esc(journalFilter.q)}" aria-label="Rechercher dans le journal">
   </div>
   <div class="filterrow">
-    <button class="filterbtn ${journalFilter.player === "all" ? "on" : ""}" data-jf="all">Tous</button>
-    ${S.players.map(p => `<button class="filterbtn ${journalFilter.player === p.id ? "on" : ""}" data-jf="${p.id}">${esc(p.emoji)} ${esc(p.name)}</button>`).join("")}
+    <button class="filterbtn ${journalFilter.player === "all" ? "on" : ""}" aria-pressed="${journalFilter.player === "all"}" data-jf="all">Tous</button>
+    ${S.players.map(p => `<button class="filterbtn ${journalFilter.player === p.id ? "on" : ""}" aria-pressed="${journalFilter.player === p.id}" data-jf="${p.id}">${esc(p.emoji)} ${esc(p.name)}</button>`).join("")}
   </div>`;
 
   if (!filtered.length) {
@@ -1854,7 +1884,7 @@ function vReglages() {
     <h2>Apparence</h2>
     <div class="themerow">
       ${Object.entries(THEMES).map(([id, t]) => `
-      <button class="themebtn ${curTheme() === id ? "on" : ""}" data-theme="${id}">
+      <button class="themebtn ${curTheme() === id ? "on" : ""}" aria-pressed="${curTheme() === id}" data-theme="${id}">
         <i style="background:${t.sys}"></i>${t.label}
       </button>`).join("")}
     </div>
@@ -2416,6 +2446,8 @@ function bindView() {
   // Duel : bascule graphique / tableau
   const cvt = $("#chartViewToggle");
   if (cvt) cvt.onclick = () => { chartView = chartView === "chart" ? "table" : "chart"; render(); };
+  const calvt = $("#calViewToggle");
+  if (calvt) calvt.onclick = () => { calView = calView === "cal" ? "table" : "cal"; render(); };
   const shareBtn = $("#shareTrophyBtn");
   if (shareBtn) shareBtn.onclick = shareTrophyCard;
   const shareDuelBtn = $("#shareDuelBtn");
@@ -2522,6 +2554,7 @@ function bindView() {
       queueOp({ table: "won", type: "upsert", row: toRow.won(w) });
       render();
       confettiBurst();
+      chime("level");
       sysModal(`
         <div class="big gold">RÉCOMPENSE</div>
         <div class="sub">${surprise ? "🎲 Le sort a désigné :" : "Vous avez gagné :"}<br><b>${esc(rw.icon)} ${esc(rw.name)}</b><br>Profitez-en bien, vous l'avez mérité 💙</div>`);
@@ -2556,6 +2589,7 @@ function bindView() {
       queueOp({ table: "won", type: "upsert", row: toRow.won(w) });
       render();
       confettiBurst();
+      chime("level");
       sysModal(`
         <div class="big gold">PARI REMPORTÉ</div>
         <div class="sub">👑 <b>${esc(win ? win.name : "?")}</b> gagne l'enjeu :<br><b>${esc(rw.icon)} ${esc(rw.name)}</b>${surprise ? "<br>🎲 désigné par le sort" : ""}</div>`);
@@ -2753,11 +2787,11 @@ function bindView() {
   if (rst) rst.onclick = () => {
     sysModal(`
       <div class="big" style="color:var(--crit)">REMISE À ZÉRO</div>
-      <div class="sub" style="text-align:left">Journal, niveaux, objectifs et récompenses gagnées seront <b>effacés pour vous deux</b>.<br><br>Les tâches et idées de récompenses sont conservées. Pensez à <b>Exporter</b> d'abord si vous voulez une sauvegarde.</div>`,
+      <div class="sub" style="text-align:left">Journal, niveaux, objectifs, paris et récompenses gagnées seront <b>effacés pour vous deux</b>.<br><br>Les tâches et idées de récompenses sont conservées. Pensez à <b>Exporter</b> d'abord si vous voulez une sauvegarde.</div>`,
       null,
       { label: "Tout effacer", danger: true, onclick: () => {
-          S.log = []; S.won = []; S.objectives = [];
-          ["log", "won", "objectives"].forEach(t => queueOp({ table: t, type: "clear" }));
+          S.log = []; S.won = []; S.objectives = []; S.bets = [];
+          ["log", "won", "objectives", "bets"].forEach(t => queueOp({ table: t, type: "clear" }));
           save(); render(); toast("L'aventure repart de zéro");
         } },
       "Garder nos données");
