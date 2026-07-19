@@ -1322,3 +1322,80 @@ schéma.
   paramétrée.
 - Revoir la taille du fichier index.html (grossit à chaque itération,
   maintenant ~3 070 lignes).
+
+## Itération 37 — 2026-07-19 (routine cloud)
+
+**Audit** : un audit ciblé (agent dédié, lecture complète d'index.html face à
+l'historique des 36 itérations) a fait remonter cinq frictions, aucune ne
+nécessitant de changement de schéma — deux vrais bugs et un trou
+d'accessibilité traités cette fois, deux notées en pistes (avertissement si
+les deux chasseurs choisissent la même couleur, et confirmation par la
+lecture du code que la factorisation `playerBlock` ne concerne en réalité
+que deux fonctions, trophées et duel — la carte héros a un layout à sujet
+unique structurellement différent).
+
+**Améliorations livrées :**
+- 🐛 **Bug corrigé — supprimer une récompense encore promise ne prévenait
+  personne** : un défi ou un pari en cours référence une récompense par
+  `rewardId` ; rien ne vérifiait qu'elle était encore utilisée avant de la
+  supprimer dans « Idées de récompenses ». Le défi/pari continuait de
+  tourner sur un identifiant fantôme, retombant sur un générique
+  « Récompense au choix » à la réclamation — la promesse initiale (« Séance
+  de ciné », par ex.) disparaissait sans que personne ne s'en aperçoive
+  avant ce moment-là. Nouvelle fonction `rewardInUse(id)` : la suppression
+  est désormais bloquée (toast explicite nommant le défi ou « l'enjeu de la
+  semaine en cours ») tant qu'un défi ou un pari non réclamé y fait
+  référence.
+- 🐛 **Bug corrigé — le focus initial d'une modale à plusieurs boutons
+  tombait sur l'action destructrice, pas sur l'action sûre** : `trapModal()`
+  posait toujours le focus sur le premier élément focusable du DOM ; or les
+  boutons additionnels (« Annuler » qui défait une quête, « Tout effacer »,
+  « Importer quand même ») sont rendus avant `#veilOk` (« Continuer »/
+  « Garder nos données »). Un réflexe Entrée à l'ouverture d'une modale
+  « NIVEAU X » risquait donc d'activer « Annuler » plutôt que de fermer
+  simplement la fenêtre — à l'inverse de ce que le code documentait déjà
+  pour Échap et le bouton retour. Le focus initial cible désormais
+  explicitement l'action sûre (`#veilOk`/`#obNext`) quand elle existe, Tab/
+  Shift+Tab continuant de parcourir normalement les autres boutons.
+- ♿ **Modales système nommées pour lecteur d'écran** : `role="alertdialog"`/
+  `"dialog"` n'avait ni `aria-labelledby` ni `aria-describedby` — un lecteur
+  d'écran qui n'annonce pas tout le contenu à l'ouverture ne dirait que le
+  libellé du bouton focalisé, sans jamais annoncer « NIVEAU 2 » ou « HAUT
+  FAIT ». Nouvelle fonction `labelModalBox()` (appelée par `sysModal()` et
+  l'onboarding) qui pose des `id` sur `.big`/`.sub` et les référence sur
+  `.sysbox`, sans changer la structure existante.
+- ✅ Tests : 306 assertions au total (299 dans smoke.js +5, 7 dans
+  sync-test.js inchangée) — focus initial sur `#veilOk` vérifié sur la
+  modale de réclamation d'une récompense surprise (2 boutons), présence et
+  contenu réel de `aria-labelledby`/`aria-describedby` sur cette même
+  modale, cycle complet du garde-fou de suppression (blocage + toast
+  nommant le défi, récompense supprimable une fois tous les défis
+  bloquants retirés — dont le défi par défaut de l'onboarding « Semaine de
+  choc » qui partage le même reward, marqué `claimed` directement en test
+  pour ne pas fausser une assertion `won` plus loin dans le scénario par un
+  gain parasite). Un test existant depuis l'itération 25 supposait l'ancien
+  comportement de focus (`veilExtra` en premier) : adapté pour refléter le
+  nouveau comportement corrigé, sans perte de couverture (piège Tab/
+  Shift+Tab toujours vérifié dans les deux sens). Deux reproductions
+  isolées ont été nécessaires en cours de route pour un même scénario
+  (garde-fou de suppression) : un premier échec dû à un oubli du défi par
+  défaut de l'onboarding partageant la même récompense, un second dû à
+  l'effet de bord de sa réclamation via l'UI (ajout parasite à `S.won`) —
+  corrigés par une manipulation d'état directe plutôt que par les boutons
+  de l'interface pour ce cas secondaire, non central à l'assertion testée.
+  Validation visuelle (captures 390×844) : toast de blocage nommant le défi
+  sur l'onglet Objectifs, modale NIVEAU 2 avec focus confirmé sur
+  `#veilOk` (vérifié programmatiquement).
+
+**Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
+- Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
+  attente — rien ne sera créé en base sans accord explicite).
+- Avertir si les deux chasseurs choisissent la même couleur (Réglages →
+  Chasseurs) — rien ne compare aujourd'hui, alors que la couleur pilote la
+  distinction visuelle sur tout l'onglet Duel (barre, graphique, cartes
+  canvas partageables).
+- Factoriser les fonctions `playerBlock` dupliquées (trophées, duel — la
+  carte héros a un layout à sujet unique, distinct) en un helper commun
+  paramétré.
+- Revoir la taille du fichier index.html (grossit à chaque itération,
+  maintenant ~3 090 lignes).

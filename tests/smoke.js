@@ -180,6 +180,20 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   // Réclamation annulable (it. 32) : « won » était la seule liste sans filet de rattrapage —
   // Annuler défait la récompense gagnée et redonne le défi à réclamer.
   check("bouton Annuler présent sur la réclamation", (await page.locator("#veilExtra").count()) === 1);
+  // Le focus initial d'une modale à plusieurs boutons doit toujours tomber sur l'action
+  // sûre (« Continuer »), jamais sur un bouton extra potentiellement destructeur, même si
+  // celui-ci apparaît avant #veilOk dans le DOM.
+  check("focus initial sur l'action sûre (Continuer), pas sur Annuler",
+    (await page.evaluate(() => document.activeElement.id)) === "veilOk");
+  // Nom/description accessibles de la modale (aria-labelledby/describedby) pour un lecteur
+  // d'écran qui n'annoncerait sinon que le libellé du bouton focalisé.
+  check("modale nommée pour lecteur d'écran (aria-labelledby/describedby)",
+    await page.evaluate(() => {
+      const box = document.querySelector(".sysbox");
+      const lbl = box.getAttribute("aria-labelledby"), desc = box.getAttribute("aria-describedby");
+      return !!lbl && !!document.getElementById(lbl).textContent.trim()
+        && !!desc && !!document.getElementById(desc).textContent.trim();
+    }));
   await page.locator("#veilExtra").click();
   await page.waitForTimeout(200);
   check("réclamation annulée : plus de récompense gagnée en liste", (await page.locator(".wonline").count()) === 0);
@@ -241,6 +255,35 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await page.locator(`[data-oname="${sprintObjId}"]`).evaluate(el => el.blur());
   await page.waitForTimeout(200);
   check("nom vide restaure l'ancien nom du défi", (await page.evaluate(id => S.objectives.find(o => o.id === id).name, sprintObjId)) === "Sprint du week-end");
+
+  // Garde-fou : impossible de supprimer une récompense encore promise par un défi actif
+  // (sinon le défi retomberait sur « Récompense au choix » sans que personne ne s'en aperçoive
+  // avant la réclamation).
+  const rewardInUseId = await page.evaluate(id => S.objectives.find(o => o.id === id).rewardId, sprintObjId);
+  const rwInUseCountBefore = await page.locator("[data-delrw]").count();
+  await page.locator(`[data-delrw="${rewardInUseId}"]`).click();
+  await page.waitForTimeout(150);
+  check("suppression bloquée pour une récompense utilisée par un défi actif",
+    (await page.locator("[data-delrw]").count()) === rwInUseCountBefore);
+  check("toast d'avertissement affiché (récompense en usage)",
+    (await page.locator(".toast", { hasText: "Impossible de supprimer" }).count()) === 1);
+  await page.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
+  await page.locator(`[data-delobj="${sprintObjId}"]`).click();
+  await page.waitForTimeout(150);
+  // Le défi par défaut de l'onboarding (« Semaine de choc ») partage le même reward par
+  // défaut : l'écarter aussi (marqué claimed directement, sans passer par la réclamation
+  // UI pour ne pas ajouter une entrée parasite à "won" qui fausserait des vérifications
+  // plus loin dans le scénario) avant de vérifier que la récompense redevient supprimable.
+  await page.evaluate(id => {
+    const o = S.objectives.find(x => !x.claimed && x.rewardId === id);
+    if (o) { o.claimed = true; save(); render(); }
+  }, rewardInUseId);
+  await page.waitForTimeout(150);
+  await page.locator(`[data-delrw="${rewardInUseId}"]`).click();
+  await page.waitForTimeout(150);
+  check("récompense supprimable une fois tous les défis qui l'utilisaient retirés",
+    (await page.locator(`[data-delrw="${rewardInUseId}"]`).count()) === 0);
+  await page.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
 
   // Récompenses éditables en place (nom + icône), comme les tâches
   const rw0 = await page.evaluate(() => S.rewards[0].id);
@@ -1030,20 +1073,21 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   check("montée de niveau déclenchée par la quête injectée (" + lvlModalTxt.replace(/\s+/g, " ").slice(0, 30) + ")", lvlModalTxt.includes("NIVEAU"));
   check("bouton Annuler présent dans la modale de niveau", (await undoModalPage.locator("#veilExtra").count()) === 1);
 
-  // Accessibilité clavier des modales système : focus initial + piège du Tab
+  // Accessibilité clavier des modales système : focus initial (sur l'action sûre « Continuer »,
+  // jamais sur « Annuler » même si ce dernier apparaît avant dans le DOM) + piège du Tab
   const initialFocusId = await undoModalPage.evaluate(() => document.activeElement && document.activeElement.id);
-  check("focus posé sur le premier bouton à l'ouverture de la modale (" + initialFocusId + ")", initialFocusId === "veilExtra");
-  await undoModalPage.keyboard.press("Tab");
-  check("Tab avance vers le bouton suivant de la modale",
-    (await undoModalPage.evaluate(() => document.activeElement.id)) === "veilOk");
+  check("focus initial sur l'action sûre, pas sur Annuler (" + initialFocusId + ")", initialFocusId === "veilOk");
   await undoModalPage.keyboard.press("Tab");
   check("Tab boucle vers le premier bouton (piège de focus)",
     (await undoModalPage.evaluate(() => document.activeElement.id)) === "veilExtra");
-  await undoModalPage.keyboard.press("Shift+Tab");
-  check("Shift+Tab boucle vers le dernier bouton",
+  await undoModalPage.keyboard.press("Tab");
+  check("Tab avance vers le bouton suivant de la modale",
     (await undoModalPage.evaluate(() => document.activeElement.id)) === "veilOk");
   await undoModalPage.keyboard.press("Shift+Tab");
-  check("focus revenu sur le premier bouton", (await undoModalPage.evaluate(() => document.activeElement.id)) === "veilExtra");
+  check("Shift+Tab revient au bouton précédent",
+    (await undoModalPage.evaluate(() => document.activeElement.id)) === "veilExtra");
+  await undoModalPage.keyboard.press("Shift+Tab");
+  check("Shift+Tab boucle vers le dernier bouton (retour à l'action sûre)", (await undoModalPage.evaluate(() => document.activeElement.id)) === "veilOk");
 
   await undoModalPage.locator("#veilExtra").click();
   await undoModalPage.waitForTimeout(200);

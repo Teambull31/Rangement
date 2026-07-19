@@ -1979,6 +1979,18 @@ function toast(msg, actionLabel, actionFn, ms) {
   setTimeout(() => t.remove(), ms || (actionLabel ? 5000 : 2200));
 }
 
+// Une récompense encore promise par un défi ou un enjeu actif (non réclamé) ne doit pas
+// pouvoir disparaître silencieusement : le défi/pari continuerait de tourner sur un
+// rewardId fantôme, retombant sur un générique « Récompense au choix » à la réclamation,
+// sans que personne ne s'en aperçoive avant ce moment-là.
+function rewardInUse(id) {
+  const o = S.objectives.find(x => !x.claimed && x.rewardId === id);
+  if (o) return `le défi « ${o.name} »`;
+  const b = S.bets.find(x => !x.claimed && x.rewardId === id);
+  if (b) return "l'enjeu de la semaine en cours";
+  return null;
+}
+
 // Supprime un élément d'une collection (tâche, récompense, défi) avec un filet de
 // rattrapage : un mistap n'oblige plus à tout retaper, comme pour le journal.
 function deleteWithUndo(table, id, msg) {
@@ -2291,7 +2303,13 @@ function trapModal() {
   const focusable = () => Array.from(box.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'))
     .filter(el => !el.disabled && el.offsetParent !== null);
   const list = focusable();
-  if (list.length) list[0].focus();
+  // Le focus initial doit toujours retomber sur l'action sûre (« Continuer »/« Garder nos
+  // données »), jamais sur un bouton extra potentiellement destructeur (« Annuler », « Tout
+  // effacer ») même s'il apparaît avant #veilOk dans le DOM — sans quoi un Entrée réflexe à
+  // l'ouverture d'une modale pourrait valider l'action dangereuse.
+  const safe = $("#veilOk") || $("#obNext");
+  if (safe && list.includes(safe)) safe.focus();
+  else if (list.length) list[0].focus();
   box.onkeydown = e => {
     if (e.key === "Escape") {
       e.preventDefault();
@@ -2347,7 +2365,20 @@ function sysModal(html, onClose, extra, okLabel) {
   extras.forEach((ex, i) => {
     $("#" + extraId(i)).onclick = () => { $("#modal").innerHTML = ""; ex.onclick(); restoreModalFocus(); };
   });
+  labelModalBox();
   trapModal();
+}
+
+// Un lecteur d'écran qui n'annonce pas tout le contenu à l'ouverture d'un rôle
+// alertdialog/dialog (comportement variable selon NVDA/VoiceOver) doit au moins
+// pouvoir lire le titre et le texte de la modale via aria-labelledby/describedby —
+// posés dynamiquement sur .big/.sub car leur contenu varie à chaque appel de sysModal.
+function labelModalBox() {
+  const box = $(".sysbox");
+  if (!box) return;
+  const big = box.querySelector(".big"), sub = box.querySelector(".sub");
+  if (big) { if (!big.id) big.id = "sysModalTitle"; box.setAttribute("aria-labelledby", big.id); }
+  if (sub) { if (!sub.id) sub.id = "sysModalDesc"; box.setAttribute("aria-describedby", sub.id); }
 }
 
 // Enchaîne plusieurs modales système à la suite (ex. niveau + objectif atteint sur la même
@@ -2691,7 +2722,11 @@ function bindView() {
   };
   bindEnter(["#rwName", "#rwIcon"], rwAdd);
   document.querySelectorAll("[data-delrw]").forEach(b =>
-    b.onclick = () => deleteWithUndo("rewards", b.dataset.delrw, "Récompense supprimée"));
+    b.onclick = () => {
+      const used = rewardInUse(b.dataset.delrw);
+      if (used) { toast(`Impossible de supprimer : promise par ${used}`, null, null, 4000); return; }
+      deleteWithUndo("rewards", b.dataset.delrw, "Récompense supprimée");
+    });
   document.querySelectorAll("[data-rwname], [data-rwicon]").forEach(inp =>
     inp.onchange = () => {
       const id = inp.dataset.rwname || inp.dataset.rwicon;
@@ -2965,6 +3000,7 @@ function onboarding() {
         </div>
       </div>
     </div>`;
+    labelModalBox();
     trapModal();
     $("#obSkip").onclick = finish;
     $("#obNext").onclick = () => {
