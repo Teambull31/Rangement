@@ -173,6 +173,15 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await page.waitForTimeout(200);
   const claimModal = (await page.locator(".sysbox").count()) ? await page.locator(".sysbox").textContent() : "";
   check("tirage au sort annoncé", claimModal.includes("Le sort a désigné"));
+  // Réclamation annulable (it. 32) : « won » était la seule liste sans filet de rattrapage —
+  // Annuler défait la récompense gagnée et redonne le défi à réclamer.
+  check("bouton Annuler présent sur la réclamation", (await page.locator("#veilExtra").count()) === 1);
+  await page.locator("#veilExtra").click();
+  await page.waitForTimeout(200);
+  check("réclamation annulée : plus de récompense gagnée en liste", (await page.locator(".wonline").count()) === 0);
+  check("le défi redevient réclamable après Annuler", (await page.locator("[data-claim]").count()) > 0);
+  await page.locator("[data-claim]").last().click();
+  await page.waitForTimeout(200);
   if (await page.locator("#veilOk").count()) await page.locator("#veilOk").click();
   const wonTxt = (await page.locator(".wonline").count()) === 1 ? await page.locator(".wonline").textContent() : "";
   check("récompense gagnée listée (réelle, pas 🎲) : " + wonTxt.trim().split("\n")[0], wonTxt !== "" && !wonTxt.includes("🎲"));
@@ -564,6 +573,15 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await page.waitForTimeout(200);
   const betModal = (await page.locator(".sysbox").count()) ? await page.locator(".sysbox").textContent() : "";
   check("« PARI REMPORTÉ » annoncé", betModal.includes("PARI REMPORTÉ"));
+  check("bouton Annuler présent sur la réclamation du pari", (await page.locator("#veilExtra").count()) === 1);
+  const wonBeforeBetUndo = await page.evaluate(() => S.won.length);
+  await page.locator("#veilExtra").click();
+  await page.waitForTimeout(200);
+  check("réclamation du pari annulée (" + wonBeforeBetUndo + " → " + (await page.evaluate(() => S.won.length)) + ")",
+    (await page.evaluate(() => S.won.length)) === wonBeforeBetUndo - 1);
+  check("le pari redevient réclamable après Annuler", (await page.locator("[data-claimbet]").count()) === 1);
+  await page.locator("[data-claimbet]").click(); // re-réclamer pour la suite du scénario
+  await page.waitForTimeout(200);
   if (await page.locator("#veilOk").count()) await page.locator("#veilOk").click();
   await page.locator('[data-tab="objectifs"]').click();
   check("enjeu ajouté aux récompenses gagnées", (await page.locator(".wonline").count()) === 2);
@@ -853,12 +871,42 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   const unlockModal = (await unlockPage.locator(".sysbox").count()) ? await unlockPage.locator(".sysbox").textContent() : "";
   check("« HÉROS DÉBLOQUÉ » prioritaire sur la montée de niveau (" + unlockModal.replace(/\s+/g, " ").slice(0, 60) + ")", unlockModal.includes("HÉROS DÉBLOQUÉ") && unlockModal.includes("Usopp"));
   check("bouton « Incarner » présent dans la modale", (await unlockPage.locator("#veilExtra").count()) === 1);
+  check("bouton « Annuler » aussi présent (it. 32 — la modale n'avait qu'Incarner)", (await unlockPage.locator("#veilExtra1").count()) === 1);
   await unlockPage.locator("#veilExtra").click();
   await unlockPage.waitForTimeout(250);
   check("héros incarné en un geste depuis la modale",
     (await unlockPage.evaluate(() => S.players[0].characterId)) === "usopp"
     && (await unlockPage.locator(".hunter").first().locator(".charline").textContent()).includes("Usopp"));
   await unlockContext.close();
+
+  // Annuler depuis la modale HÉROS DÉBLOQUÉ quand elle est seule dans la chaîne (it. 32) :
+  // jusqu'ici seul « Incarner » y était proposé, un mistap n'était pas rattrapable.
+  const heroUndoContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const heroUndoPage = await heroUndoContext.newPage();
+  await heroUndoPage.addInitScript(() => {
+    localStorage.setItem("rangement-onboard-v1", "1");
+    localStorage.setItem("rangement-recap", "off");
+  });
+  await heroUndoPage.goto(APP_URL);
+  await heroUndoPage.waitForSelector(".quest");
+  await heroUndoPage.evaluate(() => {
+    S.log.push({ id: "pre1u", ts: Date.now() - 3600e3, playerId: "p1", taskName: "Vitres", icon: "🪟", xp: 190, note: "" });
+    S.log.push({ id: "pre2u", ts: Date.now() - 1800e3, playerId: "p1", taskName: "Vitres", icon: "🪟", xp: 185, note: "" });
+    save();
+  });
+  await heroUndoPage.reload();
+  await heroUndoPage.waitForSelector(".quest");
+  const xpBeforeHeroUndo = await heroUndoPage.evaluate(() => totalXp("p1"));
+  await heroUndoPage.locator(".quest").first().locator('[data-p="p1"]').click();
+  await heroUndoPage.waitForTimeout(300);
+  const heroUndoModal = await heroUndoPage.locator(".sysbox").textContent();
+  check("« HÉROS DÉBLOQUÉ » déclenché (scénario Annuler)", heroUndoModal.includes("HÉROS DÉBLOQUÉ"));
+  await heroUndoPage.locator("#veilExtra1").click(); // Annuler
+  await heroUndoPage.waitForTimeout(250);
+  check("quête annulée depuis la modale HÉROS DÉBLOQUÉ (XP revenue à " + xpBeforeHeroUndo + ")",
+    (await heroUndoPage.evaluate(() => totalXp("p1"))) === xpBeforeHeroUndo);
+  check("héros non débloqué après Annuler", (await heroUndoPage.evaluate(() => S.players[0].characterId)) !== "usopp");
+  await heroUndoContext.close();
 
   // Annuler une quête même après une modale spéciale (mistap sur le mauvais chasseur, etc.)
   const undoModalContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
@@ -902,6 +950,38 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   check("XP revenue à sa valeur d'avant la quête après Annuler depuis la modale (" + preLvlXp + ")",
     (await undoModalPage.evaluate(() => totalXp("p1"))) === preLvlXp);
   await undoModalContext.close();
+
+  // Focus clavier restauré sur le bouton de quête après une chaîne de jalons (it. 32) :
+  // render() reconstruit le DOM avant l'ouverture de la modale (l'ancien bouton disparaît) ;
+  // doTask() le retrouve après coup via ses attributs data-do/data-p pour que sysModal
+  // capture le bon point de départ, au lieu que le focus retombe sur <body>.
+  const focusContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const focusPage = await focusContext.newPage();
+  await focusPage.addInitScript(() => {
+    localStorage.setItem("rangement-onboard-v1", "1");
+    localStorage.setItem("rangement-recap", "off");
+  });
+  await focusPage.goto(APP_URL);
+  await focusPage.waitForSelector(".quest");
+  await focusPage.evaluate(() => {
+    S.log.push({ id: "pre-focus", ts: Date.now() - 3600e3, playerId: "p1", taskName: "Vitres", icon: "🪟", xp: 95, note: "" });
+    save();
+  });
+  await focusPage.reload();
+  await focusPage.waitForSelector(".quest");
+  const focusQuestBtn = focusPage.locator(".quest").first().locator('[data-p="p1"]');
+  await focusQuestBtn.focus();
+  await focusPage.keyboard.press("Enter");
+  await focusPage.waitForSelector(".sysbox");
+  check("montée de niveau déclenchée au clavier (scénario focus)", (await focusPage.locator(".sysbox").textContent()).includes("NIVEAU"));
+  await focusPage.locator("#veilOk").click();
+  await focusPage.waitForTimeout(200);
+  const focusRestoredToQuest = await focusPage.evaluate(() => {
+    const el = document.activeElement;
+    return !!el && el.classList && el.classList.contains("doer") && el.dataset.p === "p1";
+  });
+  check("focus clavier restauré sur le bouton de quête après la chaîne de jalons", focusRestoredToQuest);
+  await focusContext.close();
 
   // Enchaînement de plusieurs jalons simultanés (niveau + objectif + haut fait sur la même quête) :
   // aucun n'est plus perdu en silence, et Annuler en cours de chaîne l'interrompt entièrement.

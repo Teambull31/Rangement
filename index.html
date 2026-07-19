@@ -2302,19 +2302,26 @@ function sysModal(html, onClose, extra, okLabel) {
     try { history.pushState({ modal: true }, "", location.href); } catch (e) {}
     PRE_MODAL_FOCUS = document.activeElement;
   }
+  // extra accepte un objet unique (compat historique) ou un tableau — un second bouton
+  // additionnel au besoin (ex. « Incarner » + « Annuler » sur HÉROS DÉBLOQUÉ). Le premier
+  // garde l'id historique #veilExtra (référencé par de nombreux tests existants).
+  const extras = extra ? (Array.isArray(extra) ? extra : [extra]) : [];
+  const extraId = i => "veilExtra" + (i === 0 ? "" : i);
   $("#modal").innerHTML = `
   <div class="veil" id="veil">
     <div class="sysbox" role="alertdialog" aria-modal="true">
       <div class="bang">Notification</div>
       ${html}
       <div class="frow" style="justify-content:center">
-        ${extra ? `<button class="btn ${extra.danger ? "danger" : ""}" id="veilExtra">${extra.label}</button>` : ""}
-        <button class="btn ${extra ? "ghost" : ""}" id="veilOk">${okLabel || "Continuer"}</button>
+        ${extras.map((ex, i) => `<button class="btn ${ex.danger ? "danger" : ""}" id="${extraId(i)}">${ex.label}</button>`).join("")}
+        <button class="btn ${extras.length ? "ghost" : ""}" id="veilOk">${okLabel || "Continuer"}</button>
       </div>
     </div>
   </div>`;
   $("#veilOk").onclick = () => { $("#modal").innerHTML = ""; if (onClose) onClose(); restoreModalFocus(); };
-  if (extra) $("#veilExtra").onclick = () => { $("#modal").innerHTML = ""; extra.onclick(); restoreModalFocus(); };
+  extras.forEach((ex, i) => {
+    $("#" + extraId(i)).onclick = () => { $("#modal").innerHTML = ""; ex.onclick(); restoreModalFocus(); };
+  });
   trapModal();
 }
 
@@ -2326,11 +2333,12 @@ function playMilestones(queue, i) {
   if (i >= queue.length) return;
   const m = queue[i];
   chime(m.chime);
+  const extras = m.extra ? (Array.isArray(m.extra) ? m.extra : [m.extra]) : null;
   sysModal(m.html, () => playMilestones(queue, i + 1),
-    m.extra ? { label: m.extra.label, onclick: () => {
-      m.extra.onclick();
-      if (!m.extra.stop) playMilestones(queue, i + 1);
-    } } : null);
+    extras ? extras.map(ex => ({ label: ex.label, danger: ex.danger, onclick: () => {
+      ex.onclick();
+      if (!ex.stop) playMilestones(queue, i + 1);
+    } })) : null);
 }
 
 function doTask(taskId, playerId) {
@@ -2358,7 +2366,20 @@ function doTask(taskId, playerId) {
   const newObjs = S.objectives.filter(o => !o.claimed && objProgress(o) >= o.target && !objsBeforeIds.has(o.id));
   const newFeat = unlockedFeats(playerId).find(f => !featsBefore.has(f.id));
   const newChar = CHARACTERS.find(c => !charsBefore.has(c.id) && unlockedCharIds(playerId).includes(c.id));
+
+  // Le focus clavier se perdait dans la chaîne de jalons : render() reconstruit le DOM et
+  // détruit le bouton cliqué avant même l'ouverture de la première modale (sysModal capture
+  // document.activeElement à ce moment-là, déjà retombé sur <body>). On retrouve le bouton
+  // équivalent après le nouveau rendu via ses attributs data-do/data-p (pas par référence DOM,
+  // l'ancien élément n'existe plus) et on le refocalise juste avant l'ouverture éventuelle
+  // d'une modale, pour que sysModal capture le bon point de départ.
+  const wasKeyboardFocused = document.activeElement && document.activeElement.matches &&
+    document.activeElement.matches(`[data-do="${taskId}"][data-p="${playerId}"]`);
   render();
+  if (wasKeyboardFocused) {
+    const btn = $(`[data-do="${taskId}"][data-p="${playerId}"]`);
+    if (btn) btn.focus();
+  }
 
   // Annule la quête même après une modale spéciale (mistap sur le mauvais chasseur, etc.)
   const undoTask = () => {
@@ -2374,7 +2395,10 @@ function doTask(taskId, playerId) {
     chime: "level",
     html: `<div class="big gold">HÉROS DÉBLOQUÉ</div>
       <div class="sub"><span style="font-size:40px">${newChar.emoji}</span><br><b>${esc(newChar.name)}</b> (${esc(newChar.univers)}) rejoint la collection de <b>${esc(p.name)}</b> !</div>`,
-    extra: { label: "Incarner 🎴", onclick: () => equipChar(p, newChar) },
+    extra: [
+      { label: "Incarner 🎴", onclick: () => equipChar(p, newChar) },
+      { label: "Annuler", onclick: undoTask, stop: true },
+    ],
   });
   if (after > before) {
     const rk = rankOf(after);
@@ -2555,9 +2579,20 @@ function bindView() {
       render();
       confettiBurst();
       chime("level");
+      // Un mistap sur « Réclamer » reste rattrapable, comme le reste de l'appli : Annuler
+      // défait la récompense gagnée et redonne le défi à réclamer.
+      const undoClaim = () => {
+        o.claimed = false;
+        S.won = S.won.filter(x => x.id !== w.id);
+        save();
+        queueOp({ table: "objectives", type: "upsert", row: toRow.objectives(o) });
+        queueOp({ table: "won", type: "delete", id: w.id });
+        render(); toast("Réclamation annulée");
+      };
       sysModal(`
         <div class="big gold">RÉCOMPENSE</div>
-        <div class="sub">${surprise ? "🎲 Le sort a désigné :" : "Vous avez gagné :"}<br><b>${esc(rw.icon)} ${esc(rw.name)}</b><br>Profitez-en bien, vous l'avez mérité 💙</div>`);
+        <div class="sub">${surprise ? "🎲 Le sort a désigné :" : "Vous avez gagné :"}<br><b>${esc(rw.icon)} ${esc(rw.name)}</b><br>Profitez-en bien, vous l'avez mérité 💙</div>`,
+        null, { label: "Annuler", onclick: undoClaim });
     });
   document.querySelectorAll("[data-delobj]").forEach(b =>
     b.onclick = () => deleteWithUndo("objectives", b.dataset.delobj, "Défi abandonné"));
@@ -2590,9 +2625,18 @@ function bindView() {
       render();
       confettiBurst();
       chime("level");
+      const undoClaimBet = () => {
+        b.claimed = false;
+        S.won = S.won.filter(x => x.id !== w.id);
+        save();
+        queueOp({ table: "bets", type: "upsert", row: toRow.bets(b) });
+        queueOp({ table: "won", type: "delete", id: w.id });
+        render(); toast("Réclamation annulée");
+      };
       sysModal(`
         <div class="big gold">PARI REMPORTÉ</div>
-        <div class="sub">👑 <b>${esc(win ? win.name : "?")}</b> gagne l'enjeu :<br><b>${esc(rw.icon)} ${esc(rw.name)}</b>${surprise ? "<br>🎲 désigné par le sort" : ""}</div>`);
+        <div class="sub">👑 <b>${esc(win ? win.name : "?")}</b> gagne l'enjeu :<br><b>${esc(rw.icon)} ${esc(rw.name)}</b>${surprise ? "<br>🎲 désigné par le sort" : ""}</div>`,
+        null, { label: "Annuler", onclick: undoClaimBet });
     });
   document.querySelectorAll("[data-tiebet]").forEach(btn =>
     btn.onclick = () => {

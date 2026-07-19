@@ -964,14 +964,83 @@ sur les boutons à état — aucune ne nécessitant de changement de schéma.
 **Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
 - Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
   attente — rien ne sera créé en base sans accord explicite).
-- Modale « HÉROS DÉBLOQUÉ » sans bouton Annuler solo ; restaurer le focus
-  clavier sur la chaîne de jalons d'une quête nécessite de capturer
-  l'élément déclencheur avant le `render()` de `doTask()` et de le
-  retrouver après re-rendu (par attributs `data-do`/`data-p`, pas par
-  référence DOM) — repéré à l'itération 29, laissé pour une prochaine passe
-  dédiée à l'accessibilité clavier.
 - Factoriser les fonctions `playerBlock` dupliquées dans les trois cartes
   canvas partageables (trophées, duel, héros) en une fonction commune
   paramétrée.
 - Revoir la taille du fichier index.html (grossit à chaque itération,
-  maintenant ~2 990 lignes).
+  maintenant ~3 020 lignes).
+
+## Itération 32 — 2026-07-19 (routine cloud)
+
+**Audit** : les pistes en attente depuis l'itération 29/30/31 ont été
+reprises directement (déblocage HÉROS DÉBLOQUÉ sans Annuler solo, focus
+clavier perdu sur la chaîne de jalons d'une quête), complétées par une
+troisième friction repérée en relisant le flux de réclamation : la liste
+des récompenses gagnées (`won`) était la seule action de gain sans filet de
+rattrapage, alors que suppressions, quêtes et jalons le sont tous depuis
+les itérations 22/24/30 — un mistap sur « Réclamer » restait irréversible.
+Aucune des trois ne nécessitait de changement de schéma.
+
+**Améliorations livrées :**
+- 🦸 **Bouton Annuler sur la modale « HÉROS DÉBLOQUÉ »** : jusqu'ici seul
+  « Incarner 🎴 » y était proposé ; quand cette modale est le seul jalon de
+  la chaîne, un mistap sur le mauvais chasseur n'était plus rattrapable
+  autrement qu'en passant par le Journal. `sysModal()`/`playMilestones()`
+  acceptent désormais un tableau de boutons additionnels (au lieu d'un
+  objet unique) — le premier garde l'id historique `#veilExtra` (utilisé
+  par de nombreux tests existants, aucun cassé), le second devient
+  `#veilExtra1`. Généralisation minimale, réutilisable pour une prochaine
+  modale à trois actions.
+- ⌨️ **Focus clavier restauré sur le bouton de quête après une chaîne de
+  jalons** : `render()` reconstruit le DOM avant l'ouverture de la
+  première modale, détruisant le bouton cliqué avant même que `sysModal`
+  capture `document.activeElement` (qui retombait sur `<body>`) — un
+  utilisateur au clavier devait retabuler depuis le haut après chaque
+  quête. `doTask()` retrouve désormais le bouton équivalent après le
+  nouveau rendu via ses attributs `data-do`/`data-p` (pas par référence
+  DOM, l'ancien élément n'existe plus) et le refocalise juste avant
+  l'ouverture d'une modale, pour que la capture existante fonctionne
+  correctement. Limite connue inchangée : ce mécanisme ne couvre que le
+  point d'entrée de `doTask()`, pas les modales autonomes (déjà couvertes
+  depuis l'itération 29).
+- ↩️ **Réclamation d'une récompense ou d'un pari annulable** : les modales
+  « RÉCOMPENSE » et « PARI REMPORTÉ » proposent désormais un bouton
+  « Annuler » qui défait la récompense gagnée (`S.won`) et redonne le défi
+  ou le pari à réclamer — dernière action de gain de l'appli sans filet de
+  rattrapage, réparée sur le même principe que les suppressions (it. 24)
+  et le Journal (it. 30).
+- ✅ Tests : 259 assertions au total (252 dans smoke.js +12, 7 dans
+  sync-test.js inchangée) — bouton Annuler présent aux côtés d'Incarner
+  sur la modale HÉROS DÉBLOQUÉ, scénario dédié où Annuler y annule
+  effectivement la quête (XP revenue à sa valeur d'avant, héros non
+  débloqué), focus clavier restauré sur le bon bouton de quête après une
+  chaîne de jalons déclenchée au clavier (Enter), Annuler sur la
+  réclamation d'une récompense et d'un pari (bouton présent, `S.won`
+  revient à son état d'avant, le défi/pari redevient réclamable), avec
+  re-réclamation ensuite pour ne pas perturber les assertions existantes
+  en aval. Aucun test existant modifié : l'id `#veilExtra` du premier
+  bouton est resté stable malgré la généralisation en tableau. Deux
+  passages complets et propres (`smoke.js` puis `sync-test.js`), aucun
+  lancé en parallèle d'un autre processus. Trois flakes rencontrés en
+  cours de route sur des passages complets intermédiaires, chacun sur du
+  code non lié à la cause probable (une fois le nouveau scénario clavier,
+  une fois le grind héros existant depuis l'itération 12, une fois la
+  chaîne à trois jalons existante depuis l'itération 24) : les trois
+  reproduits isolément avec un script dédié (5/5, 3/3 puis 5/5, y compris
+  une version instrumentée traçant XP/niveau avant/après pour la chaîne
+  de jalons) sans qu'aucun ne se reproduise — aucune mémoire, aucun
+  processus résiduel, aucune contention CPU identifiable au moment des
+  échecs (`free`/`ps` propres), cohérent avec le pattern déjà documenté
+  aux itérations 15/20/22/24/31 plutôt qu'avec une régression. Validation
+  visuelle (captures 390×844) : modale HÉROS DÉBLOQUÉ avec les trois
+  boutons (Incarner/Annuler/Continuer), modale RÉCOMPENSE avec Annuler et
+  confettis.
+
+**Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
+- Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
+  attente — rien ne sera créé en base sans accord explicite).
+- Factoriser les fonctions `playerBlock` dupliquées dans les trois cartes
+  canvas partageables (trophées, duel, héros) en une fonction commune
+  paramétrée.
+- Revoir la taille du fichier index.html (grossit à chaque itération,
+  maintenant ~3 020 lignes).
