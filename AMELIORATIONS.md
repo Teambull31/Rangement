@@ -1718,3 +1718,50 @@ d'accent).
   paramétré.
 - Revoir la taille du fichier index.html (grossit à chaque itération,
   maintenant ~3 190 lignes).
+
+## Itération 42 — 2026-07-19 (routine cloud)
+
+**Audit** : les deux frictions notées en pistes à l'itération 41 ont été
+reprises telles quelles, aucune ne nécessitant de changement de schéma —
+le type d'un défi (XP vs quêtes) restait le seul champ non éditable en
+place d'un objet par ailleurs éditable (nom/cible depuis l'it. 25), et
+`.btn.danger` gardait une bordure/un fond codés en dur au lieu de suivre
+`var(--crit)` comme le reste des boutons depuis l'itération 36 — visible
+en thème clair « Aube » où le rouge par défaut (`--crit` sombre) ne
+correspondait plus au rouge assombri choisi pour ce thème.
+
+**Améliorations livrées :**
+- 🔀 **Type de défi éditable en place** : nouveau `<select data-otype>`
+  sous le nom/la cible de chaque défi actif de l'onglet Objectifs, même
+  mécanique `onchange` + upsert Supabase que les autres champs édités en
+  place (tâches, récompenses, chasseurs, nom/cible de défi). `objProgress()`
+  relit déjà `o.type` à chaque rendu — aucune adaptation nécessaire côté
+  calcul de progression.
+- 🎨 **`.btn.danger` suit désormais le thème d'accent** : bordure et fond
+  passés en `color-mix(in oklab, var(--crit) X%, ...)`, comme le reste des
+  boutons — les trois usages (« Remettre à zéro », « Importer quand
+  même », « Tout effacer ») suivent maintenant les 5 thèmes au lieu d'un
+  rouge fixe qui jurait en thème clair Aube.
+- ✅ Tests : 343 assertions au total (336 dans smoke.js +4, 7 dans
+  sync-test.js inchangée) — type de défi modifié en place puis restauré
+  avec toast de confirmation, couleur de fond du bouton danger vérifiée
+  différente entre thème Aube et thème sombre par défaut (valeurs
+  `color-mix` distinctes selon `--crit`). Un run initial a échoué sur un
+  test préexistant sans rapport (« focus clavier restauré sur le bouton
+  de quête après la chaîne de jalons », it. 29) ; reproduit isolément à
+  l'identique sur le code de l'itération 41 non modifié (`git stash`),
+  confirmant un flake pré-existant de l'environnement et non une
+  régression de cette itération — un nouveau passage complet est ensuite
+  sorti entièrement vert (336/336 puis sync-test 7/7). Validation
+  visuelle (captures 390×844) : select de type sur un défi injecté,
+  bouton « Remettre l'aventure à zéro » en thème sombre puis en thème
+  clair Aube (fond/bordure teintés de rouge assombri, lisibles).
+
+**Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
+- Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
+  attente — rien ne sera créé en base sans accord explicite).
+- Factoriser les fonctions `playerBlock` dupliquées (trophées, duel — la
+  carte héros a un layout à sujet unique, distinct) en un helper commun
+  paramétré.
+- Revoir la taille du fichier index.html (grossit à chaque itération,
+  maintenant ~3 200 lignes).

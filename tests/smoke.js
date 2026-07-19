@@ -274,6 +274,15 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await page.waitForTimeout(200);
   check("cible du défi modifiée en place", (await page.evaluate(id => S.objectives.find(o => o.id === id).target, sprintObjId)) === 450);
   await page.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
+  await page.locator(`[data-otype="${sprintObjId}"]`).selectOption("count");
+  await page.waitForTimeout(200);
+  check("type du défi modifié en place", (await page.evaluate(id => S.objectives.find(o => o.id === id).type, sprintObjId)) === "count");
+  check("toast de confirmation après édition du type d'un défi", (await page.locator(".toast", { hasText: "Défis mis à jour" }).count()) === 1);
+  await page.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
+  await page.locator(`[data-otype="${sprintObjId}"]`).selectOption("xp");
+  await page.waitForTimeout(200);
+  check("type du défi restauré à xp", (await page.evaluate(id => S.objectives.find(o => o.id === id).type, sprintObjId)) === "xp");
+  await page.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
   await page.fill(`[data-oname="${sprintObjId}"]`, "");
   await page.locator(`[data-oname="${sprintObjId}"]`).evaluate(el => el.blur());
   await page.waitForTimeout(200);
@@ -625,6 +634,11 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   const prioBasseAube = (await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--prio-basse").trim())).toLowerCase();
   check("chip « basse » suit le thème clair Aube (" + prioBasseAube + ")", prioBasseAube === "#4a6483");
 
+  // .btn.danger : bordure/fond codés en dur avant l'it. 42, jamais convertis en color-mix
+  // sur --crit contrairement au reste des boutons (it. 36) -> devaient rester figés en Aube.
+  const dangerBgAube = await page.locator("#resetBtn").evaluate(el => getComputedStyle(el).backgroundColor);
+  check("bouton danger suit --crit en Aube (" + dangerBgAube + ")", dangerBgAube === "oklab(0.561911 0.177069 0.064578 / 0.08)");
+
   // Badges de rareté (Héros) : suivaient un hex figé identique à --ink-dim/--sys/--mana/
   // --gold/--crit mais sans jamais relire ces variables -> même défaut de contraste que
   // les chips de priorité avant l'it. 28, jamais corrigé pour la rareté (it. 33).
@@ -650,6 +664,8 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await page.waitForTimeout(150);
   const prioBasseDark = (await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--prio-basse").trim())).toLowerCase();
   check("chip « basse » revient à la teinte sombre par défaut (" + prioBasseDark + ")", prioBasseDark === "#8aa3c2");
+  const dangerBgDark = await page.locator("#resetBtn").evaluate(el => getComputedStyle(el).backgroundColor);
+  check("bouton danger revient à --crit sombre par défaut (" + dangerBgDark + ")", dangerBgDark === "oklab(0.69422 0.188363 0.0594485 / 0.08)");
   await page.evaluate(() => toast("Test contraste sombre"));
   await page.waitForTimeout(100);
   const toastBgDark = await page.locator(".toast").first().evaluate(el => getComputedStyle(el).backgroundColor);

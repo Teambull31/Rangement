@@ -411,7 +411,7 @@
     letter-spacing: .08em; text-transform: uppercase;
   }
   .btn.ghost { background: none; color: var(--ink-dim); border-color: var(--line); }
-  .btn.danger { color: var(--crit); border-color: #5A2430; background: rgba(255,92,110,.08); }
+  .btn.danger { color: var(--crit); border-color: color-mix(in oklab, var(--crit) 45%, var(--line)); background: color-mix(in oklab, var(--crit) 8%, transparent); }
   .mgline { display: flex; align-items: center; gap: 6px; padding: 7px 0; border-bottom: 1px dashed var(--line); }
   .mgline select { padding-left: 6px; padding-right: 4px; }
   .mgline input[data-ticon] { text-align: center; padding-left: 4px; padding-right: 4px; }
@@ -1760,6 +1760,12 @@ function vObjectifs() {
         : `<div class="frow" style="margin-bottom:6px">
              <input type="text" data-oname="${o.id}" value="${esc(o.name)}" maxlength="60" class="grow" style="min-width:0" aria-label="Nom du défi">
              <input type="number" data-otarget="${o.id}" value="${o.target}" min="1" inputmode="numeric" style="flex:0 0 78px" aria-label="Cible">
+           </div>
+           <div class="frow" style="margin-bottom:6px">
+             <select data-otype="${o.id}" class="grow" aria-label="Type du défi">
+               <option value="xp" ${o.type === "xp" ? "selected" : ""}>XP cumulés à deux</option>
+               <option value="count" ${o.type === "count" ? "selected" : ""}>Nombre de quêtes à deux</option>
+             </select>
            </div>`}
       <div class="oreward">🎁 ${rw ? esc(rw.icon + " " + rw.name) : "Récompense au choix"}</div>
       <div class="obar"><i style="width:${pct}%"></i></div>
@@ -2660,6 +2666,14 @@ function bindView() {
       const v = parseInt(inp.value, 10);
       if (!v || v < 1) { inp.value = o.target; return; }
       o.target = v;
+      save(); queueOp({ table: "objectives", type: "upsert", row: toRow.objectives(o) });
+      render(); toast("Défis mis à jour");
+    });
+  document.querySelectorAll("[data-otype]").forEach(sel =>
+    sel.onchange = () => {
+      const o = S.objectives.find(x => x.id === sel.dataset.otype);
+      if (!o) return;
+      o.type = sel.value;
       save(); queueOp({ table: "objectives", type: "upsert", row: toRow.objectives(o) });
       render(); toast("Défis mis à jour");
     });
