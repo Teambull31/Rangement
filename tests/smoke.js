@@ -264,6 +264,25 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   check("nom vide restaure l'ancien nom (pas d'écrasement par une chaîne vide)",
     (await page.evaluate(() => S.rewards[0].name)) === "Soirée jeux vidéo");
 
+  // Entrée valide un champ d'édition en place (comme la note du Journal depuis l'it. 23),
+  // au lieu d'attendre le blur — cohérence des 8 champs les plus récents (it. 36)
+  await page.fill(`[data-rwname="${rw0}"]`, "Soirée jeux vidéo (Entrée)");
+  await page.locator(`[data-rwname="${rw0}"]`).press("Enter");
+  await page.waitForTimeout(200);
+  check("Entrée valide l'édition d'une récompense sans attendre le blur",
+    (await page.evaluate(() => S.rewards[0].name)) === "Soirée jeux vidéo (Entrée)");
+  check("toast de confirmation après validation par Entrée", (await page.locator(".toast", { hasText: "Récompenses mises à jour" }).count()) === 1);
+  await page.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
+  // Échap annule l'édition et restaure la valeur d'origine, sans rien enregistrer
+  await page.fill(`[data-rwname="${rw0}"]`, "Ne doit jamais être enregistré");
+  await page.locator(`[data-rwname="${rw0}"]`).press("Escape");
+  await page.waitForTimeout(200);
+  check("Échap restaure la valeur affichée dans le champ",
+    (await page.locator(`[data-rwname="${rw0}"]`).inputValue()) === "Soirée jeux vidéo (Entrée)");
+  check("Échap n'enregistre pas la valeur annulée",
+    (await page.evaluate(() => S.rewards[0].name)) === "Soirée jeux vidéo (Entrée)");
+  check("aucun toast après Échap (rien n'a été enregistré)", (await page.locator(".toast").count()) === 0);
+
   // Ajout d'une récompense en appuyant sur Entrée (clavier mobile, sans toucher le bouton +)
   await page.fill("#rwIcon", "🎯");
   await page.fill("#rwName", "Test récompense entrée");
@@ -427,12 +446,28 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   check("onglet Réglages porte aria-current (Itération 31)",
     (await page.locator('#tabs [data-tab="reglages"]').getAttribute("aria-current")) === "page"
     && (await page.locator('#tabs [data-tab="quetes"]').getAttribute("aria-current")) === "false");
+  // Le fond des boutons/interrupteurs suivait un bleu figé (rgba(77,195,255,…)) identique
+  // au thème Système par pure coïncidence — jamais recalculé pour les 3 autres thèmes
+  // d'accent (Monarque/Braise/Guilde), contrairement à leur bordure/texte qui suivent déjà
+  // var(--sys) (it. 36).
+  const btnBgSysteme = await page.locator("#tAdd").evaluate(el => getComputedStyle(el).backgroundColor);
   await page.locator('[data-theme="monarque"]').click();
   const sysVar = (await page.evaluate(() => document.documentElement.style.getPropertyValue("--sys"))).trim().toLowerCase();
   check("thème appliqué (" + sysVar + ")", sysVar === "#8b7bff");
   check("aria-pressed reflète le thème actif (Itération 31)",
     (await page.locator('[data-theme="monarque"]').getAttribute("aria-pressed")) === "true"
     && (await page.locator('[data-theme="aube"]').getAttribute("aria-pressed")) === "false");
+  const btnBgMonarque = await page.locator("#tAdd").evaluate(el => getComputedStyle(el).backgroundColor);
+  check("fond du bouton suit désormais le thème d'accent (" + btnBgSysteme + " → " + btnBgMonarque + ")",
+    btnBgSysteme !== btnBgMonarque);
+  const soundSpanBgMonarque = await page.locator("#soundToggle").evaluate(el => getComputedStyle(el.nextElementSibling).backgroundColor);
+  check("fond de l'interrupteur activé suit le thème d'accent en Monarque (" + soundSpanBgMonarque + ")",
+    !soundSpanBgMonarque.includes("77, 195, 255"));
+  await page.locator('[data-tab="quetes"]').click();
+  const doerBgMonarque = await page.locator(".doer").first().evaluate(el => getComputedStyle(el).backgroundColor);
+  check("fond du bouton de quête (.doer) suit le thème d'accent en Monarque (" + doerBgMonarque + ")",
+    !doerBgMonarque.includes("77, 195, 255"));
+  await page.locator('[data-tab="reglages"]').click();
   await page.reload();
   await page.waitForSelector(".hunter");
   const sysVar2 = (await page.evaluate(() => document.documentElement.style.getPropertyValue("--sys"))).trim().toLowerCase();

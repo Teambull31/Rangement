@@ -1246,3 +1246,79 @@ variables de thème).
   paramétrée.
 - Revoir la taille du fichier index.html (grossit à chaque itération,
   maintenant ~3 060 lignes).
+
+## Itération 36 — 2026-07-19 (routine cloud)
+
+**Audit** : reprise des deux pistes en attente depuis l'itération 35 (cohérence
+Entrée sur les champs d'édition en place, bandeaux dorés/mana en `rgba()` figés),
+complétées par un bug de theming plus large repéré en creusant le second point :
+la couleur d'accent `--sys` varie déjà selon les 5 thèmes (Système bleu, Monarque
+violet, Braise orange, Guilde émeraude, Aube bleu clair) et les bordures/textes la
+suivent bien, mais une dizaine de fonds/lueurs (bouton principal, bouton de
+quête, interrupteurs, lueur de la barre XP, halo des modales système et du
+toast, fond décoratif de la page) restaient codés en `rgba(77,195,255,…)` —
+le bleu par défaut, littéralement identique au thème Système par pure
+coïncidence. Sur les 4 autres thèmes, la bordure et le texte changeaient de
+couleur mais le fond restait bleu : une incohérence visuelle sur les éléments
+les plus vus de l'appli (chaque bouton « valider », chaque interrupteur), plus
+étendue que les cas déjà corrigés aux itérations 28/33/34 (chips, badges,
+graphique). Aucune des trois améliorations ne nécessitait de changement de
+schéma.
+
+**Améliorations livrées :**
+- ⌨️ **Entrée valide les 8 champs d'édition en place** (défis : nom/cible,
+  chasseurs : nom/emoji, tâches : nom/icône, récompenses : nom/icône), comme
+  la note du Journal le fait déjà depuis l'itération 23 — jusqu'ici ces champs
+  n'enregistraient qu'au `blur`, ce qui surprend sur clavier physique.
+  Nouvelle fonction générique `bindEnterCommit(selector)` : Entrée déclenche
+  un `blur()` (l'`onchange` existant s'en charge, aucune logique dupliquée),
+  Échap restaure la valeur d'origine capturée au dernier rendu et blur sans
+  déclencher d'enregistrement (aucun toast, aucun upsert).
+- 🎨 **Bandeaux dorés/mana suivant enfin les 5 thèmes** : `.quest.bonus`,
+  `.chip.gold`, `.betremind`, `.betline.hot`, `.evremind` codaient leur teinte
+  de fond en `rgba()` fixe au lieu de `color-mix(in oklab, var(--gold|mana)
+  X%, transparent)` comme le fait déjà `.daystat` depuis l'itération 18 —
+  écart de teinte en Aube où le fond reste franchement doré/mauve alors que
+  bordure et texte s'assombrissent déjà (piste notée à l'itération 35).
+- 🐛 **Bug corrigé — le fond des boutons/interrupteurs ignorait le thème
+  d'accent** : `.btn` (bouton principal « Ajouter »/« Lancer »), `.doer`
+  (bouton de quête ⚔️/🏹, actif et pressé), `.switch input:checked + span`
+  (interrupteurs activés), `.sys-tag` (badge « SYSTÈME » de l'en-tête), la
+  lueur de la barre XP, les halos des modales système et du toast, et le
+  dégradé décoratif du fond de page codaient tous un bleu `rgba(77,195,255,…)`
+  fixe — cohérent seulement par coïncidence avec le thème Système par défaut.
+  En Monarque/Braise/Guilde, la bordure et le texte de ces éléments suivaient
+  déjà `var(--sys)` (violet/orange/émeraude) mais le fond restait bleu : une
+  incohérence visible sur les composants les plus fréquents de l'appli,
+  jamais couverte par les corrections de contraste ciblées des itérations
+  28/33/34. Tous convertis en `color-mix(in oklab, var(--sys) X%,
+  transparent)` (et `var(--gold)` pour le halo doré du rang S, même défaut).
+- ✅ Tests : 301 assertions au total (294 dans smoke.js +21, 7 dans
+  sync-test.js inchangée) — Entrée valide l'édition d'une récompense sans
+  attendre le blur (avec toast de confirmation), Échap restaure la valeur
+  affichée dans le champ et n'enregistre rien (aucun toast, valeur en base
+  inchangée) ; fond du bouton principal et du bouton de quête vérifiés
+  différents entre le thème Système et Monarque via `getComputedStyle`
+  (`color-mix` résolu en `oklab(...)` par le moteur, donc nécessairement
+  distinct de l'ancien `rgba(77,195,255,…)` littéral), fond de l'interrupteur
+  activé vérifié de même. Un passage complet lancé en tâche de fond a produit
+  6 faux échecs groupés (état injecté à 0 entrées après rechargement, modale
+  HÉROS DÉBLOQUÉ non affichée en cascade, tri de priorité non conservé après
+  rechargement) — tous sur des zones non touchées par cette itération et déjà
+  documentés comme flake de course `localStorage`/rechargement aux itérations
+  15/20/22/24/31/32/33/35 ; un second passage isolé immédiat (aucun autre
+  processus actif) est passé intégralement (294/294), confirmant l'absence de
+  régression. `sync-test.js` repassée sans problème juste après. Validation
+  visuelle (captures 390×844) : bouton « Ajouter » et interrupteurs teintés
+  violet en thème Monarque (au lieu du bleu fixe), bouton de quête ⚔️/🏹
+  teinté violet sur l'onglet Quêtes, toast « Quêtes mises à jour » après
+  validation d'un renommage de tâche par Entrée seule.
+
+**Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
+- Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
+  attente — rien ne sera créé en base sans accord explicite).
+- Factoriser les fonctions `playerBlock` dupliquées dans les trois cartes
+  canvas partageables (trophées, duel, héros) en une fonction commune
+  paramétrée.
+- Revoir la taille du fichier index.html (grossit à chaque itération,
+  maintenant ~3 070 lignes).
