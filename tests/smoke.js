@@ -89,6 +89,9 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
 
   // Duel : graphique hebdomadaire + hauts faits
   await page.locator('[data-tab="duel"]').click();
+  const duelXpNums = await page.evaluate(() => { const [a, b] = S.players; return [weekXp(a.id), weekXp(b.id)]; });
+  check("XP chiffrés sous la barre Duel de la semaine (it. 41)",
+    (await page.locator("section.panel .xpnums").first().textContent()).trim() === `${duelXpNums[0]} XP${duelXpNums[1]} XP`);
   check("graphique XP par semaine présent", (await page.locator('svg[role="img"]').count()) === 1);
   check("barres du graphique tracées", (await page.locator('svg[role="img"] rect').count()) === 16);
   check("hauts faits débloqués visibles", (await page.locator(".feat.on").count()) >= 1);
@@ -1087,6 +1090,14 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await heroPage.waitForSelector(".hunter");
   check("héros conservé après rechargement", (await heroPage.locator(".hunter").first().locator(".charline").count()) === 1);
 
+  // Emoji verrouillé dans Réglages pendant qu'un héros est incarné (it. 41) : le taper à la
+  // main écrasait silencieusement l'emoji du héros sans mettre à jour l'emoji personnel
+  // mémorisé, cassant la restauration au retrait.
+  await heroPage.locator('[data-tab="reglages"]').click();
+  check("champ emoji désactivé tant qu'un héros est incarné", (await heroPage.locator('[data-pemoji="p1"]').isDisabled()));
+  check("indication affichée sur le verrouillage de l'emoji", (await heroPage.locator("text=Emoji verrouillé").count()) === 1);
+  await heroPage.locator('[data-tab="heros"]').click();
+
   // Reprendre son emoji : le héros est retiré ET l'emoji personnel réellement restauré
   // (it. 33 — le bouton le promettait depuis l'it. 12 sans jamais le faire, l'utilisateur
   // devait retaper son ancien emoji à la main).
@@ -1095,6 +1106,8 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await heroPage.waitForTimeout(200);
   check("héros retiré", (await heroPage.locator(".hunter").first().locator(".charline").count()) === 0);
   check("emoji personnel réellement restauré (" + p1EmojiBefore + ")", (await heroPage.evaluate(() => S.players[0].emoji)) === p1EmojiBefore);
+  await heroPage.locator('[data-tab="reglages"]').click();
+  check("champ emoji réactivé après le retrait du héros", !(await heroPage.locator('[data-pemoji="p1"]').isDisabled()));
   await heroContext.close();
 
   // Déblocage en direct : juste sous le seuil d'Usopp (niv. 4), une quête le franchit
@@ -1127,6 +1140,43 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
     (await unlockPage.evaluate(() => S.players[0].characterId)) === "usopp"
     && (await unlockPage.locator(".hunter").first().locator(".charline").textContent()).includes("Usopp"));
   await unlockContext.close();
+
+  // Incarner sur la modale HÉROS DÉBLOQUÉ puis Annuler sur le jalon suivant (NIVEAU) de la
+  // même chaîne (it. 41) : jusqu'ici undoTask() ne touchait qu'au journal, laissant le joueur
+  // incarné dans un héros dont il ne remplit plus les conditions une fois la quête défaite.
+  const equipUndoContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const equipUndoPage = await equipUndoContext.newPage();
+  await equipUndoPage.addInitScript(() => {
+    localStorage.setItem("rangement-onboard-v1", "1");
+    localStorage.setItem("rangement-recap", "off");
+  });
+  await equipUndoPage.goto(APP_URL);
+  await equipUndoPage.waitForSelector(".quest");
+  const p1EmojiBeforeEquipUndo = await equipUndoPage.evaluate(() => S.players[0].emoji);
+  await equipUndoPage.evaluate(() => {
+    S.log.push({ id: "pre1eu", ts: Date.now() - 3600e3, playerId: "p1", taskName: "Vitres", icon: "🪟", xp: 190, note: "" });
+    S.log.push({ id: "pre2eu", ts: Date.now() - 1800e3, playerId: "p1", taskName: "Vitres", icon: "🪟", xp: 185, note: "" });
+    save();
+  });
+  await equipUndoPage.reload();
+  await equipUndoPage.waitForSelector(".quest");
+  const xpBeforeEquipUndo = await equipUndoPage.evaluate(() => totalXp("p1"));
+  await equipUndoPage.locator(".quest").first().locator('[data-p="p1"]').click();
+  await equipUndoPage.waitForSelector(".sysbox");
+  const equipUndoModal1 = await equipUndoPage.locator(".sysbox").textContent();
+  check("jalon 1 : HÉROS DÉBLOQUÉ (Usopp)", equipUndoModal1.includes("HÉROS DÉBLOQUÉ") && equipUndoModal1.includes("Usopp"));
+  await equipUndoPage.locator("#veilExtra").click(); // Incarner
+  await equipUndoPage.waitForTimeout(200);
+  check("héros bien incarné avant d'annuler la suite", (await equipUndoPage.evaluate(() => S.players[0].characterId)) === "usopp");
+  const equipUndoModal2 = await equipUndoPage.locator(".sysbox").textContent();
+  check("jalon 2 de la même chaîne : NIVEAU", equipUndoModal2.includes("NIVEAU"));
+  await equipUndoPage.locator("#veilExtra").click(); // Annuler (sur le jalon NIVEAU)
+  await equipUndoPage.waitForTimeout(250);
+  check("quête annulée (XP revenue à " + xpBeforeEquipUndo + ")", (await equipUndoPage.evaluate(() => totalXp("p1"))) === xpBeforeEquipUndo);
+  check("héros désincarné automatiquement (conditions perdues)", (await equipUndoPage.evaluate(() => S.players[0].characterId)) === null);
+  check("emoji personnel restauré après désincarnation automatique",
+    (await equipUndoPage.evaluate(() => S.players[0].emoji)) === p1EmojiBeforeEquipUndo);
+  await equipUndoContext.close();
 
   // Annuler depuis la modale HÉROS DÉBLOQUÉ quand elle est seule dans la chaîne (it. 32) :
   // jusqu'ici seul « Incarner » y était proposé, un mistap n'était pas rattrapable.

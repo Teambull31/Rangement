@@ -1650,3 +1650,71 @@ migration ; remonter la quête bonus/suggérée en tête de liste — tentée pu
   paramétré.
 - Revoir la taille du fichier index.html (grossit à chaque itération,
   maintenant ~3 150 lignes).
+
+## Itération 41 — 2026-07-19 (routine cloud)
+
+**Audit** : un audit ciblé (agent dédié, lecture complète d'index.html face à
+l'historique des 40 itérations) a fait remonter cinq frictions, aucune ne
+nécessitant de changement de schéma. Les trois plus concrètes retenues (dont
+un vrai bug de confiance sur la chaîne de jalons héros) ; deux notées en
+pistes (type de défi non éditable en place, `.btn.danger` ignorant le thème
+d'accent).
+
+**Améliorations livrées :**
+- 🐛 **Bug corrigé — cliquer « Incarner » puis « Annuler » sur le jalon
+  suivant laissait un héros incarné orphelin** : quand une quête déclenche
+  à la fois « HÉROS DÉBLOQUÉ » et un autre jalon (NIVEAU, OBJECTIF, HAUT
+  FAIT) dans la même chaîne, cliquer « Incarner 🎴 » sur la première
+  modale puis « Annuler » sur la suivante ne défaisait que le journal —
+  `p.characterId` restait pointé sur un héros dont la quête annulée
+  venait justement de retirer les conditions de déblocage. `undoTask()`
+  retire désormais l'incarnation (et restaure l'emoji personnel) quand le
+  héros encore équipé est celui que la quête annulée venait de débloquer.
+  Nouvelle fonction `unequipChar(p)` qui factorise ce retrait, reprise par
+  le bouton manuel et par la remise à zéro (comportement inchangé pour ces
+  deux-là, code partagé).
+- 🐛 **Bug corrigé — l'emoji restait éditable pendant qu'un héros était
+  incarné** : le champ emoji de Réglages → Chasseurs affichait l'emblème
+  du héros incarné mais restait un champ texte libre ; le modifier
+  écrasait silencieusement `p.emoji` sans mettre à jour l'emoji personnel
+  mémorisé (`baseEmojiKey`, protégé par `if (!p.characterId)`) — au
+  retrait du héros, l'ancien emoji personnel (périmé) revenait, pas celui
+  tapé par erreur. Le champ est désormais désactivé tant qu'un héros est
+  incarné, avec une indication explicite (« retire ton héros dans
+  l'onglet Héros pour changer ton emoji »).
+- 📊 **XP chiffrés sous la barre « Duel de la semaine »** : la barre de
+  proportion et le badge qualitatif (« domine le donjon » / « égalité »)
+  ne donnaient aucun chiffre exact, contrairement aux jauges de niveau et
+  de défi qui affichent toujours leurs valeurs en dessous — les XP réels
+  n'étaient visibles que plus bas dans les statistiques. Ligne « wa XP —
+  wb XP » ajoutée sous la barre, même style que les autres jauges.
+- ✅ Tests : 339 assertions au total (332 dans smoke.js +11, 7 dans
+  sync-test.js inchangée) — scénario dédié où « Incarner » est cliqué sur
+  le premier jalon puis « Annuler » sur le second (NIVEAU) de la même
+  chaîne, vérifiant XP revenue à sa valeur d'avant, héros désincarné et
+  emoji personnel réellement restauré ; champ emoji vérifié désactivé
+  pendant l'incarnation (avec l'indication) puis réactivé après retrait ;
+  XP chiffrés sous la barre Duel vérifiés égaux aux valeurs réelles
+  (`weekXp`) via `getComputedStyle`/`textContent`. Deux passages complets
+  et propres (`smoke.js` puis `sync-test.js`), aucun lancé en parallèle
+  d'un autre processus — un run de référence avant toute modification a
+  d'abord confirmé l'état vert des 328 assertions précédentes. Validation
+  visuelle (captures 390×844) : XP chiffrés (« 60 XP » / « 25 XP ») sous
+  la barre Duel, champ emoji visiblement désactivé et indication affichée
+  dans Réglages → Chasseurs pendant l'incarnation de Sein.
+
+**Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
+- Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
+  attente — rien ne sera créé en base sans accord explicite).
+- Type d'un défi (XP vs quêtes) non éditable en place, contrairement à son
+  nom et sa cible (it. 25) — seul champ d'un objet éditable resté figé à
+  la création.
+- `.btn.danger` (« Tout effacer », « Importer quand même ») ignore le
+  thème d'accent — bordure et fond codés en dur, jamais convertis en
+  `color-mix(in oklab, var(--crit) X%, transparent)` contrairement au
+  reste des boutons corrigé à l'itération 36.
+- Factoriser les fonctions `playerBlock` dupliquées (trophées, duel — la
+  carte héros a un layout à sujet unique, distinct) en un helper commun
+  paramétré.
+- Revoir la taille du fichier index.html (grossit à chaque itération,
+  maintenant ~3 190 lignes).

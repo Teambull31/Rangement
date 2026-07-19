@@ -977,6 +977,14 @@ function equipChar(p, c) {
   render(); toast(`${c.emoji} ${p.name} incarne ${c.name} !`);
   try { if (navigator.vibrate) navigator.vibrate(35); } catch (e) {}
 }
+// Retrait d'un héros incarné, factorisé pour le bouton manuel, la remise à zéro
+// et l'annulation d'une quête ayant servi à le débloquer (mêmes conditions perdues).
+function unequipChar(p) {
+  p.characterId = null;
+  const baseEmoji = localStorage.getItem(baseEmojiKey(p.id));
+  if (baseEmoji) p.emoji = baseEmoji;
+  return !!baseEmoji;
+}
 
 // Rythme du duo : XP cumulés des 28 derniers jours, ramenés à la semaine
 function duoWeeklyPace() {
@@ -1598,6 +1606,7 @@ function vDuel() {
       <div class="vsname r">${esc(b.name)} ${esc(b.emoji)}</div>
     </div>
     <div class="duelbar"><span class="a" style="width:${pa}%;background:${esc(a.color)}"></span><span class="b" style="width:${100 - pa}%;background:${esc(b.color)}"></span></div>
+    <div class="xpnums"><span>${wa} XP</span><span>${wb} XP</span></div>
     <div class="winbadge">${lead ? "👑 " + esc(lead.name) + " domine le donjon cette semaine" : "⚡ Égalité — tout se joue maintenant"}</div>
   </section>
   ${betSection()}
@@ -1880,11 +1889,12 @@ function vReglages() {
     <h2>Chasseurs</h2>
     ${S.players.map(p => `
     <div class="frow">
-      <input type="text" data-pemoji="${p.id}" value="${esc(p.emoji)}" maxlength="4" style="flex:0 0 64px" aria-label="Emoji">
+      <input type="text" data-pemoji="${p.id}" value="${esc(p.emoji)}" maxlength="4" style="flex:0 0 64px" aria-label="Emoji"${p.characterId ? ' disabled title="Retire ton héros dans l\'onglet Héros pour changer ton emoji"' : ""}>
       <input type="text" data-pname="${p.id}" value="${esc(p.name)}" maxlength="20" aria-label="Nom">
       <input type="color" data-pcolor="${p.id}" value="${esc(p.color || "#4DC3FF")}" style="flex:0 0 52px;height:44px;padding:2px;background:var(--field);border:1px solid var(--line);border-radius:3px" aria-label="Couleur">
     </div>`).join("")}
     <p class="hint" style="margin-top:6px">Enregistré automatiquement à chaque changement. La couleur personnalise ta carte, tes boutons de quête et la barre de duel — elle se synchronise sur les deux téléphones.</p>
+    ${S.players.some(p => p.characterId) ? `<p class="hint">🎴 Emoji verrouillé pendant qu'un héros est incarné — retire-le dans l'onglet Héros pour reprendre ton emoji personnel.</p>` : ""}
     ${samePlayerColor() ? `<p class="hint warn" id="colorClashHint">⚠️ Les deux chasseurs ont la même couleur — le duel devient difficile à lire. Change l'une des deux.</p>` : ""}
   </section>
   <section class="panel">
@@ -2460,9 +2470,15 @@ function doTask(taskId, playerId) {
   }
 
   // Annule la quête même après une modale spéciale (mistap sur le mauvais chasseur, etc.)
+  // Si la quête a débloqué un héros et que "Incarner" a été cliqué avant d'annuler, le
+  // joueur reste sinon incarné dans un héros dont il ne remplit plus les conditions.
   const undoTask = () => {
     S.log = S.log.filter(l => l.id !== entry.id);
     save(); queueOp({ table: "log", type: "delete", id: entry.id });
+    if (newChar && p.characterId === newChar.id) {
+      unequipChar(p);
+      queueOp({ table: "players", type: "upsert", row: toRow.players(p) });
+    }
     render(); toast("Action annulée");
   };
 
@@ -2540,11 +2556,9 @@ function bindView() {
   if (unequipBtn) unequipBtn.onclick = () => {
     const p = S.players.find(x => x.id === herosView);
     if (!p) return;
-    p.characterId = null;
-    const baseEmoji = localStorage.getItem(baseEmojiKey(p.id));
-    if (baseEmoji) p.emoji = baseEmoji;
+    const restored = unequipChar(p);
     save(); queueOp({ table: "players", type: "upsert", row: toRow.players(p) });
-    render(); toast(baseEmoji ? "Héros retiré — emoji personnel restauré" : "Héros retiré");
+    render(); toast(restored ? "Héros retiré — emoji personnel restauré" : "Héros retiré");
   };
 
   // Duel : bascule graphique / tableau
@@ -2956,9 +2970,7 @@ function bindView() {
           ["log", "won", "objectives", "bets"].forEach(t => queueOp({ table: t, type: "clear" }));
           S.players.forEach(p => {
             if (p.characterId) {
-              p.characterId = null;
-              const baseEmoji = localStorage.getItem(baseEmojiKey(p.id));
-              if (baseEmoji) p.emoji = baseEmoji;
+              unequipChar(p);
               queueOp({ table: "players", type: "upsert", row: toRow.players(p) });
             }
           });
