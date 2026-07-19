@@ -19,6 +19,12 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   const nQuests = await page.locator(".quest").count();
   check("13 quêtes par défaut", nQuests === 13);
 
+  // aria-label des boutons de quête nomme la tâche, pas seulement le joueur
+  // (26 boutons identiques au rotor d'un lecteur d'écran sans ça, corrigé it. 39)
+  const firstDoerLabel = await page.locator(".quest").first().locator('[data-p="p1"]').getAttribute("aria-label");
+  check("aria-label du bouton de quête inclut le nom de la tâche (\"" + firstDoerLabel + "\")",
+    !!firstDoerLabel && firstDoerLabel.includes("Vaisselle") && firstDoerLabel.includes("fait par"));
+
   // Première quête : haut fait « Première quête » + XP créditée
   await page.locator(".quest").first().locator('[data-p="p1"]').click();
   await page.waitForTimeout(300);
@@ -118,6 +124,16 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   const duelShareCall = await page.evaluate(() => window.__shareCalled);
   check("carte du duel partagée (" + (duelShareCall && duelShareCall.title) + ")",
     duelShareCall && duelShareCall.nFiles === 1 && duelShareCall.title.includes("Duel"));
+
+  // Partage annulé par l'utilisateur (AbortError) : pas de repli téléchargement silencieux (bug corrigé it. 39)
+  await page.evaluate(() => {
+    navigator.share = async () => { const e = new Error("Abort"); e.name = "AbortError"; throw e; };
+  });
+  let downloadFiredOnAbort = false;
+  page.once("download", () => { downloadFiredOnAbort = true; });
+  await page.locator("#shareDuelBtn").click();
+  await page.waitForTimeout(500);
+  check("annuler le partage natif (AbortError) ne déclenche pas de téléchargement forcé", !downloadFiredOnAbort);
 
   // Vue tableau accessible du graphique XP (bascule)
   check("aria-pressed=false sur la bascule XP en vue graphique (Itération 34)",
@@ -450,10 +466,16 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   // Tâches éditables en place : nom et icône
   await page.locator('[data-tab="reglages"]').click();
   const t0 = await page.evaluate(() => S.tasks[0].id);
+  const t0OldName = await page.evaluate(() => S.tasks[0].name);
+  const t0LogCountBefore = await page.evaluate((old) => S.log.filter(l => l.taskName === old).length, t0OldName);
   await page.fill(`[data-tname="${t0}"]`, "Vitres du salon");
   await page.locator(`[data-tname="${t0}"]`).evaluate(el => el.blur());
   await page.waitForTimeout(200);
   check("tâche renommée depuis Réglages", (await page.evaluate(() => S.tasks[0].name)) === "Vitres du salon");
+  const t0LogOldNameAfter = await page.evaluate((old) => S.log.filter(l => l.taskName === old).length, t0OldName);
+  const t0LogNewNameAfter = await page.evaluate(() => S.log.filter(l => l.taskName === "Vitres du salon").length);
+  check("renommage de tâche propage le nom au journal (bug corrigé it. 39, " + t0LogCountBefore + " entrée(s) déplacée(s))",
+    t0LogCountBefore >= 1 && t0LogOldNameAfter === 0 && t0LogNewNameAfter === t0LogCountBefore);
   check("toast de confirmation après édition d'une tâche (cohérence avec Chasseurs)", (await page.locator(".toast", { hasText: "Quêtes mises à jour" }).count()) === 1);
   await page.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
   await page.fill(`[data-ticon="${t0}"]`, "🫧");
@@ -832,6 +854,21 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   check("heure du soir bornée à 23 en stockage", (await evPage.evaluate(() => localStorage.getItem("rangement-evening-hour"))) === "23");
   check("champ réaffiche la valeur bornée (23), pas la saisie brute (27)",
     (await evPage.locator("#eveningHour").inputValue()) === "23");
+
+  // Entrée valide désormais l'heure du soir sans attendre le blur, Échap annule
+  // (cohérence avec les 8 autres champs d'édition en place, oubli corrigé it. 39)
+  await evPage.fill("#eveningHour", "22");
+  await evPage.locator("#eveningHour").press("Enter");
+  await evPage.waitForTimeout(150);
+  check("Entrée valide l'heure du soir sans attendre le blur",
+    (await evPage.evaluate(() => localStorage.getItem("rangement-evening-hour"))) === "22");
+  await evPage.fill("#eveningHour", "5");
+  await evPage.locator("#eveningHour").press("Escape");
+  await evPage.waitForTimeout(150);
+  check("Échap restaure la valeur affichée du champ heure du soir",
+    (await evPage.locator("#eveningHour").inputValue()) === "22");
+  check("Échap n'enregistre pas l'heure du soir annulée",
+    (await evPage.evaluate(() => localStorage.getItem("rangement-evening-hour"))) === "22");
 
   // Heure du rappel de série 🔥 indépendante de l'heure du rappel générique
   await evPage.locator('[data-tab="reglages"]').click();

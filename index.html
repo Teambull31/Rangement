@@ -1317,7 +1317,7 @@ function vQuetes() {
         </div>
       </div>
       <div class="qbtns">
-        ${S.players.map(pl => `<button class="doer" style="border-color:${esc(pl.color)}" data-do="${t.id}" data-p="${pl.id}" title="Fait par ${esc(pl.name)}" aria-label="Fait par ${esc(pl.name)}">${esc(pl.emoji)}</button>`).join("")}
+        ${S.players.map(pl => `<button class="doer" style="border-color:${esc(pl.color)}" data-do="${t.id}" data-p="${pl.id}" title="Fait par ${esc(pl.name)}" aria-label="${esc(t.name)} — fait par ${esc(pl.name)}">${esc(pl.emoji)}</button>`).join("")}
       </div>
     </div>`;
   }).join("");
@@ -2281,7 +2281,10 @@ function shareCanvasCard(canvas, filenamePrefix, shareTitle, shareText) {
       try {
         await navigator.share({ files: [file], title: shareTitle, text: shareText });
         return;
-      } catch (e) { /* partage annulé ou indisponible -> repli téléchargement */ }
+      } catch (e) {
+        if (e && e.name === "AbortError") return; // partage annulé par l'utilisateur -> pas de repli
+        /* partage indisponible -> repli téléchargement */
+      }
     }
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -2818,7 +2821,16 @@ function bindView() {
       if (!t) return;
       const v = inp.value.trim();
       if (!v) { inp.value = isName ? t.name : t.icon; return; }
-      if (isName) t.name = v; else t.icon = v;
+      if (isName) {
+        const oldName = t.name;
+        t.name = v;
+        if (oldName !== v) {
+          S.log.filter(l => l.taskName === oldName).forEach(l => {
+            l.taskName = v;
+            queueOp({ table: "log", type: "upsert", row: toRow.log(l) });
+          });
+        }
+      } else t.icon = v;
       save(); queueOp({ table: "tasks", type: "upsert", row: toRow.tasks(t) });
       render(); toast("Quêtes mises à jour");
     });
@@ -2936,7 +2948,7 @@ function bindView() {
       "Garder nos données");
   };
 
-  bindEnterCommit("[data-oname], [data-otarget], [data-pname], [data-pemoji], [data-tname], [data-ticon], [data-rwname], [data-rwicon]");
+  bindEnterCommit("[data-oname], [data-otarget], [data-pname], [data-pemoji], [data-tname], [data-ticon], [data-rwname], [data-rwicon], #eveningHour, #streakHour");
 }
 
 /* ---------- Thèmes (préférence propre à cet appareil) ---------- */

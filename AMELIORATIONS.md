@@ -1467,15 +1467,82 @@ et la factorisation `playerBlock` déjà identifiée aux itérations 36/37.
 **Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
 - Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
   attente — rien ne sera créé en base sans accord explicite).
-- Renommer une tâche (Réglages) casse silencieusement l'appariement par
-  nom dans le journal (`log.taskName` est dénormalisé, sans `taskId`) :
-  le badge « dernier : ⚔️/🏹 », la suggestion « à ton tour ? » et le
-  panneau « Répartition des tâches » repartent de zéro pour cette tâche
-  malgré l'historique existant. Correctif possible sans changement de
-  schéma : propager l'ancien nom vers le nouveau sur les entrées `S.log`
-  concernées au moment du renommage.
 - Factoriser les fonctions `playerBlock` dupliquées (trophées, duel — la
   carte héros a un layout à sujet unique, distinct) en un helper commun
   paramétré.
 - Revoir la taille du fichier index.html (grossit à chaque itération,
   maintenant ~3 100 lignes).
+
+## Itération 39 — 2026-07-19 (routine cloud)
+
+**Audit** : un audit ciblé (agent dédié, lecture complète d'index.html face
+à l'historique des 38 itérations) a réévalué les deux pistes en attente
+depuis l'itération 38 (renommage de tâche cassant l'appariement du journal,
+factorisation `playerBlock`) et cherché de nouvelles frictions. La piste
+`playerBlock` reste à faible valeur (refactor cosmétique, risque de
+régression visuelle sur les cartes canvas, proposée sans suite depuis les
+itérations 36/37/38) et reste en attente. Trois autres pistes retenues,
+aucune ne nécessitant de changement de schéma.
+
+**Améliorations livrées :**
+- 🐛 **Bug corrigé — renommer une tâche cassait l'appariement du journal** :
+  `log.taskName` est dénormalisé (pas de `taskId`) — renommer une tâche
+  dans Réglages laissait toutes les entrées passées du journal sous
+  l'ancien nom, ce qui repartait de zéro pour le badge « dernier : ⚔️/🏹 »,
+  la suggestion « à ton tour ? » et le panneau « Répartition des tâches »
+  malgré un historique bien réel. Le handler de renommage propage
+  désormais l'ancien nom vers le nouveau sur toutes les entrées `S.log`
+  concernées, avec upsert Supabase pour chacune (colonne `task_name`
+  déjà existante, aucune migration).
+- 🐛 **Bug corrigé — annuler le partage natif déclenchait quand même un
+  téléchargement** : `shareCanvasCard()` traitait toute erreur de
+  `navigator.share()` (y compris `AbortError`, levée quand l'utilisateur
+  ferme simplement la feuille de partage native) comme une indisponibilité
+  de l'API, et enchaînait sur le repli téléchargement — toucher
+  « 📤 Partager » puis annuler déclenchait quand même un PNG sur
+  l'appareil, sans le dire. `AbortError` est désormais traité comme une
+  annulation volontaire : aucun repli.
+- ⌨️ **Entrée/Échap sur les deux champs d'heure de rappel** : oubli de
+  sélecteur lors de la généralisation de `bindEnterCommit` à l'itération
+  36 — les champs « heure du rappel du soir » et « heure du rappel de
+  série » (mêmes `onchange` que les autres champs d'édition en place)
+  n'avaient pas Entrée=valider/Échap=annuler, contrairement aux 8 autres
+  champs déjà couverts. `#eveningHour`/`#streakHour` ajoutés au sélecteur.
+- ♿ **`aria-label` du bouton de quête nomme la tâche** : `aria-label="Fait
+  par {joueur}"` ne mentionnait pas la tâche — avec 13 tâches × 2 joueurs,
+  un lecteur d'écran naviguant par liste de boutons ne pouvait pas
+  distinguer les 26 boutons entre eux. Devient « {tâche} — fait par
+  {joueur} ».
+- ✅ Tests : 321 assertions au total (314 dans smoke.js +15, 7 dans
+  sync-test.js inchangée) — propagation du nom de tâche au journal
+  (entrées déplacées vérifiées par comptage avant/après), absence de
+  téléchargement forcé après un `AbortError` simulé sur `navigator.share`
+  (écoute d'un éventuel événement `download` sur 500 ms), Entrée valide
+  l'heure du soir sans blur explicite puis Échap restaure la valeur
+  affichée sans rien enregistrer, `aria-label` du premier bouton de quête
+  vérifié complet. Un flake préexistant et non lié à cette itération a été
+  rencontré à l'identique sur deux passages complets consécutifs (« tri
+  par priorité conservé après rechargement » / « retour à l'ordre
+  habituel ») — reproduit isolément **y compris sur le code de base non
+  modifié** (`git stash` avant relance), confirmant qu'il ne s'agit pas
+  d'une régression de cette itération mais d'une course préexistante
+  entre l'écriture `localStorage` et le rechargement en Chromium headless
+  (même famille que les flakes déjà documentés aux itérations 15/20/22/
+  24/31/32/33/35/36) ; 6/6 passages isolés propres sur un script de
+  reproduction ciblé, puis un troisième passage complet de `smoke.js`
+  entièrement vert (314/314) confirme l'absence de régression. `sync-
+  test.js` repassée sans problème juste après, aucune suite jamais lancée
+  en parallèle d'un autre processus. Validation visuelle (captures
+  390×844) : renommage d'une tâche en « Vitres du salon » depuis Réglages
+  puis entrée du Journal affichant le nouveau nom sur l'ancienne quête
+  (« Vitres du salon » avec tag « ×2 »), `aria-label` du bouton de quête
+  vérifié programmatiquement complet.
+
+**Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
+- Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
+  attente — rien ne sera créé en base sans accord explicite).
+- Factoriser les fonctions `playerBlock` dupliquées (trophées, duel — la
+  carte héros a un layout à sujet unique, distinct) en un helper commun
+  paramétré.
+- Revoir la taille du fichier index.html (grossit à chaque itération,
+  maintenant ~3 110 lignes).
