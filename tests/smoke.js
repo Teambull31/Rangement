@@ -157,6 +157,9 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   const firstMilestone = (await page.locator(".sysbox").count()) ? await page.locator(".sysbox").textContent() : "";
   check("premier jalon de la file (" + firstMilestone.replace(/\s+/g, " ").trim().slice(0, 40) + ")",
     firstMilestone.includes("OBJECTIF ATTEINT") || firstMilestone.includes("HAUT FAIT"));
+  if (firstMilestone.includes("OBJECTIF ATTEINT")) {
+    check("modale OBJECTIF ATTEINT nomme le défi concerné", firstMilestone.includes("Test défi"));
+  }
   await closeModals(page);
   check("jalons enchaînés bien tous fermés (aucune modale ne bloque la suite)", (await page.locator(".sysbox").count()) === 0);
   await page.locator('[data-tab="objectifs"]').click();
@@ -260,12 +263,21 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
     (await page.locator("[data-delrw]").count()) === rwCountBefore
     && (await page.evaluate(id => S.rewards.find(r => r.id === id) ? S.rewards.find(r => r.id === id).name : null, rw1)) === rw1Name);
 
-  // Journal + annulation
+  // Journal + annulation (avec filet de rattrapage, comme tâches/récompenses/défis depuis l'it. 24)
   await page.locator('[data-tab="journal"]').click();
   const before = await page.locator(".logline").count();
+  const undoneId = await page.evaluate(() => document.querySelector("[data-undo]").dataset.undo);
   await page.locator("[data-undo]").first().click();
   await page.waitForTimeout(200);
   check("annulation depuis le journal", (await page.locator(".logline").count()) === before - 1);
+  check("toast « Annuler » proposé après suppression d'une entrée du journal", (await page.locator(".toast-action").count()) === 1);
+  await page.locator(".toast-action").click();
+  await page.waitForTimeout(150);
+  check("entrée du journal restaurée après Annuler",
+    (await page.locator(".logline").count()) === before
+    && (await page.evaluate(id => !!S.log.find(l => l.id === id), undoneId)));
+  await page.locator("[data-undo]").first().click();
+  await page.waitForTimeout(200);
 
   // Recherche et filtre du Journal (une entrée fraîche pour Chasseuse : l'undo précédent a pu vider les siennes)
   await page.locator('[data-tab="quetes"]').click();
@@ -974,6 +986,16 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   check("série de p2 cassée normalement, aucun bouclier utilisé",
     (await shieldPage.evaluate(() => S.log.some(l => l.playerId === "p2" && l.note === "bouclier"))) === false
     && (await shieldPage.evaluate(() => streakOf("p2"))) === 0);
+  check("l'entrée bouclier ne compte pas non plus dans le calendrier d'activité (bug corrigé)",
+    (await shieldPage.evaluate(() => {
+      // Le jour comblé automatiquement par le bouclier doit apparaître avec 0 quête dans le
+      // calendrier (aucune tâche réellement faite ce jour-là), pas 1.
+      const shieldEntry = S.log.find(l => l.playerId === "p1" && l.note === "bouclier");
+      if (!shieldEntry) return false;
+      const day = new Date(shieldEntry.ts);
+      const label = day.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+      return activityCalendar().includes(`${label} — 0 quête`);
+    })) === true);
   await shieldPage.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
   await shieldPage.locator('[data-tab="duel"]').click();
   check("compte de boucliers disponibles affiché dans Duel", (await shieldPage.locator(".statgrid").textContent()).includes("Boucliers"));

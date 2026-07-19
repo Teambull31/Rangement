@@ -1472,6 +1472,7 @@ function activityCalendar() {
   const WEEKS = 8;
   const counts = {};
   for (const l of S.log) {
+    if (l.note === "bouclier") continue;
     const k = dayKey(l.ts);
     (counts[k] ??= { total: 0, byP: {} });
     counts[k].total++;
@@ -2307,7 +2308,7 @@ function doTask(taskId, playerId) {
   const p = S.players.find(x => x.id === playerId);
   if (!t || !p) return;
   const before = levelInfo(totalXp(playerId)).lvl;
-  const objsBefore = S.objectives.filter(o => !o.claimed && objProgress(o) >= o.target).length;
+  const objsBeforeIds = new Set(S.objectives.filter(o => !o.claimed && objProgress(o) >= o.target).map(o => o.id));
   const featsBefore = new Set(unlockedFeats(playerId).map(f => f.id));
   const charsBefore = new Set(unlockedCharIds(playerId));
 
@@ -2324,7 +2325,7 @@ function doTask(taskId, playerId) {
   try { if (navigator.vibrate) navigator.vibrate(35); } catch (e) {}
 
   const after = levelInfo(totalXp(playerId)).lvl;
-  const objsAfter = S.objectives.filter(o => !o.claimed && objProgress(o) >= o.target).length;
+  const newObjs = S.objectives.filter(o => !o.claimed && objProgress(o) >= o.target && !objsBeforeIds.has(o.id));
   const newFeat = unlockedFeats(playerId).find(f => !featsBefore.has(f.id));
   const newChar = CHARACTERS.find(c => !charsBefore.has(c.id) && unlockedCharIds(playerId).includes(c.id));
   render();
@@ -2354,12 +2355,12 @@ function doTask(taskId, playerId) {
       extra: { label: "Annuler", onclick: undoTask, stop: true },
     });
   }
-  if (objsAfter > objsBefore) queue.push({
+  newObjs.forEach(o => queue.push({
     chime: "level",
     html: `<div class="big gold">OBJECTIF ATTEINT</div>
-      <div class="sub">Un défi commun est terminé.<br>Allez le réclamer dans l'onglet <b>Objectifs</b> 🎁</div>`,
+      <div class="sub">Le défi <b>${esc(o.name)}</b> est terminé.<br>Allez le réclamer dans l'onglet <b>Objectifs</b> 🎁</div>`,
     extra: { label: "Annuler", onclick: undoTask, stop: true },
-  });
+  }));
   if (newFeat) queue.push({
     chime: "feat",
     html: `<div class="big gold">HAUT FAIT</div>
@@ -2433,11 +2434,7 @@ function bindView() {
     b.onclick = () => { journalFilter.player = b.dataset.jf; render(); });
 
   document.querySelectorAll("[data-undo]").forEach(b =>
-    b.onclick = () => {
-      S.log = S.log.filter(l => l.id !== b.dataset.undo);
-      save(); queueOp({ table: "log", type: "delete", id: b.dataset.undo });
-      render(); toast("Entrée annulée");
-    });
+    b.onclick = () => deleteWithUndo("log", b.dataset.undo, "Entrée supprimée"));
 
   document.querySelectorAll("[data-noteeditopen]").forEach(b =>
     b.onclick = () => {

@@ -817,12 +817,60 @@ nécessitant de changement de schéma — trois ont été traitées.
 **Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
 - Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
   attente — rien ne sera créé en base sans accord explicite).
-- Nommer le défi concerné dans la modale « OBJECTIF ATTEINT » (actuellement
-  générique — gênant dès que plusieurs défis tournent en parallèle) ;
-  restaurer le focus clavier sur la chaîne de jalons d'une quête nécessite
+- Restaurer le focus clavier sur la chaîne de jalons d'une quête nécessite
   de capturer l'élément déclencheur avant le `render()` de `doTask()` et de
   le retrouver après re-rendu (par attributs `data-do`/`data-p`, pas par
-  référence DOM) — repéré à cette itération, laissé pour une prochaine
+  référence DOM) — repéré à l'itération 29, laissé pour une prochaine
   passe dédiée à l'accessibilité clavier.
+- Modale « HÉROS DÉBLOQUÉ » sans bouton Annuler quand elle est le seul
+  jalon de la chaîne (repéré à l'itération 30, voir audit ci-dessous).
+- `aria-pressed` manquant sur les boutons bascule (thème, filtres,
+  tri) — état actif porté uniquement par la classe CSS `.on`, invisible
+  pour un lecteur d'écran (repéré à l'itération 30).
 - Revoir la taille du fichier index.html (grossit à chaque itération,
   maintenant ~2 970 lignes).
+
+## Itération 30 — 2026-07-19 (routine cloud)
+
+**Audit** : un audit ciblé (agent dédié, lecture complète d'index.html face
+à l'historique des 29 itérations) a fait remonter quatre frictions, aucune
+ne nécessitant de changement de schéma — deux traitées cette fois, deux
+notées en pistes (modale HÉROS DÉBLOQUÉ sans Annuler solo, `aria-pressed`
+manquant). Un troisième correctif venait directement de la fin de
+l'itération 29 : la modale « OBJECTIF ATTEINT » restait générique
+(« Un défi commun est terminé ») alors que plusieurs défis peuvent tourner
+en parallèle depuis l'itération 17.
+
+**Améliorations livrées :**
+- 🎯 **Modale « OBJECTIF ATTEINT » nommée** : `doTask()` compare désormais
+  les identifiants des défis complétés avant/après la quête (au lieu d'un
+  simple compteur) et nomme chaque défi fraîchement terminé (« Le défi
+  **Sprint 300 XP** est terminé »). Si une quête complète plusieurs défis
+  à la fois, chacun obtient sa propre modale dans la chaîne de jalons —
+  aucun n'est plus tu.
+- 🐛 **Bug corrigé — le calendrier d'activité (Duel) comptait les jours
+  de bouclier comme de vraies quêtes** : `activityCalendar()` n'excluait
+  pas les entrées `note === "bouclier"` (introduites à l'itération 22),
+  contrairement à `objProgress()` (corrigé it. 28), `featStats()` et aux
+  statistiques du Duel qui filtraient déjà ce cas. Un jour comblé
+  automatiquement par le bouclier affichait une case dorée et « 1 quête »
+  au lieu de « 0 quête » — même filtre qu'ailleurs, désormais aligné.
+- ↩️ **Suppression du Journal avec filet de rattrapage** : le bouton
+  « Annuler » d'une ligne du Journal passe maintenant par `deleteWithUndo`
+  (généralisé aux tâches/récompenses/défis à l'itération 24) au lieu de
+  supprimer directement — un mistap propose un toast « Annuler » (5 s)
+  pour réinsérer l'entrée à sa position d'origine, comme le reste de
+  l'appli. Le Journal était la seule liste encore irréversible malgré un
+  bouton nommé « Annuler ».
+- ✅ Tests : 236 assertions au total (229 dans smoke.js +4, 7 dans
+  sync-test.js inchangée) — modale OBJECTIF ATTEINT vérifiée nommée
+  (« Test défi ») quand elle est le premier jalon de la chaîne, cycle
+  complet de suppression/restauration d'une entrée du journal (toast,
+  disparition, réapparition à l'identique via `S.log`), entrée bouclier
+  absente du calendrier d'activité (case du jour comblé vérifiée à
+  « 0 quête », pas « 1 »). Deux passages complets de `smoke.js` (un
+  premier tronqué par erreur de capture de sortie, un second intégral) et
+  un passage de `sync-test.js`, aucun lancé en parallèle d'un autre
+  processus lourd. Validation visuelle (captures 390×844) : modale
+  « OBJECTIF ATTEINT » nommant « Défi visuel », toast « Annuler » après
+  suppression d'une entrée du Journal.
