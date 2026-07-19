@@ -1170,3 +1170,79 @@ schéma.
   paramétrée.
 - Revoir la taille du fichier index.html (grossit à chaque itération,
   maintenant ~3 040 lignes).
+
+## Itération 35 — 2026-07-19 (routine cloud)
+
+**Audit** : un audit ciblé (agent dédié, lecture complète d'index.html face
+à l'historique des 34 itérations) a fait remonter cinq frictions, dont un
+vrai bug de confiance sur l'import de sauvegarde — aucune ne nécessitant de
+changement de schéma. Trois traitées cette fois, deux notées en pistes
+(Entrée n'engage pas les 8 champs d'édition en place les plus récents,
+bandeaux dorés utilisant des `rgba()` figés au lieu de `color-mix` sur les
+variables de thème).
+
+**Améliorations livrées :**
+- 🐛 **Bug corrigé — importer une sauvegarde n'avait aucune confirmation** :
+  contrairement à la remise à zéro (modale système depuis l'itération 27),
+  choisir un fichier dans « Importer » remplaçait immédiatement **toutes**
+  les données pour les deux téléphones (journal, héros incarnés, objectifs,
+  paris…) sans le moindre filet — un mistap sur le mauvais fichier JSON
+  était irréversible. Le même pattern de modale système est repris (nombre
+  d'entrées du fichier annoncé, rappel d'Exporter d'abord), avec
+  « Annuler » comme action sûre par défaut (Échap/retour y tombent) et
+  « Importer quand même » comme bouton danger distinct.
+- ♿ **`aria-label` sur les 5 interrupteurs de Réglages** : Sons, Suggestion
+  de quête équitable, Rappel du soir, Notification du navigateur, Récap du
+  dimanche soir — le texte descriptif de chaque `togglerow` est un `<span>`
+  frère du `<label>` (pas un enfant), donc invisible pour un lecteur
+  d'écran qui n'annonçait qu'une « case à cocher » sans description.
+  `aria-label` posé directement sur chaque `<input>` pour combler ce trou,
+  dans la continuité des `aria-label` déjà posés sur les `<select>` à
+  l'itération 28.
+- 🐛 **Bug corrigé — le marqueur technique "bouclier" fuitait dans le
+  Journal** : chaque entrée « 🛡️ Bouclier de série » (introduite à
+  l'itération 22) affichait en plus un chip doré montrant littéralement le
+  mot « bouclier » — un artefact interne (`log.note === "bouclier"`) sans
+  rapport avec ce que l'app raconte par ailleurs, alors que le bouton
+  d'édition de note était lui déjà correctement masqué pour ces entrées.
+  Le chip suit désormais la même exclusion.
+- ✅ Tests : 291 assertions au total (284 dans smoke.js +11, 7 dans
+  sync-test.js inchangée) — modale de confirmation avant import (contenu,
+  bouton sûr « Annuler » par défaut, données inchangées après Annuler,
+  bouton danger « Importer quand même » présent, données bien remplacées
+  après confirmation), `aria-label` vérifié sur les 5 interrupteurs, entrée
+  bouclier affichée sans son chip technique (avec vérification que le
+  bouton d'édition de note reste absent, non régressé). Deux flakes
+  rencontrés sur des passages complets isolés consécutifs, chacun sur du
+  code non touché par cette itération et disparus au passage isolé
+  suivant : rappel du soir après rechargement (`dismiss=null`, pattern déjà
+  documenté à l'itération 31) puis timeout sur la modale HÉROS DÉBLOQUÉ du
+  scénario Annuler (jamais rencontré sous cette forme précise, probable
+  dépendance à la date réelle comme les hauts faits lève-tôt/oiseau de nuit
+  ou le bouclier de série) — un troisième passage isolé entièrement vert
+  confirme l'absence de régression, cohérent avec le pattern déjà documenté
+  aux itérations 15/20/22/24/31/32/33. `sync-test.js` repassée sans
+  problème après ces trois passages de `smoke.js`, aucun jamais lancé en
+  parallèle d'un autre processus. Validation visuelle (captures 390×844) :
+  modale de confirmation d'import, entrée bouclier du Journal sans chip
+  parasite (à côté d'une note libre normale qui, elle, s'affiche bien),
+  interrupteurs de Réglages en thème Aube.
+
+**Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
+- Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
+  attente — rien ne sera créé en base sans accord explicite).
+- Cohérence Entrée sur les 8 champs d'édition en place les plus récents
+  (objectifs, récompenses, tâches, joueurs) : seule la note du Journal gère
+  `onkeydown` (Entrée = commit, Échap = annule proprement) ; les autres ne
+  valident qu'au `blur`, ce qui surprend sur clavier physique.
+- Bandeaux dorés/mana (`.quest.bonus`, `.chip.gold`, `.betremind`,
+  `.betline.hot`, `.evremind`) utilisant des `rgba()` figés (couleurs du
+  thème Système par défaut) au lieu de `color-mix(in oklab, var(--gold)/
+  var(--mana) X%, transparent)` comme `.daystat` — décalage de teinte
+  perceptible dans les 4 autres thèmes, plus visible en Aube où le fond
+  reste franchement doré alors que bordure/texte s'assombrissent.
+- Factoriser les fonctions `playerBlock` dupliquées dans les trois cartes
+  canvas partageables (trophées, duel, héros) en une fonction commune
+  paramétrée.
+- Revoir la taille du fichier index.html (grossit à chaque itération,
+  maintenant ~3 060 lignes).

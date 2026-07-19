@@ -1830,7 +1830,7 @@ function vJournal() {
       const editable = l.note !== "bouclier";
       const noteZone = journalEditing === l.id
         ? `<input type="text" class="jnote-edit" data-noteedit="${l.id}" value="${esc(l.note)}" maxlength="40" placeholder="Note…" aria-label="Note sur cette entrée">`
-        : `${l.note ? ` <span class="chip gold">${esc(l.note)}</span>` : ""}${editable ? `<button class="notebtn" data-noteeditopen="${l.id}" aria-label="Ajouter ou modifier une note">✏️</button>` : ""}`;
+        : `${l.note && editable ? ` <span class="chip gold">${esc(l.note)}</span>` : ""}${editable ? `<button class="notebtn" data-noteeditopen="${l.id}" aria-label="Ajouter ou modifier une note">✏️</button>` : ""}`;
       return `<div class="logline">
         <span>${esc(l.icon || "✅")}</span>
         <span class="lname">${p ? esc(p.emoji + " ") : ""}${esc(l.taskName)}</span>
@@ -1896,11 +1896,11 @@ function vReglages() {
     </div>
     <p class="hint">Le thème est propre à ce téléphone — chacun le sien.</p>
     <div class="togglerow">
-      <label class="switch"><input type="checkbox" id="soundToggle" ${soundsOn() ? "checked" : ""}><span></span></label>
+      <label class="switch"><input type="checkbox" id="soundToggle" aria-label="Sons (montée de niveau, hauts faits)" ${soundsOn() ? "checked" : ""}><span></span></label>
       <span>Sons (montée de niveau, hauts faits)</span>
     </div>
     <div class="togglerow">
-      <label class="switch"><input type="checkbox" id="suggestToggle" ${suggestionsOn() ? "checked" : ""}><span></span></label>
+      <label class="switch"><input type="checkbox" id="suggestToggle" aria-label="Suggestion de quête équitable" ${suggestionsOn() ? "checked" : ""}><span></span></label>
       <span>Suggestion de quête équitable</span>
     </div>
     <p class="hint">Ces deux réglages sont aussi propres à ce téléphone.</p>
@@ -1908,7 +1908,7 @@ function vReglages() {
   <section class="panel">
     <h2>Rappel du soir</h2>
     <div class="togglerow">
-      <label class="switch"><input type="checkbox" id="eveningToggle" ${eveningReminderOn() ? "checked" : ""}><span></span></label>
+      <label class="switch"><input type="checkbox" id="eveningToggle" aria-label="Rappel si personne n'a joué aujourd'hui" ${eveningReminderOn() ? "checked" : ""}><span></span></label>
       <span>Rappel si personne n'a joué aujourd'hui</span>
     </div>
     <div class="frow" style="margin-top:10px;align-items:center">
@@ -1923,7 +1923,7 @@ function vReglages() {
     </div>
     <p class="hint">Quand une série 🔥 est en jeu, le rappel peut sonner plus tôt que le rappel générique${localStorage.getItem("rangement-streak-hour") === null ? " (pour l'instant : même heure que ci-dessus)" : ""} — vider le champ le réaligne sur l'heure ci-dessus.</p>
     <div class="togglerow">
-      <label class="switch"><input type="checkbox" id="notifToggle" ${(notifsSupported() && notifsOn()) ? "checked" : ""} ${notifsSupported() ? "" : "disabled"}><span></span></label>
+      <label class="switch"><input type="checkbox" id="notifToggle" aria-label="Notification du navigateur" ${(notifsSupported() && notifsOn()) ? "checked" : ""} ${notifsSupported() ? "" : "disabled"}><span></span></label>
       <span>Notification du navigateur${notifsSupported() ? "" : " (non disponible sur cet appareil)"}</span>
     </div>
     <p class="hint">En plus du rappel dans l'appli : une vraie notification système, une fois par jour, si votre navigateur le permet. Sur iPhone, Safari ne le supporte pas hors app installée avec un service de notifications push — le rappel dans l'appli reste le plus fiable partout.</p>
@@ -1936,7 +1936,7 @@ function vReglages() {
       ${notifHistory().length ? '<button class="undo" id="clearNotifHist" style="margin-top:6px">Effacer l\'historique</button>' : ""}
     </div>` : ""}
     <div class="togglerow">
-      <label class="switch"><input type="checkbox" id="recapToggle" ${weeklyRecapOn() ? "checked" : ""}><span></span></label>
+      <label class="switch"><input type="checkbox" id="recapToggle" aria-label="Récap du dimanche soir (dès 18 h)" ${weeklyRecapOn() ? "checked" : ""}><span></span></label>
       <span>Récap du dimanche soir (dès 18 h)</span>
     </div>
   </section>
@@ -2839,10 +2839,21 @@ function bindView() {
         const data = JSON.parse(r.result);
         const src = data.S || data; // accepte les sauvegardes v1 et v2
         if (!src.players || !src.log) throw new Error("format");
-        S = Object.assign(defaultState(), src);
-        TABLES.forEach(t => (S[t] || []).forEach(x => PENDING.push({ table: t, type: "upsert", row: toRow[t](x) })));
-        save(); flushOps(); render(); toast("Sauvegarde importée ✅");
+        // Import = remplacement total pour les deux téléphones, plus destructeur encore que
+        // la remise à zéro (qui, elle, épargne tâches/récompenses) : même garde-fou en modale
+        // système, action sûre par défaut (Échap/retour tombent sur « Annuler »).
+        sysModal(`
+          <div class="big" style="color:var(--crit)">IMPORTER UNE SAUVEGARDE</div>
+          <div class="sub" style="text-align:left">Ce fichier contient <b>${(src.log || []).length} entrées de journal</b>. L'import remplacera <b>toutes les données actuelles pour vous deux</b> (journal, niveaux, héros incarnés, objectifs, paris, récompenses gagnées…).<br><br>Pensez à <b>Exporter</b> d'abord si vous voulez garder une trace de l'état actuel.</div>`,
+          null,
+          { label: "Importer quand même", danger: true, onclick: () => {
+              S = Object.assign(defaultState(), src);
+              TABLES.forEach(t => (S[t] || []).forEach(x => PENDING.push({ table: t, type: "upsert", row: toRow[t](x) })));
+              save(); flushOps(); render(); toast("Sauvegarde importée ✅");
+            } },
+          "Annuler");
       } catch (e) { toast("Fichier invalide"); }
+      imf.value = "";
     };
     r.readAsText(f);
   };

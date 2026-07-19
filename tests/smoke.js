@@ -1305,6 +1305,70 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
     (await it27Page.locator(".evremind").count()) === 1);
   await it27Context.close();
 
+  // Itération 35 : confirmation avant import, accessibilité des interrupteurs, chip "bouclier" masqué
+  const it35Context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const it35Page = await it35Context.newPage();
+  await it35Page.addInitScript(() => { localStorage.setItem("rangement-onboard-v1", "1"); });
+  await it35Page.goto(APP_URL);
+  await it35Page.waitForSelector(".quest");
+
+  await it35Page.locator('[data-tab="reglages"]').click();
+  check("aria-label sur l'interrupteur Sons (Itération 35)",
+    (await it35Page.locator("#soundToggle").getAttribute("aria-label")) === "Sons (montée de niveau, hauts faits)");
+  check("aria-label sur l'interrupteur Suggestion de quête équitable (Itération 35)",
+    (await it35Page.locator("#suggestToggle").getAttribute("aria-label")) === "Suggestion de quête équitable");
+  check("aria-label sur l'interrupteur Rappel du soir (Itération 35)",
+    (await it35Page.locator("#eveningToggle").getAttribute("aria-label")) === "Rappel si personne n'a joué aujourd'hui");
+  check("aria-label sur l'interrupteur Notification du navigateur (Itération 35)",
+    (await it35Page.locator("#notifToggle").getAttribute("aria-label")) === "Notification du navigateur");
+  check("aria-label sur l'interrupteur Récap du dimanche soir (Itération 35)",
+    (await it35Page.locator("#recapToggle").getAttribute("aria-label")) === "Récap du dimanche soir (dès 18 h)");
+
+  // Le marqueur technique "bouclier" ne doit plus fuiter en chip dans le Journal
+  await it35Page.evaluate(() => {
+    S.log.push({ id: "it35shield", ts: Date.now(), playerId: "p1", taskName: "Bouclier de série", icon: "🛡️", xp: 0, note: "bouclier" });
+    save(); render();
+  });
+  await it35Page.locator('[data-tab="journal"]').click();
+  await it35Page.waitForSelector(".logline");
+  const shieldLine = it35Page.locator(".logline", { hasText: "Bouclier de série" }).first();
+  check("entrée bouclier affichée dans le Journal", (await shieldLine.count()) === 1);
+  check("aucun chip \"bouclier\" affiché sur cette entrée (Itération 35)",
+    (await shieldLine.locator(".chip.gold").count()) === 0);
+  check("pas de bouton d'édition de note sur l'entrée bouclier (déjà acquis, non régressé)",
+    (await shieldLine.locator(".notebtn").count()) === 0);
+
+  // Import de sauvegarde : confirmation obligatoire, action sûre par défaut
+  await it35Page.locator('[data-tab="reglages"]').click();
+  const beforeImportLen = await it35Page.evaluate(() => S.log.length);
+  const importPayload = JSON.stringify({
+    players: [
+      { id: "p1", name: "Import", emoji: "🦄", color: "#ff0000", characterId: null },
+      { id: "p2", name: "Import2", emoji: "🐺", color: "#00ff00", characterId: null },
+    ],
+    log: [{ id: "it35imported", ts: Date.now(), playerId: "p1", taskName: "Tâche importée", icon: "✅", xp: 30, note: "" }],
+  });
+  await it35Page.setInputFiles("#importFile", { name: "sauvegarde.json", mimeType: "application/json", buffer: Buffer.from(importPayload) });
+  await it35Page.waitForSelector(".sysbox");
+  check("modale de confirmation avant import (Itération 35)",
+    (await it35Page.locator(".sysbox").textContent()).includes("IMPORTER UNE SAUVEGARDE"));
+  check("bouton sûr « Annuler » par défaut sur l'import",
+    (await it35Page.locator("#veilOk").textContent()).includes("Annuler"));
+  await it35Page.locator("#veilOk").click();
+  await it35Page.waitForTimeout(150);
+  check("« Annuler » sur l'import : données inchangées",
+    (await it35Page.evaluate(() => S.log.length)) === beforeImportLen);
+
+  await it35Page.setInputFiles("#importFile", { name: "sauvegarde.json", mimeType: "application/json", buffer: Buffer.from(importPayload) });
+  await it35Page.waitForSelector("#veilExtra");
+  check("bouton danger « Importer quand même » présent",
+    (await it35Page.locator("#veilExtra").textContent()).includes("Importer quand même"));
+  await it35Page.locator("#veilExtra").click();
+  await it35Page.waitForTimeout(150);
+  check("« Importer quand même » : journal remplacé par celui du fichier",
+    (await it35Page.evaluate(() => S.log.length === 1 && S.log[0].taskName === "Tâche importée")));
+  await it35Context.close();
+
   await browser.close();
   done();
 })();
