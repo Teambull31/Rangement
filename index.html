@@ -38,6 +38,8 @@
     --field: #0A1120;
     --navbg: rgba(8,13,24,.92);
     --logo-top: #EAF6FF;
+    --modalbg: linear-gradient(180deg, #0E1B30, #0A1322);
+    --toastbg: #0E1B30;
     --display: 'Orbitron', 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
     --body: 'Rajdhani', 'Segoe UI', system-ui, sans-serif;
   }
@@ -171,6 +173,7 @@
   }
   h2 small { color: var(--ink-dim); letter-spacing: .1em; font-weight: 500; }
   .hint { font-size: 14px; color: var(--ink-dim); }
+  .hint.warn { color: var(--high); }
 
   /* ---------- Quest list ---------- */
   .quest {
@@ -424,7 +427,7 @@
   }
   .sysbox {
     width: 100%; max-width: 380px;
-    background: linear-gradient(180deg, #0E1B30, #0A1322);
+    background: var(--modalbg);
     border: 1px solid var(--sys);
     box-shadow: 0 0 30px color-mix(in oklab, var(--sys) 35%, transparent), inset 0 0 25px color-mix(in oklab, var(--sys) 6%, transparent);
     border-radius: 3px;
@@ -446,7 +449,7 @@
   /* toast */
   .toast {
     position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%);
-    background: #0E1B30; border: 1px solid var(--sys-dim); color: var(--ink);
+    background: var(--toastbg); border: 1px solid var(--sys-dim); color: var(--ink);
     padding: 8px 16px; border-radius: 3px; font-size: 15px; z-index: 60;
     box-shadow: 0 0 14px color-mix(in oklab, var(--sys) 30%, transparent);
     animation: toastin .25s ease;
@@ -961,6 +964,11 @@ function charOf(p) {
 // Emoji personnel du joueur, mémorisé sur cet appareil avant la première incarnation
 // d'un héros, pour pouvoir le restaurer réellement au retrait (au lieu de le perdre).
 function baseEmojiKey(pid) { return "rangement-baseemoji-" + pid; }
+function samePlayerColor() {
+  if (S.players.length !== 2) return false;
+  const [a, b] = S.players.map(p => (p.color || "#4DC3FF").toLowerCase());
+  return a === b;
+}
 function equipChar(p, c) {
   if (!p.characterId) localStorage.setItem(baseEmojiKey(p.id), p.emoji);
   p.characterId = c.id;
@@ -1820,8 +1828,9 @@ function vJournal() {
   });
 
   const filterBar = `
-  <div class="frow" style="margin-bottom:9px">
-    <input type="text" id="journalSearch" placeholder="Rechercher une tâche…" value="${esc(journalFilter.q)}" aria-label="Rechercher dans le journal">
+  <div class="frow" style="margin-bottom:9px;position:relative">
+    <input type="text" id="journalSearch" placeholder="Rechercher une tâche…" value="${esc(journalFilter.q)}" aria-label="Rechercher dans le journal" style="${journalFilter.q ? "padding-right:34px" : ""}">
+    ${journalFilter.q ? `<button class="x" id="journalSearchClear" aria-label="Effacer la recherche" style="position:absolute;right:6px;top:50%;transform:translateY(-50%)">✕</button>` : ""}
   </div>
   <div class="filterrow">
     <button class="filterbtn ${journalFilter.player === "all" ? "on" : ""}" aria-pressed="${journalFilter.player === "all"}" data-jf="all">Tous</button>
@@ -1876,6 +1885,7 @@ function vReglages() {
       <input type="color" data-pcolor="${p.id}" value="${esc(p.color || "#4DC3FF")}" style="flex:0 0 52px;height:44px;padding:2px;background:var(--field);border:1px solid var(--line);border-radius:3px" aria-label="Couleur">
     </div>`).join("")}
     <p class="hint" style="margin-top:6px">Enregistré automatiquement à chaque changement. La couleur personnalise ta carte, tes boutons de quête et la barre de duel — elle se synchronise sur les deux téléphones.</p>
+    ${samePlayerColor() ? `<p class="hint warn" id="colorClashHint">⚠️ Les deux chasseurs ont la même couleur — le duel devient difficile à lire. Change l'une des deux.</p>` : ""}
   </section>
   <section class="panel">
     <h2>Tâches ménagères</h2>
@@ -2544,6 +2554,13 @@ function bindView() {
     const el = $("#journalSearch");
     if (el) { el.focus(); el.setSelectionRange(pos, pos); }
   };
+  const journalSearchClear = $("#journalSearchClear");
+  if (journalSearchClear) journalSearchClear.onclick = () => {
+    journalFilter.q = "";
+    render();
+    const el = $("#journalSearch");
+    if (el) el.focus();
+  };
   document.querySelectorAll("[data-jf]").forEach(b =>
     b.onclick = () => { journalFilter.player = b.dataset.jf; render(); });
 
@@ -2932,7 +2949,8 @@ const THEMES = {
               light: { abyss: "#EAF0F9", panel: "#FFFFFF", panel2: "#F4F8FE", line: "#C9D8EE", ink: "#16263F", inkDim: "#54688A", field: "#FFFFFF",
                        gold: "#9C7C0C", ok: "#1F8F5F", crit: "#CC3344", high: "#C2601A",
                        prioBasse: "#4A6483", prioNormale: "#1471B0",
-                       navbg: "rgba(255,255,255,.92)", logoTop: "#33475F" } },
+                       navbg: "rgba(255,255,255,.92)", logoTop: "#33475F",
+                       modalBg: "linear-gradient(180deg, #FFFFFF, #F4F8FE)", toastBg: "#FFFFFF" } },
 };
 function curTheme() {
   const stored = localStorage.getItem("rangement-theme");
@@ -2952,7 +2970,7 @@ function applyTheme(id) {
   const L = t.light;
   const vars = { "--abyss": "abyss", "--panel": "panel", "--panel-2": "panel2", "--line": "line", "--ink": "ink", "--ink-dim": "inkDim", "--field": "field",
                  "--gold": "gold", "--ok": "ok", "--crit": "crit", "--high": "high", "--prio-basse": "prioBasse", "--prio-normale": "prioNormale",
-                 "--navbg": "navbg", "--logo-top": "logoTop" };
+                 "--navbg": "navbg", "--logo-top": "logoTop", "--modalbg": "modalBg", "--toastbg": "toastBg" };
   for (const [cssVar, key] of Object.entries(vars)) {
     if (L && L[key]) r.setProperty(cssVar, L[key]); else r.removeProperty(cssVar);
   }
@@ -2978,7 +2996,8 @@ function onboarding() {
         <input type="text" data-ob-emoji="${p.id}" value="${esc(p.emoji)}" maxlength="4" style="flex:0 0 56px" aria-label="Emoji">
         <input type="text" data-ob-name="${p.id}" value="${esc(p.name)}" maxlength="20" aria-label="Nom">
         <input type="color" data-ob-color="${p.id}" value="${esc(p.color || "#4DC3FF")}" style="flex:0 0 46px;height:42px;padding:2px;background:var(--field);border:1px solid var(--line);border-radius:3px" aria-label="Couleur">
-      </div>`).join("")}`;
+      </div>`).join("")}
+      <p class="hint warn" id="obColorClash" style="display:none;margin-top:6px">⚠️ Les deux chasseurs ont la même couleur — le duel devient difficile à lire. Change l'une des deux.</p>`;
     return `
       <div class="big gold">LA CHASSE</div>
       <div class="sub" style="text-align:left">⚔️ Touchez <b>votre emoji</b> sur une quête accomplie.<br>👑 L'onglet <b>Duel</b> compare vos scores — un trophée par semaine gagnée.<br>🏆 Créez des <b>objectifs communs</b> : atteints, ils débloquent vos récompenses (ciné, resto, surprise 🎲…).<br><br>Que le meilleur chasseur gagne 💙</div>`;
@@ -3019,6 +3038,16 @@ function onboarding() {
       if (step === 2) return finish();
       step++; show();
     };
+    if (step === 1) {
+      const colorInputs = S.players.map(p => document.querySelector(`[data-ob-color="${p.id}"]`));
+      const checkClash = () => {
+        const hint = $("#obColorClash");
+        if (!hint) return;
+        hint.style.display = colorInputs[0] && colorInputs[1] && colorInputs[0].value.toLowerCase() === colorInputs[1].value.toLowerCase() ? "" : "none";
+      };
+      colorInputs.forEach(inp => inp && (inp.oninput = checkClash));
+      checkClash();
+    }
   };
   show();
 }

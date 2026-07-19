@@ -380,8 +380,13 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await page.fill("#journalSearch", "zzz-introuvable");
   await page.waitForTimeout(150);
   check("aucun résultat -> message clair", (await page.locator(".logline").count()) === 0 && (await page.locator(".hint", { hasText: "Aucune entrée" }).count()) === 1);
-  await page.fill("#journalSearch", "");
+  check("bouton d'effacement de la recherche visible quand le champ n'est pas vide",
+    (await page.locator("#journalSearchClear").count()) === 1);
+  await page.locator("#journalSearchClear").click();
   await page.waitForTimeout(150);
+  check("bouton d'effacement vide le champ et restaure toutes les lignes",
+    (await page.inputValue("#journalSearch")) === "" && (await page.locator(".logline").count()) === totalLines);
+  check("bouton d'effacement disparaît une fois le champ vide", (await page.locator("#journalSearchClear").count()) === 0);
   await page.locator('[data-jf]', { hasText: "Chasseuse" }).click();
   await page.waitForTimeout(150);
   const p2Lines = await page.locator(".logline").count();
@@ -431,6 +436,16 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   check("nom conservé après rechargement", (await page.locator(".hunter .name").first().textContent()).trim() === "Max");
   const borderColor = await page.locator(".hunter").nth(1).evaluate(el => el.style.borderTopColor);
   check("couleur personnalisée appliquée (" + borderColor + ")", borderColor.includes("255, 0, 0") || borderColor === "#ff0000");
+
+  // Alerte si les deux chasseurs choisissent la même couleur (Réglages)
+  await page.locator('[data-tab="reglages"]').click();
+  check("pas d'alerte couleur quand les couleurs diffèrent", (await page.locator("#colorClashHint").count()) === 0);
+  await page.locator('[data-pcolor="p1"]').evaluate(el => { el.value = "#ff0000"; el.dispatchEvent(new Event("change")); });
+  await page.waitForTimeout(200);
+  check("alerte affichée quand les deux couleurs sont identiques", (await page.locator("#colorClashHint").count()) === 1);
+  await page.locator('[data-pcolor="p1"]').evaluate(el => { el.value = "#4dc3ff"; el.dispatchEvent(new Event("change")); });
+  await page.waitForTimeout(200);
+  check("alerte disparaît dès que les couleurs redeviennent différentes", (await page.locator("#colorClashHint").count()) === 0);
 
   // Tâches éditables en place : nom et icône
   await page.locator('[data-tab="reglages"]').click();
@@ -524,6 +539,21 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   check("thème clair Aube : fond clair (" + bodyBg + ")", bodyBg === "rgb(234, 240, 249)");
   check("thème clair : meta theme-color suit",
     (await page.evaluate(() => document.querySelector('meta[name="theme-color"]').content)) === "#EAF0F9");
+
+  // Modales système et toasts suivaient un fond navy figé, illisible avec l'encre claire
+  // d'Aube (contraste corrigé, it. 38) : doivent désormais suivre le thème clair.
+  await page.evaluate(() => toast("Test contraste Aube"));
+  await page.waitForTimeout(100);
+  const toastBgAube = await page.locator(".toast").first().evaluate(el => getComputedStyle(el).backgroundColor);
+  check("fond du toast suit le thème clair Aube, plus de navy sombre (" + toastBgAube + ")", toastBgAube === "rgb(255, 255, 255)");
+  await page.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
+  await page.evaluate(() => sysModal('<div class="big">TEST</div>', null, null, "OK"));
+  await page.waitForTimeout(100);
+  const sysboxBgAube = await page.locator(".sysbox").first().evaluate(el => getComputedStyle(el).backgroundImage);
+  check("fond de la modale système suit le thème clair Aube (" + sysboxBgAube + ")", sysboxBgAube.includes("255, 255, 255"));
+  await page.locator("#veilOk").click();
+  await page.waitForTimeout(100);
+
   await page.reload();
   await page.waitForSelector(".hunter");
   check("thème clair conservé après rechargement",
@@ -565,6 +595,11 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await page.waitForTimeout(150);
   const prioBasseDark = (await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--prio-basse").trim())).toLowerCase();
   check("chip « basse » revient à la teinte sombre par défaut (" + prioBasseDark + ")", prioBasseDark === "#8aa3c2");
+  await page.evaluate(() => toast("Test contraste sombre"));
+  await page.waitForTimeout(100);
+  const toastBgDark = await page.locator(".toast").first().evaluate(el => getComputedStyle(el).backgroundColor);
+  check("fond du toast reste navy sombre en thème Monarque, pas de régression (" + toastBgDark + ")", toastBgDark === "rgb(14, 27, 48)");
+  await page.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
   await page.locator('[data-tab="heros"]').click();
   await page.waitForTimeout(100);
   const rarityBDark = await page.locator(".rarity").first().evaluate(el => getComputedStyle(el).color);
