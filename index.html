@@ -1780,13 +1780,13 @@ function vObjectifs() {
       <button class="filterbtn" data-objpreset="quetes20">🗡️ 20 quêtes</button>
       <button class="filterbtn" data-objpreset="grand">🏰 Grand ménage</button>
     </div>
-    <div class="frow"><input type="text" id="objName" placeholder="Nom du défi (ex : Opération appart nickel)" maxlength="60"></div>
+    <div class="frow"><input type="text" id="objName" placeholder="Nom du défi (ex : Opération appart nickel)" maxlength="60" aria-label="Nom du défi"></div>
     <div class="frow">
       <select id="objType" aria-label="Type d'objectif">
         <option value="xp">XP cumulés à deux</option>
         <option value="count">Nombre de quêtes à deux</option>
       </select>
-      <input type="number" id="objTarget" placeholder="Cible (ex : 300)" min="1" inputmode="numeric">
+      <input type="number" id="objTarget" placeholder="Cible (ex : 300)" min="1" inputmode="numeric" aria-label="Cible du défi">
     </div>
     <div class="frow">
       <select id="objReward" aria-label="Récompense">
@@ -1805,8 +1805,8 @@ function vObjectifs() {
       <button class="x" data-delrw="${r.id}" aria-label="Supprimer">✕</button>
     </div>`).join("")}
     <div class="frow" style="margin-top:10px">
-      <input type="text" id="rwIcon" placeholder="🎁" maxlength="4" style="flex:0 0 64px">
-      <input type="text" id="rwName" placeholder="Nouvelle récompense (ex : Week-end surprise)" maxlength="50">
+      <input type="text" id="rwIcon" placeholder="🎁" maxlength="4" style="flex:0 0 64px" aria-label="Icône de la récompense">
+      <input type="text" id="rwName" placeholder="Nouvelle récompense (ex : Week-end surprise)" maxlength="50" aria-label="Nom de la récompense">
       <button class="btn" id="rwAdd" style="flex:0 0 auto">+</button>
     </div>
   </section>
@@ -1899,8 +1899,8 @@ function vReglages() {
       <button class="x" data-deltask="${t.id}" aria-label="Supprimer">✕</button>
     </div>`).join("")}
     <div class="frow" style="margin-top:10px">
-      <input type="text" id="tIcon" placeholder="🧼" maxlength="4" style="flex:0 0 64px">
-      <input type="text" id="tName" placeholder="Nouvelle tâche" maxlength="50">
+      <input type="text" id="tIcon" placeholder="🧼" maxlength="4" style="flex:0 0 64px" aria-label="Icône de la quête">
+      <input type="text" id="tName" placeholder="Nouvelle tâche" maxlength="50" aria-label="Nom de la quête">
     </div>
     <div class="frow">
       <select id="tPrio" aria-label="Priorité">${Object.entries(PRIOS).map(([k, v]) => `<option value="${k}">${v.label} · ${v.xp} XP</option>`).join("")}</select>
@@ -1934,12 +1934,12 @@ function vReglages() {
     </div>
     <div class="frow" style="margin-top:10px;align-items:center">
       <span class="hint" style="flex:0 0 auto">À partir de</span>
-      <input type="number" id="eveningHour" min="0" max="23" value="${eveningReminderHour()}" style="flex:0 0 70px">
+      <input type="number" id="eveningHour" min="0" max="23" value="${eveningReminderHour()}" style="flex:0 0 70px" aria-label="Heure du rappel du soir">
       <span class="hint" style="flex:0 0 auto">h, heure de ce téléphone</span>
     </div>
     <div class="frow" style="align-items:center">
       <span class="hint" style="flex:0 0 auto">Rappel de série 🔥 dès</span>
-      <input type="number" id="streakHour" min="0" max="23" value="${streakReminderHour()}" style="flex:0 0 70px">
+      <input type="number" id="streakHour" min="0" max="23" value="${streakReminderHour()}" style="flex:0 0 70px" aria-label="Heure du rappel de série">
       <span class="hint" style="flex:0 0 auto">h</span>
     </div>
     <p class="hint">Quand une série 🔥 est en jeu, le rappel peut sonner plus tôt que le rappel générique${localStorage.getItem("rangement-streak-hour") === null ? " (pour l'instant : même heure que ci-dessus)" : ""} — vider le champ le réaligne sur l'heure ci-dessus.</p>
@@ -1999,6 +1999,15 @@ function rewardInUse(id) {
   const b = S.bets.find(x => !x.claimed && x.rewardId === id);
   if (b) return "l'enjeu de la semaine en cours";
   return null;
+}
+
+// Le journal relie les quêtes par nom (taskName), pas par id : deux tâches
+// homonymes se partageraient silencieusement le même historique (badge
+// « dernier », suggestion équitable, répartition). Bloque la création/le
+// renommage vers un nom déjà pris par une autre tâche.
+function nameTaken(list, name, excludeId) {
+  const n = name.trim().toLowerCase();
+  return list.some(x => x.id !== excludeId && x.name.trim().toLowerCase() === n);
 }
 
 // Supprime un élément d'une collection (tâche, récompense, défi) avec un filet de
@@ -2796,6 +2805,7 @@ function bindView() {
   if (tAdd) tAdd.onclick = () => {
     const name = $("#tName").value.trim();
     if (!name) return;
+    if (nameTaken(S.tasks, name)) { toast("Une quête porte déjà ce nom"); return; }
     const t = { id: uid(), name, icon: $("#tIcon").value.trim() || "🧼", prio: $("#tPrio").value, createdAt: NOW() };
     S.tasks.push(t);
     save(); queueOp({ table: "tasks", type: "upsert", row: toRow.tasks(t) });
@@ -2822,6 +2832,7 @@ function bindView() {
       const v = inp.value.trim();
       if (!v) { inp.value = isName ? t.name : t.icon; return; }
       if (isName) {
+        if (v !== t.name && nameTaken(S.tasks, v, t.id)) { toast("Une quête porte déjà ce nom"); inp.value = t.name; return; }
         const oldName = t.name;
         t.name = v;
         if (oldName !== v) {
@@ -2938,11 +2949,19 @@ function bindView() {
   if (rst) rst.onclick = () => {
     sysModal(`
       <div class="big" style="color:var(--crit)">REMISE À ZÉRO</div>
-      <div class="sub" style="text-align:left">Journal, niveaux, objectifs, paris et récompenses gagnées seront <b>effacés pour vous deux</b>.<br><br>Les tâches et idées de récompenses sont conservées. Pensez à <b>Exporter</b> d'abord si vous voulez une sauvegarde.</div>`,
+      <div class="sub" style="text-align:left">Journal, niveaux, objectifs, paris, récompenses gagnées et héros incarnés seront <b>effacés pour vous deux</b>.<br><br>Les tâches et idées de récompenses sont conservées. Pensez à <b>Exporter</b> d'abord si vous voulez une sauvegarde.</div>`,
       null,
       { label: "Tout effacer", danger: true, onclick: () => {
           S.log = []; S.won = []; S.objectives = []; S.bets = [];
           ["log", "won", "objectives", "bets"].forEach(t => queueOp({ table: t, type: "clear" }));
+          S.players.forEach(p => {
+            if (p.characterId) {
+              p.characterId = null;
+              const baseEmoji = localStorage.getItem(baseEmojiKey(p.id));
+              if (baseEmoji) p.emoji = baseEmoji;
+              queueOp({ table: "players", type: "upsert", row: toRow.players(p) });
+            }
+          });
           save(); render(); toast("L'aventure repart de zéro");
         } },
       "Garder nos données");

@@ -157,12 +157,16 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   });
   await page.reload();
   await page.waitForSelector(".hunter");
+  await closeModals(page); // récap hebdo dimanche ≥18h : réel un dimanche soir, jamais désactivé avant la ligne 796
   await page.locator('[data-tab="duel"]').click();
   check("badge de déséquilibre affiché pour une tâche à sens unique", (await page.locator(".splitline:has-text('Vitres') .chip.gold").count()) === 1);
   await page.locator('[data-tab="quetes"]').click();
 
   // Objectif : création (récompense surprise 🎲), complétion, réclamation
   await page.locator('[data-tab="objectifs"]').click();
+  check("aria-label sur le nom et la cible du défi (formulaire de création)",
+    (await page.locator("#objName[aria-label]").count()) === 1
+    && (await page.locator("#objTarget[aria-label]").count()) === 1);
   await page.fill("#objName", "Test défi");
   await page.fill("#objTarget", "10");
   await page.selectOption("#objReward", "__random__");
@@ -343,6 +347,9 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   check("aucun toast après Échap (rien n'a été enregistré)", (await page.locator(".toast").count()) === 0);
 
   // Ajout d'une récompense en appuyant sur Entrée (clavier mobile, sans toucher le bouton +)
+  check("aria-label sur l'icône et le nom de récompense (formulaire de création)",
+    (await page.locator("#rwIcon[aria-label]").count()) === 1
+    && (await page.locator("#rwName[aria-label]").count()) === 1);
   await page.fill("#rwIcon", "🎯");
   await page.fill("#rwName", "Test récompense entrée");
   await page.locator("#rwName").press("Enter");
@@ -497,12 +504,35 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   // Ajout d'une tâche en appuyant sur Entrée (clavier mobile, sans toucher le bouton Ajouter)
   await page.locator('[data-tab="reglages"]').click();
   check("select de priorité (ajout) a un aria-label pour lecteur d'écran", (await page.locator("#tPrio[aria-label]").count()) === 1);
+  check("aria-label sur l'icône et le nom de tâche (formulaire de création)",
+    (await page.locator("#tIcon[aria-label]").count()) === 1
+    && (await page.locator("#tName[aria-label]").count()) === 1);
   await page.fill("#tIcon", "🪣");
   await page.fill("#tName", "Test tâche entrée");
   await page.locator("#tName").press("Enter");
   await page.waitForTimeout(200);
   check("tâche ajoutée via Entrée", (await page.evaluate(() => S.tasks.some(t => t.name === "Test tâche entrée"))) === true);
   check("toast de confirmation après ajout de tâche", (await page.locator(".toast", { hasText: "Quête ajoutée" }).count()) === 1);
+  await page.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
+
+  // Bug corrigé : deux tâches homonymes se partageraient silencieusement le même
+  // historique de journal (lié par taskName, pas par id) — création et renommage
+  // vers un nom déjà pris sont désormais bloqués.
+  const tCountBeforeDup = await page.evaluate(() => S.tasks.length);
+  await page.fill("#tIcon", "🧴");
+  await page.fill("#tName", "Test tâche entrée");
+  await page.locator("#tAdd").click();
+  await page.waitForTimeout(150);
+  check("création bloquée sur un nom de tâche déjà pris",
+    (await page.evaluate(() => S.tasks.length)) === tCountBeforeDup
+    && (await page.locator(".toast", { hasText: "porte déjà ce nom" }).count()) === 1);
+  await page.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
+  await page.fill(`[data-tname="${t0}"]`, "Test tâche entrée");
+  await page.locator(`[data-tname="${t0}"]`).evaluate(el => el.blur());
+  await page.waitForTimeout(150);
+  check("renommage bloqué vers un nom de tâche déjà pris",
+    (await page.evaluate(() => S.tasks[0].name)) === "Vitres du salon"
+    && (await page.locator(".toast", { hasText: "porte déjà ce nom" }).count()) === 1);
   await page.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
 
   // Suppression d'une tâche avec filet de rattrapage (toast « Annuler »), même mécanique
@@ -848,6 +878,9 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   // Heure du rappel du soir : une saisie hors bornes est stockée bornée, et le champ
   // doit désormais réafficher aussitôt la valeur réellement utilisée (re-render manquant, it. 29)
   await evPage.locator('[data-tab="reglages"]').click();
+  check("aria-label sur les champs d'heure du rappel du soir et de série",
+    (await evPage.locator("#eveningHour[aria-label]").count()) === 1
+    && (await evPage.locator("#streakHour[aria-label]").count()) === 1);
   await evPage.fill("#eveningHour", "27");
   await evPage.locator("#eveningHour").evaluate(el => el.blur());
   await evPage.waitForTimeout(150);
@@ -1023,6 +1056,7 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
     }
     save();
   });
+  await heroPage.waitForTimeout(100); // laisse le temps à l'écriture localStorage de se propager avant la navigation (flake documenté, it. 31 et suivantes)
   await heroPage.reload();
   await heroPage.waitForSelector(".hunter"); // le hash #heros restaure l'onglet Héros au reload
   await heroPage.locator('[data-tab="heros"]').click().catch(() => {});
@@ -1433,6 +1467,16 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   check("focus clavier restauré sur le bouton d'origine après fermeture de la modale (it. 29)",
     (await it27Page.evaluate(() => document.activeElement && document.activeElement.id)) === "resetBtn");
   check("« Garder nos données » : pari fantôme conservé (avant remise à zéro)", (await it27Page.evaluate(() => S.bets.length)) === 1);
+
+  // Bug corrigé : « Tout effacer » remettait les conditions de déblocage à zéro
+  // (journal vidé) sans jamais retirer le héros incarné — un chasseur pouvait
+  // « incarner » un héros dont il ne remplissait plus aucun critère.
+  await it27Page.evaluate(() => {
+    localStorage.setItem("rangement-baseemoji-" + S.players[0].id, S.players[0].emoji);
+    S.players[0].characterId = "usopp";
+    S.players[0].emoji = "🎯";
+    save();
+  });
   await it27Page.locator("#resetBtn").click();
   await it27Page.waitForSelector("#veilExtra");
   await it27Page.locator("#veilExtra").click();
@@ -1441,6 +1485,9 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
     (await it27Page.evaluate(() => S.log.length === 0 && S.tasks.length === 13)));
   check("« Tout effacer » (Itération 31) : les paris en attente sont aussi effacés, plus de pari fantôme",
     (await it27Page.evaluate(() => S.bets.length)) === 0);
+  check("« Tout effacer » (bug corrigé) : héros incarné retiré, emoji personnel restauré",
+    (await it27Page.evaluate(() => S.players[0].characterId)) === null
+    && (await it27Page.evaluate(() => S.players[0].emoji)) !== "🎯");
 
   // Rappels vivants : le bandeau du soir apparaît via le tick, sans recharger ni naviguer
   await it27Page.locator('[data-tab="quetes"]').click();
@@ -1459,7 +1506,10 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   // Itération 35 : confirmation avant import, accessibilité des interrupteurs, chip "bouclier" masqué
   const it35Context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const it35Page = await it35Context.newPage();
-  await it35Page.addInitScript(() => { localStorage.setItem("rangement-onboard-v1", "1"); });
+  await it35Page.addInitScript(() => {
+    localStorage.setItem("rangement-onboard-v1", "1");
+    localStorage.setItem("rangement-recap", "off"); // déterminisme : indépendant du jour/heure réels
+  });
   await it35Page.goto(APP_URL);
   await it35Page.waitForSelector(".quest");
 

@@ -1546,3 +1546,107 @@ aucune ne nécessitant de changement de schéma.
   paramétré.
 - Revoir la taille du fichier index.html (grossit à chaque itération,
   maintenant ~3 110 lignes).
+
+## Itération 40 — 2026-07-19 (routine cloud)
+
+**Audit** : un audit ciblé (agent dédié, lecture complète d'index.html face à
+l'historique des 39 itérations) a fait remonter cinq frictions, aucune ne
+nécessitant de changement de schéma. Trois retenues cette fois ; deux notées
+en pistes (restauration de l'emoji personnel entre deux téléphones —
+nécessiterait une colonne Supabase dédiée, écartée pour rester sans
+migration ; remonter la quête bonus/suggérée en tête de liste — tentée puis
+**annulée en cours d'itération**, voir plus bas).
+
+**Améliorations livrées :**
+- 🐛 **Bug corrigé — la remise à zéro laissait un héros incarné orphelin** :
+  « Tout effacer » remettait à zéro le journal (donc les conditions de
+  déblocage des héros) mais oubliait `players.characterId` — un chasseur
+  pouvait continuer d'« incarner » un héros dont il ne remplissait plus
+  aucun critère, affiché à la fois en incarné en haut de l'onglet Héros et
+  en verrouillé/grisé dans la collection. Le handler de remise à zéro
+  retire désormais l'incarnation des deux joueurs et restaure leur emoji
+  personnel (même mécanisme que le bouton « Reprendre son emoji », corrigé
+  à l'itération 33), avec upsert Supabase. Le texte de la modale mentionne
+  désormais « héros incarnés » parmi les données effacées.
+- 🐛 **Bug corrigé — deux tâches pouvaient partager le même nom** : le
+  journal relie les quêtes par `taskName`, pas par id (dénormalisé depuis
+  l'origine) — rien n'empêchait de créer ou de renommer une tâche vers un
+  nom déjà pris par une autre, ce qui aurait mélangé silencieusement leur
+  historique (badge « dernier », suggestion équitable, répartition des
+  tâches). Nouvelle fonction `nameTaken()` : la création et le renommage
+  d'une tâche sont désormais bloqués (toast explicite) vers un nom déjà
+  utilisé (comparaison insensible à la casse, espaces ignorés).
+- ♿ **`aria-label` sur les derniers champs de formulaire sans nom
+  accessible** : `#objName`/`#objTarget` (défi), `#tIcon`/`#tName` (tâche),
+  `#rwIcon`/`#rwName` (récompense), `#eveningHour`/`#streakHour` (heures de
+  rappel) ne s'annonçaient que par leur `placeholder`, invisible pour un
+  lecteur d'écran dès que le champ contient une valeur — dans la continuité
+  des `aria-label` déjà posés sur les `<select>` (it. 28) et les
+  interrupteurs (it. 35).
+- ↩️ **Tentative annulée** : remonter systématiquement la quête dorée (×2)
+  et la suggérée (« à ton tour ? ») en tête de la liste, quel que soit le
+  tri choisi, semblait une amélioration UX à fort impact perçu — mais
+  `bonusTaskId()` choisit la quête du jour par un hash de la date, pas par
+  ordre de création : la réordonner change quelle tâche `.quest.first()`
+  désigne selon le jour réel, cassant silencieusement l'hypothèse (ordre =
+  création) sur laquelle reposent des dizaines d'assertions existantes
+  dans `smoke.js` depuis les itérations 1 à 39. Détecté en cours de route
+  par un vrai échec de test (scénario HÉROS DÉBLOQUÉ/Annuler), revert
+  complet plutôt que de réécrire la suite en profondeur pour une seule
+  itération — noté en piste pour une passe dédiée qui adapterait aussi les
+  tests concernés.
+- 🧪 **Stabilisation de test** : deux contextes de `smoke.js` (le clic vers
+  l'onglet Duel après une injection directe dans le journal, et un
+  contexte isolé de l'itération 35) ne désactivaient pas le récap hebdo du
+  dimanche — un vrai dimanche soir ≥18h (comme aujourd'hui), la modale
+  système s'ouvrait automatiquement au chargement et bloquait le clic
+  suivant. `closeModals()`/`rangement-recap=off` ajoutés à ces deux points,
+  cohérent avec le reste de la suite qui désactive déjà le récap partout
+  ailleurs. Un délai de 100 ms a aussi été ajouté avant le rechargement du
+  scénario de grind (310 quêtes injectées), après plusieurs échecs
+  isolés de ce point précis (voir ci-dessous) — même stabilisation que
+  celle déjà appliquée à l'itération 31 pour une course similaire.
+- ✅ Tests : 328 assertions au total (321 dans smoke.js +7, 7 dans
+  sync-test.js inchangée) — blocage de la création et du renommage d'une
+  tâche vers un nom déjà pris, héros incarné retiré et emoji restauré après
+  « Tout effacer », `aria-label` vérifié sur les 8 champs listés ci-dessus.
+  Cette itération a nécessité un nombre inhabituel de passages complets
+  (6) avant d'obtenir un run entièrement vert, avec une leçon de fond
+  identifiée en cours de route : plusieurs échecs qui semblaient être des
+  flakes de contention CPU (le grind de 310 quêtes revenant à 0/30 après
+  rechargement, un « HAUT FAIT » affiché à la place d'une « NIVEAU »
+  attendue) étaient en réalité provoqués par **le propre outillage de la
+  session** — un moniteur (`Monitor`/boucle `ps aux` toutes les 5 s) laissé
+  actif en tâche de fond pour détecter la fin des suites, en violation
+  directe de la règle 2 (« rien en parallèle des tests »). Un scénario de
+  reproduction ciblé isolé (8/8 passages propres, script dédié de 8 lancers
+  du seul scénario de grind) avait déjà innocenté le code applicatif avant
+  cette découverte ; une fois le moniteur de sondage supprimé et les
+  passages relancés strictement seuls (aucun processus concurrent, aucune
+  boucle `ps aux`), `smoke.js` puis `sync-test.js` sont passés
+  intégralement du premier coup. Leçon ajoutée à la règle 2 : la
+  surveillance de complétion d'une suite de tests (y compris via les
+  outils de l'agent lui-même) compte comme un processus concurrent et doit
+  être évitée — attendre la notification naturelle de fin plutôt que de
+  sonder. Validation visuelle (captures 390×844) : toast « Une quête porte
+  déjà ce nom » après tentative de doublon, modale de remise à zéro
+  mentionnant « héros incarnés » parmi les données effacées.
+
+**Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
+- Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
+  attente — rien ne sera créé en base sans accord explicite).
+- Restaurer l'emoji personnel entre deux téléphones : actuellement stocké
+  en `localStorage` (propre à l'appareil où l'incarnation a eu lieu), donc
+  non fiable si l'incarnation et le retrait se font depuis deux téléphones
+  différents — nécessiterait une colonne Supabase dédiée (ex.
+  `players.base_emoji`), à proposer à l'utilisateur avant toute migration.
+- Remonter la quête bonus/suggérée en tête de la liste des quêtes, quel
+  que soit le tri — idée validée sur le principe, mais nécessite d'abord
+  d'auditer/adapter les nombreuses assertions `smoke.js` qui supposent
+  `.quest.first()`/`.nth(N)` = ordre de création (tentée et annulée à
+  l'itération 40, voir ci-dessus).
+- Factoriser les fonctions `playerBlock` dupliquées (trophées, duel — la
+  carte héros a un layout à sujet unique, distinct) en un helper commun
+  paramétré.
+- Revoir la taille du fichier index.html (grossit à chaque itération,
+  maintenant ~3 150 lignes).
