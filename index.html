@@ -1309,7 +1309,7 @@ function vQuetes() {
   <section class="panel">
     <div class="panelhead">
       <h2 style="margin-bottom:0">Quêtes disponibles</h2>
-      <button class="linkbtn" id="qSortToggle">${questSortMode() === "prio" ? "Ordre habituel" : "Trier par priorité"}</button>
+      <button class="linkbtn" id="qSortToggle" aria-pressed="${questSortMode() === "prio"}">${questSortMode() === "prio" ? "Ordre habituel" : "Trier par priorité"}</button>
     </div>
     ${rows || '<p class="hint">Aucune quête. Ajoute des tâches dans Réglages.</p>'}
     <p class="hint">Touche ton emoji quand c'est fait. Bonus de série : +5&nbsp;% d'XP par jour d'activité consécutif (max +50&nbsp;%). La quête dorée rapporte le double aujourd'hui${suggestId ? ", et 👉 marque la tâche la plus en attente" : ""}.</p>
@@ -1381,7 +1381,8 @@ function betSection() {
 
   const activeHtml = active
     ? `<div class="betline hot">⚔️ Enjeu de la semaine : <b>${betRewardLabel(active)}</b><br>
-       <span class="hint">Le vainqueur du duel dimanche soir l'emporte. Bonne chasse !</span></div>`
+       <span class="hint">Le vainqueur du duel dimanche soir l'emporte. Bonne chasse !</span><br>
+       <button class="linkbtn" style="margin-top:6px" data-cancelbet="${active.id}">Annuler l'enjeu</button></div>`
     : `<div class="frow" style="margin-top:4px">
         <select id="betReward" aria-label="Récompense misée">
           ${S.rewards.map(r => `<option value="${r.id}">${esc(r.icon)} ${esc(r.name)}</option>`).join("")}
@@ -1424,12 +1425,13 @@ function weekTable(a, b, data) {
 
 function weekChart() {
   const { a, b, data } = weekChartData();
+  const c = cardColors();
   const max = Math.max(20, ...data.map(x => Math.max(x.a, x.b)));
   const W = 320, H = 112, base = H - 14, plot = H - 22, gw = W / 8, bw = 13;
   const grid = [0.5, 1].map(f => {
     const y = (base - plot * f).toFixed(1);
-    return `<line x1="0" x2="${W}" y1="${y}" y2="${y}" stroke="#1C3252" stroke-width="1"/>` +
-      `<text x="2" y="${y - 3}" font-size="8" fill="#8AA3C2">${Math.round(max * f)}</text>`;
+    return `<line x1="0" x2="${W}" y1="${y}" y2="${y}" stroke="${c.line}" stroke-width="1"/>` +
+      `<text x="2" y="${y - 3}" font-size="8" fill="${c.inkDim}">${Math.round(max * f)}</text>`;
   }).join("");
   let bars = "", labels = "";
   data.forEach((x, i) => {
@@ -1437,7 +1439,7 @@ function weekChart() {
     const ha = Math.max(1, Math.round(plot * x.a / max)), hb = Math.max(1, Math.round(plot * x.b / max));
     bars += `<rect x="${(cx - bw - 1).toFixed(1)}" y="${base - ha}" width="${bw}" height="${ha}" rx="2" fill="${esc(a.color)}"><title>${esc(a.name)} · ${x.a} XP</title></rect>` +
             `<rect x="${(cx + 1).toFixed(1)}" y="${base - hb}" width="${bw}" height="${hb}" rx="2" fill="${esc(b.color)}"><title>${esc(b.name)} · ${x.b} XP</title></rect>`;
-    labels += `<text x="${cx}" y="${H - 2}" text-anchor="middle" font-size="8" fill="#8AA3C2">${i === 7 ? "cette sem." : "S−" + (7 - i)}</text>`;
+    labels += `<text x="${cx}" y="${H - 2}" text-anchor="middle" font-size="8" fill="${c.inkDim}">${i === 7 ? "cette sem." : "S−" + (7 - i)}</text>`;
   });
   return `
   <div class="legend">
@@ -1445,7 +1447,7 @@ function weekChart() {
     <span><i class="dot" style="background:${esc(b.color)}"></i>${esc(b.name)}</span>
   </div>
   <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="XP gagnés par semaine, huit dernières semaines" style="width:100%;height:auto;display:block">
-    <line x1="0" x2="${W}" y1="${base}" y2="${base}" stroke="#2B5A8F" stroke-width="1"/>
+    <line x1="0" x2="${W}" y1="${base}" y2="${base}" stroke="${c.lineGlow}" stroke-width="1"/>
     ${grid}${bars}${labels}
   </svg>`;
 }
@@ -1583,14 +1585,14 @@ function vDuel() {
   <section class="panel">
     <div class="panelhead">
       <h2 style="margin-bottom:0">XP par semaine</h2>
-      <button class="linkbtn" id="chartViewToggle">${chartView === "chart" ? "Voir en tableau" : "Voir en graphique"}</button>
+      <button class="linkbtn" id="chartViewToggle" aria-pressed="${chartView === "table"}">${chartView === "chart" ? "Voir en tableau" : "Voir en graphique"}</button>
     </div>
     ${chartView === "chart" ? weekChart() : weekTable(a, b, weekChartData().data)}
   </section>
   <section class="panel">
     <div class="panelhead">
       <h2 style="margin-bottom:0">Calendrier d'activité <small>— 8 dernières semaines, à deux</small></h2>
-      <button class="linkbtn" id="calViewToggle">${calView === "cal" ? "Voir en tableau" : "Voir en calendrier"}</button>
+      <button class="linkbtn" id="calViewToggle" aria-pressed="${calView === "table"}">${calView === "cal" ? "Voir en tableau" : "Voir en calendrier"}</button>
     </div>
     ${calView === "cal" ? activityCalendar(activityDays()) : activityTable(activityDays())}
   </section>
@@ -2041,6 +2043,7 @@ function cardColors() {
   const col = (name, fallback) => (cs.getPropertyValue(name).trim() || fallback);
   return {
     abyss: col("--abyss", "#060A13"), panel: col("--panel", "#0C1526"), line: col("--line", "#1C3252"),
+    lineGlow: col("--line-glow", "#2B5A8F"),
     sys: col("--sys", "#4DC3FF"), gold: col("--gold", "#F0C550"), ink: col("--ink", "#D9E7F7"), inkDim: col("--ink-dim", "#8AA3C2"),
     mana: col("--mana", "#8B7BFF"), crit: col("--crit", "#FF5C6E"),
   };
@@ -2661,6 +2664,9 @@ function bindView() {
       save(); queueOp({ table: "bets", type: "upsert", row: toRow.bets(b) });
       render(); toast("Enjeu retiré (égalité)");
     });
+  const cancelBetBtn = $("[data-cancelbet]");
+  if (cancelBetBtn) cancelBetBtn.onclick = () =>
+    deleteWithUndo("bets", cancelBetBtn.dataset.cancelbet, "Enjeu annulé");
 
   // Récompenses
   const rwAdd = $("#rwAdd");

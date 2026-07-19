@@ -120,10 +120,14 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
     duelShareCall && duelShareCall.nFiles === 1 && duelShareCall.title.includes("Duel"));
 
   // Vue tableau accessible du graphique XP (bascule)
+  check("aria-pressed=false sur la bascule XP en vue graphique (Itération 34)",
+    (await page.locator("#chartViewToggle").getAttribute("aria-pressed")) === "false");
   await page.locator("#chartViewToggle").click();
   check("bascule vers la vue tableau", (await page.locator("table.datatable").count()) === 1);
   check("8 semaines listées dans le tableau", (await page.locator("table.datatable tbody tr").count()) === 8);
   check("graphique masqué en vue tableau", (await page.locator('svg[role="img"]').count()) === 0);
+  check("aria-pressed=true sur la bascule XP en vue tableau (Itération 34)",
+    (await page.locator("#chartViewToggle").getAttribute("aria-pressed")) === "true");
   await page.locator("#chartViewToggle").click();
   check("retour à la vue graphique", (await page.locator('svg[role="img"]').count()) === 1);
 
@@ -465,6 +469,19 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await page.waitForTimeout(100);
   const rarityBAube = await page.locator(".rarity").first().evaluate(el => getComputedStyle(el).color);
   check("badge de rareté B suit --ink-dim en Aube, contraste corrigé (" + rarityBAube + ")", rarityBAube === "rgb(84, 104, 138)");
+
+  // Graphique XP hebdo (SVG, Duel) : mêmes hex figés (#8AA3C2/#1C3252/#2B5A8F) que la rareté
+  // avant l'it. 33, jamais corrigés pour ce graphique (it. 34) -> grille et libellés
+  // illisibles en Aube tant que la vue tableau n'était pas choisie à la place.
+  await page.locator('[data-tab="duel"]').click();
+  await page.waitForTimeout(100);
+  const chartColorsAube = await page.evaluate(() => {
+    const svg = document.querySelector('svg[role="img"]');
+    return { grid: getComputedStyle(svg.querySelector("line")).stroke, text: getComputedStyle(svg.querySelector("text")).fill };
+  });
+  check("grille du graphique XP suit --line-glow en Aube (" + chartColorsAube.grid + ")", chartColorsAube.grid === "rgb(159, 194, 228)");
+  check("libellés du graphique XP suivent --ink-dim en Aube, contraste corrigé (" + chartColorsAube.text + ")", chartColorsAube.text === "rgb(84, 104, 138)");
+
   await page.locator('[data-tab="reglages"]').click();
   await page.locator('[data-theme="monarque"]').click();
   await page.waitForTimeout(150);
@@ -474,6 +491,14 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await page.waitForTimeout(100);
   const rarityBDark = await page.locator(".rarity").first().evaluate(el => getComputedStyle(el).color);
   check("badge de rareté B suit --ink-dim en thème sombre (" + rarityBDark + ")", rarityBDark === "rgb(138, 163, 194)");
+  await page.locator('[data-tab="duel"]').click();
+  await page.waitForTimeout(100);
+  const chartColorsDark = await page.evaluate(() => {
+    const svg = document.querySelector('svg[role="img"]');
+    return { grid: getComputedStyle(svg.querySelector("line")).stroke, text: getComputedStyle(svg.querySelector("text")).fill };
+  });
+  check("grille du graphique XP suit --line-glow du thème Monarque (" + chartColorsDark.grid + ")", chartColorsDark.grid === "rgb(74, 63, 158)");
+  check("libellés du graphique XP reviennent à --ink-dim sombre par défaut (" + chartColorsDark.text + ")", chartColorsDark.text === "rgb(138, 163, 194)");
   await page.locator('[data-tab="reglages"]').click();
 
   // Thème par défaut au premier lancement : suit la préférence système clair/sombre
@@ -575,6 +600,17 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await page.locator("#betAdd").click();
   await page.waitForTimeout(200);
   check("enjeu actif affiché", (await page.locator(".betline.hot").count()) === 1);
+
+  // Itération 34 : l'enjeu misé peut être annulé avant la fin de la semaine (avec filet Annuler)
+  check("bouton « Annuler l'enjeu » présent sur l'enjeu actif", (await page.locator("[data-cancelbet]").count()) === 1);
+  await page.locator("[data-cancelbet]").click();
+  await page.waitForTimeout(150);
+  check("enjeu actif retiré après Annuler l'enjeu", (await page.locator(".betline.hot").count()) === 0);
+  check("toast avec bouton Annuler affiché après l'annulation de l'enjeu", (await page.locator(".toast-action").count()) === 1);
+  await page.locator(".toast-action").click();
+  await page.waitForTimeout(150);
+  check("enjeu actif restauré après Annuler depuis le toast", (await page.locator(".betline.hot").count()) === 1);
+
   await page.locator('[data-tab="quetes"]').click();
   check("rappel de l'enjeu visible sur l'onglet Quêtes", (await page.locator(".betremind").count()) === 1);
   await page.locator('[data-tab="duel"]').click();
@@ -1125,11 +1161,15 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   // Itération 31 : bascule tableau pour le calendrier d'activité (parité avec le graphique XP hebdo)
   check("calendrier affiché par défaut", (await shieldPage.locator(".cal").count()) === 1);
   check("bouton de bascule du calendrier présent", (await shieldPage.locator("#calViewToggle").textContent()).includes("Voir en tableau"));
+  check("aria-pressed=false sur la bascule calendrier en vue calendrier (Itération 34)",
+    (await shieldPage.locator("#calViewToggle").getAttribute("aria-pressed")) === "false");
   await shieldPage.locator("#calViewToggle").click();
   await shieldPage.waitForTimeout(100);
   check("bascule vers la vue tableau du calendrier", (await shieldPage.locator(".cal").count()) === 0 && (await shieldPage.locator(".datatable").count()) === 1);
   check("le tableau liste les jours avec quêtes (p1 a bien joué)",
     (await shieldPage.locator(".datatable tbody tr").count()) >= 7);
+  check("aria-pressed=true sur la bascule calendrier en vue tableau (Itération 34)",
+    (await shieldPage.locator("#calViewToggle").getAttribute("aria-pressed")) === "true");
   await shieldPage.locator("#calViewToggle").click();
   await shieldPage.waitForTimeout(100);
   check("retour à la vue calendrier", (await shieldPage.locator(".cal").count()) === 1);
@@ -1206,10 +1246,14 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   // Tri des quêtes par priorité (toggle propre à l'appareil)
   check("ordre habituel par défaut (Vaisselle en tête)",
     (await it27Page.locator(".quest .qname").first().textContent()).includes("Vaisselle"));
+  check("aria-pressed=false sur le tri en ordre habituel (Itération 34)",
+    (await it27Page.locator("#qSortToggle").getAttribute("aria-pressed")) === "false");
   await it27Page.locator("#qSortToggle").click();
   await it27Page.waitForTimeout(100);
   check("tri par priorité : une quête critique passe en tête",
     (await it27Page.locator(".quest .chip").first().textContent()).includes("Critique"));
+  check("aria-pressed=true sur le tri par priorité (Itération 34)",
+    (await it27Page.locator("#qSortToggle").getAttribute("aria-pressed")) === "true");
   await it27Page.reload();
   await it27Page.waitForSelector(".quest");
   check("tri par priorité conservé après rechargement",

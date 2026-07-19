@@ -1105,16 +1105,68 @@ fin de la semaine, `aria-pressed` manquant sur trois bascules `linkbtn`).
 **Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
 - Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
   attente — rien ne sera créé en base sans accord explicite).
-- Un enjeu de duel misé ne peut être ni annulé ni changé avant la fin de
-  la semaine (contrairement à sa réclamation, annulable depuis
-  l'itération 32) — ajouter un bouton « Annuler l'enjeu » réutilisant
-  `deleteWithUndo("bets", …)`.
-- `aria-pressed` manquant sur trois bascules `linkbtn` à état binaire non
-  couvertes par l'itération 31 : tri des quêtes (`#qSortToggle`), bascule
-  graphique/tableau du XP hebdo (`#chartViewToggle`) et bascule
-  calendrier/tableau (`#calViewToggle`).
 - Factoriser les fonctions `playerBlock` dupliquées dans les trois cartes
   canvas partageables (trophées, duel, héros) en une fonction commune
   paramétrée.
 - Revoir la taille du fichier index.html (grossit à chaque itération,
-  maintenant ~3 030 lignes).
+  maintenant ~3 040 lignes).
+
+## Itération 34 — 2026-07-19 (routine cloud)
+
+**Audit** : reprise des deux pistes laissées en attente depuis l'itération 33
+(enjeu de duel non annulable, `aria-pressed` manquant sur trois bascules),
+complétées par un nouveau bug de contraste repéré en relisant le graphique
+XP hebdo du Duel à la lumière du correctif de rareté de l'itération 33 : le
+même défaut (hex figé identique aux couleurs sombres par défaut, jamais
+recalculé pour le thème clair Aube) touchait aussi ce graphique SVG, jamais
+audité pour ce point précis. Aucune des trois n'a nécessité de changement de
+schéma.
+
+**Améliorations livrées :**
+- ⚔️ **Enjeu de duel annulable avant la fin de la semaine** : la mise
+  (`S.bets`) était la seule action de l'appli sans aucun moyen de se rétracter
+  une fois lancée — contrairement à sa réclamation, annulable depuis
+  l'itération 32. Bouton « Annuler l'enjeu » sur l'enjeu actif, qui réutilise
+  tel quel `deleteWithUndo("bets", …)` (aucune nouvelle logique de synchro,
+  filet de rattrapage identique au reste de l'appli).
+- ♿ **`aria-pressed` sur les trois dernières bascules `linkbtn`** : le tri des
+  quêtes (`#qSortToggle`), la bascule graphique/tableau du XP hebdo
+  (`#chartViewToggle`) et la bascule calendrier/tableau (`#calViewToggle`)
+  ne communiquaient leur état actif que par leur libellé changeant — invisible
+  pour un lecteur d'écran, à l'inverse des filtres et du sélecteur de thème
+  déjà couverts par l'itération 31. `aria-pressed` reflète maintenant l'état
+  « actif » de chaque bascule (tri par priorité, vue tableau).
+- 🐛 **Bug corrigé — graphique XP hebdo illisible en thème clair Aube** : les
+  axes et libellés du graphique SVG (Duel) codaient trois couleurs en
+  hexadécimal brut (`#8AA3C2`, `#1C3252`, `#2B5A8F`) — exactement les valeurs
+  *sombres* par défaut de `--ink-dim`/`--line`/`--line-glow`, jamais résolues
+  pour les 5 thèmes, le même défaut que celui corrigé pour les badges de
+  rareté à l'itération 33 mais jamais étendu à ce graphique. `weekChart()`
+  utilise désormais `cardColors()` (déjà introduite à l'itération 33 pour
+  résoudre les variables CSS hors canvas), étendue avec `lineGlow`, pour
+  calculer la couleur réelle de la grille et des libellés avant de générer le
+  SVG — suit donc automatiquement les 5 thèmes, la vue tableau alternative
+  (it. 8) n'étant plus le seul moyen fiable de lire ce graphique en Aube.
+- ✅ Tests : 280 assertions au total (273 dans smoke.js +14, 7 dans
+  sync-test.js inchangée) — bouton « Annuler l'enjeu » présent sur l'enjeu
+  actif, cycle complet annulation → toast Annuler → enjeu restauré ;
+  `aria-pressed` vérifié dans les deux états (actif/inactif) des trois
+  bascules ; couleur réellement appliquée (via `getComputedStyle`) sur la
+  grille et les libellés du graphique XP hebdo vérifiée en Aube (contraste
+  corrigé) et en thème sombre (Monarque, pour confirmer qu'aucune régression
+  n'affecte les thèmes déjà corrects — `--line-glow` variant aussi par thème
+  d'accent, pas seulement clair/sombre, contrairement à `--ink-dim`). Deux
+  passages complets et propres (`smoke.js` puis `sync-test.js`), aucun lancé
+  en parallèle d'un autre processus. Validation visuelle (captures 390×844) :
+  enjeu actif avec le bouton « Annuler l'enjeu », graphique XP hebdo en Aube
+  (axes et libellés lisibles) comparé au même graphique en thème sombre
+  (inchangé).
+
+**Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
+- Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
+  attente — rien ne sera créé en base sans accord explicite).
+- Factoriser les fonctions `playerBlock` dupliquées dans les trois cartes
+  canvas partageables (trophées, duel, héros) en une fonction commune
+  paramétrée.
+- Revoir la taille du fichier index.html (grossit à chaque itération,
+  maintenant ~3 040 lignes).
