@@ -1839,3 +1839,69 @@ aucune ne nécessitant de changement de schéma.
   paramétré.
 - Revoir la taille du fichier index.html (grossit à chaque itération,
   maintenant ~3 210 lignes).
+
+## Itération 44 — 2026-07-20 (routine cloud)
+
+**Audit** : un audit ciblé (agent dédié, lecture complète d'index.html face à
+l'historique des 43 itérations) a fait remonter six frictions, aucune ne
+nécessitant de changement de schéma. Les trois retenues touchent
+l'accessibilité et un filet de rattrapage manquant ; les deux pistes déjà
+notées (factorisation `playerBlock`, taille du fichier) restent en attente,
+rien de nouveau ne les faisait remonter en priorité.
+
+**Améliorations livrées :**
+- 🐛 **Bug corrigé — « Retirer l'enjeu » (égalité de pari) était la seule
+  action de résolution sans filet de rattrapage** : `toast("Enjeu retiré
+  (égalité)")` était appelé sans `actionLabel`/`actionFn`, contrairement à
+  « Réclamer l'enjeu » juste au-dessus (`undoClaimBet`, it. 24/30/32/34) — un
+  mistap sur ce bouton était irrécupérable. Toast désormais accompagné d'un
+  bouton « Annuler » qui repasse `b.claimed` à `false` et réaffiche le pari,
+  même mécanique que le reste de l'appli.
+- ♿ **`aria-label` nommant la cible sur les boutons répétés** : les boutons
+  « ✕ » de suppression des tâches (13), des idées de récompenses (5) et des
+  récompenses gagnées de l'historique portaient tous le même `aria-label`
+  générique (« Supprimer », « Retirer de l'historique ») — un lecteur d'écran
+  qui navigue par liste de boutons les annonçait indiscernables. Même défaut
+  sur le bouton « Incarner » de la collection de héros (jusqu'à 29 occurrences
+  identiques). Les quatre `aria-label` incluent désormais le nom de
+  l'élément (`Supprimer ${nom}`, `Retirer ${nom} de l'historique`,
+  `Incarner ${nom}`) — même correctif que celui déjà appliqué aux boutons de
+  quête à l'itération 39, étendu à ces quatre listes restées non traitées.
+- 🔧 **Factorisation `rewardOptions()`** : la liste `<option>` de récompense
+  (5 récompenses + option 🎲 Surprise) était recopiée à l'identique à trois
+  endroits (mise de pari, édition en place d'un défi, nouveau défi), avec
+  seule la gestion du `selected` qui variait. Extraite en une fonction
+  `rewardOptions(selectedId)` réutilisée aux trois endroits — factoring pur,
+  aucune logique métier modifiée.
+- ✅ Tests : 350 assertions au total (343 dans smoke.js +9, 7 dans
+  sync-test.js inchangée) — retrait de l'enjeu sur égalité puis annulation
+  depuis le toast (bet retrouvé non réclamé, bouton « Retirer l'enjeu »
+  réaffiché), `aria-label` vérifié exact sur le premier bouton de suppression
+  de tâche, de récompense, de récompense gagnée et sur le bouton Incarner de
+  Frieren. Un run initial a échoué sur « rappel toujours masqué après
+  rechargement le même jour » (zone rappel du soir, non touchée par cette
+  itération) ; un deuxième run a échoué sur « gros grind → collection
+  complète débloquée (0/30) » — flake de timing déjà documenté dans le code
+  lui-même (commentaire « laisse le temps à l'écriture localStorage de se
+  propager avant la navigation », it. 31 et suivantes) qui a fait échouer en
+  cascade la nouvelle vérification d'`aria-label` sur le bouton Incarner
+  placée juste après ; les 9 assertions de l'itération étaient vertes aux
+  deux passages. Un troisième passage complet et isolé est sorti entièrement
+  vert (350/350), confirmant deux flakes indépendants et déjà répertoriés
+  plutôt qu'une régression de ces trois correctifs. `sync-test.js` repassée
+  sans problème juste après, jamais lancée en parallèle d'un autre processus.
+  Validation visuelle (captures 390×844, parcours complet via un script
+  Playwright dédié) : bouton « Retirer l'enjeu » sur une semaine d'égalité
+  passée, toast « Enjeu retiré (égalité) » avec bouton « ANNULER », liste des
+  13 tâches avec boutons de suppression, liste des 5 idées de récompenses
+  avec boutons de suppression (`aria-label` confirmés programmatique :
+  « Supprimer Vaisselle / lave-vaisselle », « Supprimer Séance de ciné »).
+
+**Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
+- Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
+  attente — rien ne sera créé en base sans accord explicite).
+- Factoriser les fonctions `playerBlock` dupliquées (trophées, duel — la
+  carte héros a un layout à sujet unique, distinct) en un helper commun
+  paramétré.
+- Revoir la taille du fichier index.html (grossit à chaque itération,
+  maintenant ~3 200 lignes).

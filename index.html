@@ -1296,6 +1296,10 @@ function betRewardLabel(b) {
   const r = S.rewards.find(x => x.id === b.rewardId);
   return r ? esc(r.icon) + " " + esc(r.name) : "🎁 Récompense";
 }
+function rewardOptions(selectedId) {
+  return S.rewards.map(r => `<option value="${r.id}" ${selectedId === r.id ? "selected" : ""}>${esc(r.icon)} ${esc(r.name)}</option>`).join("")
+    + `<option value="__random__" ${selectedId === "__random__" ? "selected" : ""}>🎲 Surprise (tirage au sort)</option>`;
+}
 
 // Tri des quêtes : ordre habituel (création) ou priorités critiques en tête — propre à l'appareil
 function questSortMode() { return localStorage.getItem("rangement-qsort") === "prio" ? "prio" : "habituel"; }
@@ -1412,8 +1416,7 @@ function betSection() {
        <button class="linkbtn" style="margin-top:6px" data-cancelbet="${active.id}">Annuler l'enjeu</button></div>`
     : `<div class="frow" style="margin-top:4px">
         <select id="betReward" aria-label="Récompense misée">
-          ${S.rewards.map(r => `<option value="${r.id}">${esc(r.icon)} ${esc(r.name)}</option>`).join("")}
-          <option value="__random__">🎲 Surprise (tirage au sort)</option>
+          ${rewardOptions(null)}
         </select>
         <button class="btn" id="betAdd">Miser</button>
       </div>
@@ -1701,7 +1704,7 @@ function vHeros() {
         <div class="charcard-name">${esc(c.name)}</div>
         ${isUnlocked
           ? `<div class="hint">${"⭐".repeat(tier)}${"☆".repeat(3 - tier)}</div>
-             ${isCur ? '<div class="charcard-cur">Incarné ✓</div>' : `<button class="btn charcard-btn" data-equip="${c.id}">Incarner</button>`}`
+             ${isCur ? '<div class="charcard-cur">Incarné ✓</div>' : `<button class="btn charcard-btn" data-equip="${c.id}" aria-label="Incarner ${esc(c.name)}">Incarner</button>`}`
           : `<div class="charcard-cond">🔒 ${condProgress(c.cond, st)}</div>`}
       </div>`;
     }).join("");
@@ -1769,8 +1772,7 @@ function vObjectifs() {
            </div>
            <div class="frow" style="margin-bottom:6px">
              <select data-oreward="${o.id}" class="grow" aria-label="Récompense du défi">
-               ${S.rewards.map(r => `<option value="${r.id}" ${o.rewardId === r.id ? "selected" : ""}>${esc(r.icon)} ${esc(r.name)}</option>`).join("")}
-               <option value="__random__" ${o.rewardId === "__random__" ? "selected" : ""}>🎲 Surprise (tirage au sort)</option>
+               ${rewardOptions(o.rewardId)}
              </select>
            </div>`}
       ${done ? `<div class="oreward">🎁 ${rw ? esc(rw.icon + " " + rw.name) : "Récompense au choix"}</div>` : ""}
@@ -1786,7 +1788,7 @@ function vObjectifs() {
   }).join("");
 
   const wonRows = S.won.slice().reverse().map(w =>
-    `<div class="wonline"><span>${esc(w.icon)} ${esc(w.name)}</span><span class="d">${new Date(w.ts).toLocaleDateString("fr-FR")} <button class="notebtn" data-delwon="${w.id}" aria-label="Retirer de l'historique">✕</button></span></div>`
+    `<div class="wonline"><span>${esc(w.icon)} ${esc(w.name)}</span><span class="d">${new Date(w.ts).toLocaleDateString("fr-FR")} <button class="notebtn" data-delwon="${w.id}" aria-label="Retirer ${esc(w.name)} de l'historique">✕</button></span></div>`
   ).join("");
 
   return `
@@ -1811,8 +1813,7 @@ function vObjectifs() {
     </div>
     <div class="frow">
       <select id="objReward" aria-label="Récompense">
-        ${S.rewards.map(r => `<option value="${r.id}">${esc(r.icon)} ${esc(r.name)}</option>`).join("")}
-        <option value="__random__">🎲 Surprise (tirage au sort)</option>
+        ${rewardOptions(null)}
       </select>
       <button class="btn" id="objAdd">Lancer le défi</button>
     </div>
@@ -1823,7 +1824,7 @@ function vObjectifs() {
     ${S.rewards.map(r => `<div class="mgline">
       <input type="text" data-rwicon="${r.id}" value="${esc(r.icon)}" maxlength="4" style="flex:0 0 44px" aria-label="Icône de la récompense">
       <input type="text" data-rwname="${r.id}" value="${esc(r.name)}" maxlength="50" class="grow" style="min-width:0" aria-label="Nom de la récompense">
-      <button class="x" data-delrw="${r.id}" aria-label="Supprimer">✕</button>
+      <button class="x" data-delrw="${r.id}" aria-label="Supprimer ${esc(r.name)}">✕</button>
     </div>`).join("")}
     <div class="frow" style="margin-top:10px">
       <input type="text" id="rwIcon" placeholder="🎁" maxlength="4" style="flex:0 0 64px" aria-label="Icône de la récompense">
@@ -1918,7 +1919,7 @@ function vReglages() {
       <select data-tprio="${t.id}" style="flex:0 0 auto" aria-label="Priorité">
         ${Object.entries(PRIOS).map(([k, v]) => `<option value="${k}" ${t.prio === k ? "selected" : ""}>${v.label}</option>`).join("")}
       </select>
-      <button class="x" data-deltask="${t.id}" aria-label="Supprimer">✕</button>
+      <button class="x" data-deltask="${t.id}" aria-label="Supprimer ${esc(t.name)}">✕</button>
     </div>`).join("")}
     <div class="frow" style="margin-top:10px">
       <input type="text" id="tIcon" placeholder="🧼" maxlength="4" style="flex:0 0 64px" aria-label="Icône de la quête">
@@ -2775,7 +2776,12 @@ function bindView() {
       if (!b) return;
       b.claimed = true;
       save(); queueOp({ table: "bets", type: "upsert", row: toRow.bets(b) });
-      render(); toast("Enjeu retiré (égalité)");
+      render();
+      toast("Enjeu retiré (égalité)", "Annuler", () => {
+        b.claimed = false;
+        save(); queueOp({ table: "bets", type: "upsert", row: toRow.bets(b) });
+        render(); toast("Retrait annulé");
+      });
     });
   const cancelBetBtn = $("[data-cancelbet]");
   if (cancelBetBtn) cancelBetBtn.onclick = () =>

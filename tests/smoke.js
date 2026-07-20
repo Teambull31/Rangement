@@ -230,6 +230,9 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   // Suppression d'une récompense gagnée avec filet de rattrapage (it. 33) : "won" était
   // la seule liste sans bouton de suppression malgré deleteWithUndo généralisé (it. 24/30).
   check("bouton de suppression présent sur la récompense gagnée", (await page.locator("[data-delwon]").count()) === 1);
+  check("aria-label du bouton de suppression nomme la récompense gagnée (Itération 44)",
+    (await page.locator("[data-delwon]").getAttribute("aria-label")).startsWith("Retirer ") &&
+    (await page.locator("[data-delwon]").getAttribute("aria-label")).endsWith(" de l'historique"));
   await page.locator("[data-delwon]").click();
   await page.waitForTimeout(150);
   check("récompense gagnée supprimée de la liste", (await page.locator(".wonline").count()) === 0);
@@ -383,6 +386,8 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   const rwCountBefore = await page.locator("[data-delrw]").count();
   const rw1 = await page.evaluate(() => S.rewards[1].id);
   const rw1Name = await page.evaluate(() => S.rewards[1].name);
+  check("aria-label du bouton de suppression nomme la récompense (Itération 44)",
+    (await page.locator(`[data-delrw="${rw1}"]`).getAttribute("aria-label")) === "Supprimer " + rw1Name);
   await page.locator(`[data-delrw="${rw1}"]`).click();
   await page.waitForTimeout(150);
   check("récompense supprimée immédiatement de la liste", (await page.locator("[data-delrw]").count()) === rwCountBefore - 1);
@@ -561,6 +566,8 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   const taskCountBefore = await page.locator("[data-deltask]").count();
   const tLast = await page.evaluate(() => S.tasks[S.tasks.length - 1].id);
   const tLastName = await page.evaluate(() => S.tasks[S.tasks.length - 1].name);
+  check("aria-label du bouton de suppression nomme la tâche (Itération 44)",
+    (await page.locator(`[data-deltask="${tLast}"]`).getAttribute("aria-label")) === "Supprimer " + tLastName);
   await page.locator(`[data-deltask="${tLast}"]`).click();
   await page.waitForTimeout(150);
   check("tâche supprimée immédiatement de Réglages", (await page.locator("[data-deltask]").count()) === taskCountBefore - 1);
@@ -856,6 +863,37 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   check("pastille Duel disparue après réclamation du pari",
     (await page.locator('#tabs [data-tab="duel"] .tabdot').count()) === 0);
 
+  // Itération 44 : « Retirer l'enjeu » (égalité) était la seule action de résolution
+  // sans filet de rattrapage — nouveau bouton Annuler sur le toast, comme les autres.
+  await page.locator('[data-tab="duel"]').click();
+  await page.locator("#betAdd").click();
+  await page.waitForTimeout(150);
+  const tieBetId = await page.evaluate(() => {
+    const raw = JSON.parse(localStorage.getItem("rangement-sl-v2"));
+    const tieBet = raw.S.bets.find(b => !b.claimed);
+    const past = new Date(Date.now() - 30 * 864e5);
+    past.setHours(0, 0, 0, 0);
+    past.setDate(past.getDate() - ((past.getDay() + 6) % 7)); // lundi d'une semaine passée sans activité (0-0, égalité)
+    const k = past.getFullYear() + "-" + String(past.getMonth() + 1).padStart(2, "0") + "-" + String(past.getDate()).padStart(2, "0");
+    tieBet.week = k;
+    localStorage.setItem("rangement-sl-v2", JSON.stringify(raw));
+    return tieBet.id;
+  });
+  await page.reload();
+  await page.waitForSelector(".hunter");
+  await page.locator('[data-tab="duel"]').click();
+  check("pari en égalité affiché avec bouton « Retirer l'enjeu » (Itération 44)", (await page.locator("[data-tiebet]").count()) === 1);
+  await page.locator("[data-tiebet]").click();
+  await page.waitForTimeout(150);
+  check("enjeu marqué retiré après égalité (Itération 44)",
+    (await page.evaluate(id => S.bets.find(b => b.id === id).claimed, tieBetId)) === true);
+  check("toast « Annuler » proposé après retrait pour égalité (Itération 44)", (await page.locator(".toast-action").count()) === 1);
+  await page.locator(".toast-action").click();
+  await page.waitForTimeout(150);
+  check("retrait pour égalité annulé (Itération 44)",
+    (await page.evaluate(id => S.bets.find(b => b.id === id).claimed, tieBetId)) === false);
+  check("pari en égalité de nouveau affiché après Annuler (Itération 44)", (await page.locator("[data-tiebet]").count()) === 1);
+
   // Réglages : interrupteurs son et suggestion (propres à l'appareil)
   await page.locator('[data-tab="reglages"]').click();
   check("interrupteur son présent et activé par défaut", await page.locator("#soundToggle").isChecked());
@@ -1111,6 +1149,8 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
 
   // Incarner Frieren : avatar + stuff
   const p1EmojiBefore = await heroPage.evaluate(() => S.players[0].emoji);
+  check("aria-label du bouton Incarner nomme le héros (Itération 44)",
+    (await heroPage.locator('.charcard:has-text("Frieren") [data-equip]').getAttribute("aria-label")) === "Incarner Frieren");
   await heroPage.locator('.charcard:has-text("Frieren") [data-equip]').click();
   await heroPage.waitForTimeout(200);
   check("héros incarné visible sur la carte du chasseur", (await heroPage.locator(".hunter").first().locator(".charline").textContent()).includes("Frieren"));
