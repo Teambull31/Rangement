@@ -1765,3 +1765,77 @@ correspondait plus au rouge assombri choisi pour ce thème.
   paramétré.
 - Revoir la taille du fichier index.html (grossit à chaque itération,
   maintenant ~3 200 lignes).
+
+## Itération 43 — 2026-07-20 (routine cloud)
+
+**Audit** : un audit ciblé (agent dédié, lecture complète d'index.html face à
+l'historique des 42 itérations) a fait remonter quatre frictions. Une piste
+proposée (avertissement « même couleur » dans Réglages → Chasseurs) s'est
+révélée déjà livrée à l'itération 38 — vérifiée dans le code avant toute
+implémentation, écartée sans double travail. Les trois autres retenues,
+aucune ne nécessitant de changement de schéma.
+
+**Améliorations livrées :**
+- 🐛 **Bug corrigé — cartes partageables illisibles en thème clair Aube** :
+  `cardCanvas()` codait le centre de son dégradé radial en hex figé
+  (`#101D33`, un navy sombre) — identique par coïncidence à la valeur par
+  défaut de `--panel-2`, mais jamais recalculé pour les 5 thèmes. En Aube,
+  `--panel-2` devient presque blanc et le titre « RANGEMENT » est dessiné en
+  `c.ink` (sombre en Aube pour rester lisible sur fond clair) juste au-dessus
+  de ce centre resté navy : texte sombre sur fond sombre, sur les trois
+  cartes partageables (mur des trophées, duel de la semaine, héros incarné)
+  — le même défaut de « couleur codée en dur non reliée au thème » déjà
+  corrigé pour les chips de priorité (it. 28), les badges de rareté (it. 33)
+  et le graphique XP (it. 34), jamais étendu à ce dégradé précis. `panel2`
+  ajouté à `cardColors()` (lit `--panel-2`, mêmes fallback que l'ancien hex)
+  et utilisé comme stop 0 du dégradé — suit désormais les 5 thèmes, fond
+  identique en pixel sur les 4 thèmes sombres (aucune régression).
+- 🎨 **Bouton de thème/filtre actif visible en Aube** : `.themebtn.on` et
+  `.filterbtn.on` codaient leur surcouche de sélection en
+  `rgba(255,255,255,.04)` — un léger éclaircissement pensé pour un fond
+  sombre, visuellement nul sur les panneaux presque blancs d'Aube (le thème
+  « Aube » lui-même, une fois sélectionné, ne se distinguait plus que par sa
+  bordure). Converti en `color-mix(in oklab, var(--sys) 10%, transparent)`,
+  même traitement déjà appliqué à `.btn.danger` à l'itération 42 — suit
+  désormais la couleur d'accent des 5 thèmes au lieu d'un blanc fixe.
+- 🎁 **Récompense d'un défi actif éditable en place** : nom, cible (it. 25)
+  et type (it. 42) d'un défi étaient déjà éditables en place, mais la
+  récompense promise (`o.rewardId`) restait figée à la création, affichée en
+  texte statique — seul champ resté figé alors que le pattern (select +
+  `onchange` + upsert) est en place pour tous les autres. Nouveau
+  `<select data-oreward="${o.id}">` sous le type, même mécanique
+  (`Défis mis à jour` en confirmation), réutilise `rewardInUse` tel quel
+  côté suppression de récompense (aucune nouvelle logique de synchro).
+- ✅ Tests : 348 assertions au total (341 dans smoke.js +5, 7 dans
+  sync-test.js inchangée) — récompense d'un défi modifiée en place (toast de
+  confirmation), fond du bouton de thème actif vérifié distinct en Aube
+  (`getComputedStyle` résolu en `oklab(...)`, donc nécessairement différent
+  de l'ancien `rgba(255,255,255,.04)` littéral), `cardColors().panel2`
+  vérifié égal à `#f4f8fe` en Aube puis revérifié `#101d33` (valeur d'origine)
+  en thème sombre pour confirmer l'absence de régression sur les 4 autres
+  thèmes. Trois passages complets et isolés de `smoke.js` ont été nécessaires
+  avant validation : le premier a échoué sur « focus clavier restauré sur le
+  bouton de quête après la chaîne de jalons » (zone Quêtes, non touchée par
+  cette itération), le second a crashé sur le scénario Annuler de la modale
+  HÉROS DÉBLOQUÉ (zone Héros, non touchée non plus), le troisième a de
+  nouveau échoué sur le même test que le premier — trois échecs
+  non-déterministes répartis sur deux zones distinctes, jamais sur les
+  nouvelles assertions (vertes aux trois passages), cohérent avec les flakes
+  de contention déjà documentés aux itérations 15/20/22/24/31/32/33/35/36/
+  39/40/42 plutôt qu'avec une régression de ces trois correctifs. `sync-
+  test.js` repassée sans problème juste après, jamais lancée en parallèle
+  d'un autre processus. Validation visuelle (captures 390×844 et rendu
+  direct des cartes canvas) : bouton de thème « Aube » nettement visible une
+  fois sélectionné, récompense « 🎬 Séance de ciné » éditable sous le type
+  d'un défi actif, titre « RANGEMENT » lisible (encre sombre sur fond clair)
+  sur la carte partageable en Aube comparée au même rendu en thème Système
+  (identique pixel pour pixel à l'ancien code, non régressé).
+
+**Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
+- Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
+  attente — rien ne sera créé en base sans accord explicite).
+- Factoriser les fonctions `playerBlock` dupliquées (trophées, duel — la
+  carte héros a un layout à sujet unique, distinct) en un helper commun
+  paramétré.
+- Revoir la taille du fichier index.html (grossit à chaque itération,
+  maintenant ~3 210 lignes).

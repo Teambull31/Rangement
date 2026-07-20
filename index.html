@@ -265,7 +265,7 @@
     border-radius: 3px; padding: 9px 12px; font-size: 14px; font-weight: 600;
   }
   .themebtn i { width: 12px; height: 12px; border-radius: 50%; }
-  .themebtn.on { border-color: var(--sys); color: var(--ink); background: rgba(255,255,255,.04); }
+  .themebtn.on { border-color: var(--sys); color: var(--ink); background: color-mix(in oklab, var(--sys) 10%, transparent); }
   .togglerow { display: flex; align-items: center; gap: 11px; margin-top: 12px; font-size: 14.5px; }
   .switch { position: relative; display: inline-block; width: 42px; height: 24px; flex: 0 0 auto; }
   .switch input { opacity: 0; width: 0; height: 0; }
@@ -327,7 +327,7 @@
     background: var(--panel-2); border: 1px solid var(--line); color: var(--ink-dim);
     border-radius: 99px; padding: 6px 13px; font-size: 13px; font-weight: 600;
   }
-  .filterbtn.on { border-color: var(--sys); color: var(--ink); background: rgba(255,255,255,.04); }
+  .filterbtn.on { border-color: var(--sys); color: var(--ink); background: color-mix(in oklab, var(--sys) 10%, transparent); }
   .notifhist { margin: 10px 0 4px; }
   .notifhistline {
     display: flex; align-items: center; gap: 8px; padding: 5px 0;
@@ -1766,8 +1766,14 @@ function vObjectifs() {
                <option value="xp" ${o.type === "xp" ? "selected" : ""}>XP cumulés à deux</option>
                <option value="count" ${o.type === "count" ? "selected" : ""}>Nombre de quêtes à deux</option>
              </select>
+           </div>
+           <div class="frow" style="margin-bottom:6px">
+             <select data-oreward="${o.id}" class="grow" aria-label="Récompense du défi">
+               ${S.rewards.map(r => `<option value="${r.id}" ${o.rewardId === r.id ? "selected" : ""}>${esc(r.icon)} ${esc(r.name)}</option>`).join("")}
+               <option value="__random__" ${o.rewardId === "__random__" ? "selected" : ""}>🎲 Surprise (tirage au sort)</option>
+             </select>
            </div>`}
-      <div class="oreward">🎁 ${rw ? esc(rw.icon + " " + rw.name) : "Récompense au choix"}</div>
+      ${done ? `<div class="oreward">🎁 ${rw ? esc(rw.icon + " " + rw.name) : "Récompense au choix"}</div>` : ""}
       <div class="obar"><i style="width:${pct}%"></i></div>
       <div class="onums">
         <span>${prog} / ${o.target} ${o.type === "xp" ? "XP (à deux)" : "quêtes (à deux)"}</span>
@@ -2100,7 +2106,7 @@ function cardColors() {
   const cs = getComputedStyle(document.documentElement);
   const col = (name, fallback) => (cs.getPropertyValue(name).trim() || fallback);
   return {
-    abyss: col("--abyss", "#060A13"), panel: col("--panel", "#0C1526"), line: col("--line", "#1C3252"),
+    abyss: col("--abyss", "#060A13"), panel: col("--panel", "#0C1526"), panel2: col("--panel-2", "#101D33"), line: col("--line", "#1C3252"),
     lineGlow: col("--line-glow", "#2B5A8F"),
     sys: col("--sys", "#4DC3FF"), gold: col("--gold", "#F0C550"), ink: col("--ink", "#D9E7F7"), inkDim: col("--ink-dim", "#8AA3C2"),
     mana: col("--mana", "#8B7BFF"), crit: col("--crit", "#FF5C6E"),
@@ -2117,7 +2123,7 @@ function cardCanvas(W, H, c) {
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext("2d");
   const bg = ctx.createRadialGradient(W / 2, 160, 60, W / 2, 160, 900);
-  bg.addColorStop(0, "#101D33"); bg.addColorStop(1, c.abyss);
+  bg.addColorStop(0, c.panel2); bg.addColorStop(1, c.abyss);
   ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
   ctx.textAlign = "center";
   return { canvas, ctx };
@@ -2674,6 +2680,14 @@ function bindView() {
       const o = S.objectives.find(x => x.id === sel.dataset.otype);
       if (!o) return;
       o.type = sel.value;
+      save(); queueOp({ table: "objectives", type: "upsert", row: toRow.objectives(o) });
+      render(); toast("Défis mis à jour");
+    });
+  document.querySelectorAll("[data-oreward]").forEach(sel =>
+    sel.onchange = () => {
+      const o = S.objectives.find(x => x.id === sel.dataset.oreward);
+      if (!o) return;
+      o.rewardId = sel.value;
       save(); queueOp({ table: "objectives", type: "upsert", row: toRow.objectives(o) });
       render(); toast("Défis mis à jour");
     });

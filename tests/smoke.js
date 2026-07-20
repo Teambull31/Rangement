@@ -283,6 +283,15 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await page.waitForTimeout(200);
   check("type du défi restauré à xp", (await page.evaluate(id => S.objectives.find(o => o.id === id).type, sprintObjId)) === "xp");
   await page.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
+
+  // Récompense d'un défi éditable en place (it. 43), même mécanique que le type (it. 42)
+  const otherRewardId = await page.evaluate(id => S.rewards.find(r => r.id !== S.objectives.find(o => o.id === id).rewardId).id, sprintObjId);
+  await page.locator(`[data-oreward="${sprintObjId}"]`).selectOption(otherRewardId);
+  await page.waitForTimeout(200);
+  check("récompense du défi modifiée en place", (await page.evaluate(id => S.objectives.find(o => o.id === id).rewardId, sprintObjId)) === otherRewardId);
+  check("toast de confirmation après édition de la récompense d'un défi", (await page.locator(".toast", { hasText: "Défis mis à jour" }).count()) === 1);
+  await page.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
+
   await page.fill(`[data-oname="${sprintObjId}"]`, "");
   await page.locator(`[data-oname="${sprintObjId}"]`).evaluate(el => el.blur());
   await page.waitForTimeout(200);
@@ -639,6 +648,18 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   const dangerBgAube = await page.locator("#resetBtn").evaluate(el => getComputedStyle(el).backgroundColor);
   check("bouton danger suit --crit en Aube (" + dangerBgAube + ")", dangerBgAube === "oklab(0.561911 0.177069 0.064578 / 0.08)");
 
+  // Bouton de thème actif : fond codé en rgba(255,255,255,.04) avant l'it. 43, quasi invisible
+  // sur les panneaux presque blancs d'Aube -> passé en color-mix sur --sys, comme .btn.danger.
+  const themebtnOnBgAube = await page.locator('[data-theme="aube"]').evaluate(el => getComputedStyle(el).backgroundColor);
+  check("bouton de thème actif se distingue en Aube, plus de rgba(255,255,255,.04) (" + themebtnOnBgAube + ")",
+    themebtnOnBgAube.includes("oklab"));
+
+  // cardColors().panel2 alimente le centre du dégradé des cartes canvas partageables (trophées,
+  // duel, héros) : codé en hex figé "#101D33" avant l'it. 43 -> texte c.ink (sombre en Aube)
+  // dessiné sur un centre resté navy sombre, illisible. Doit désormais suivre --panel-2.
+  const panel2Aube = (await page.evaluate(() => cardColors().panel2)).toLowerCase();
+  check("cardColors().panel2 suit le thème clair Aube (" + panel2Aube + ")", panel2Aube === "#f4f8fe");
+
   // Badges de rareté (Héros) : suivaient un hex figé identique à --ink-dim/--sys/--mana/
   // --gold/--crit mais sans jamais relire ces variables -> même défaut de contraste que
   // les chips de priorité avant l'it. 28, jamais corrigé pour la rareté (it. 33).
@@ -666,6 +687,8 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   check("chip « basse » revient à la teinte sombre par défaut (" + prioBasseDark + ")", prioBasseDark === "#8aa3c2");
   const dangerBgDark = await page.locator("#resetBtn").evaluate(el => getComputedStyle(el).backgroundColor);
   check("bouton danger revient à --crit sombre par défaut (" + dangerBgDark + ")", dangerBgDark === "oklab(0.69422 0.188363 0.0594485 / 0.08)");
+  const panel2Dark = (await page.evaluate(() => cardColors().panel2)).toLowerCase();
+  check("cardColors().panel2 revient au navy sombre par défaut, pas de régression (" + panel2Dark + ")", panel2Dark === "#101d33");
   await page.evaluate(() => toast("Test contraste sombre"));
   await page.waitForTimeout(100);
   const toastBgDark = await page.locator(".toast").first().evaluate(el => getComputedStyle(el).backgroundColor);
