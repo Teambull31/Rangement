@@ -447,13 +447,17 @@
   .sysbox button { margin-top: 16px; }
 
   /* toast */
-  .toast {
+  #toastZone {
     position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%);
+    z-index: 60; display: flex; flex-direction: column-reverse;
+    align-items: center; gap: 8px; pointer-events: none;
+  }
+  .toast {
     background: var(--toastbg); border: 1px solid var(--sys-dim); color: var(--ink);
-    padding: 8px 16px; border-radius: 3px; font-size: 15px; z-index: 60;
+    padding: 8px 16px; border-radius: 3px; font-size: 15px;
     box-shadow: 0 0 14px color-mix(in oklab, var(--sys) 30%, transparent);
     animation: toastin .25s ease;
-    white-space: nowrap;
+    white-space: nowrap; pointer-events: auto;
     display: flex; align-items: center; gap: 12px;
   }
   .toast-action {
@@ -461,7 +465,7 @@
     border-radius: 3px; font-size: 13px; font-weight: 700; letter-spacing: .06em;
     text-transform: uppercase; padding: 3px 10px;
   }
-  @keyframes toastin { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+  @keyframes toastin { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
   @media (prefers-reduced-motion: reduce) {
     * { animation: none !important; transition: none !important; }
@@ -972,6 +976,11 @@ function samePlayerColor() {
 function sameEmoji() {
   if (S.players.length !== 2) return false;
   const [a, b] = S.players.map(p => p.emoji || "");
+  return a && a === b;
+}
+function sameName() {
+  if (S.players.length !== 2) return false;
+  const [a, b] = S.players.map(p => (p.name || "").trim().toLowerCase());
   return a && a === b;
 }
 function equipChar(p, c) {
@@ -1787,8 +1796,8 @@ function vObjectifs() {
         <span>${pct}%</span>
       </div>
       ${done
-        ? `<button class="claim" data-claim="${o.id}">Réclamer la récompense</button>`
-        : `<button class="undo" style="margin-top:9px" data-delobj="${o.id}">Abandonner</button>`}
+        ? `<button class="claim" data-claim="${o.id}" aria-label="Réclamer la récompense de ${esc(o.name)}">Réclamer la récompense</button>`
+        : `<button class="undo" style="margin-top:9px" data-delobj="${o.id}" aria-label="Abandonner ${esc(o.name)}">Abandonner</button>`}
     </div>`;
   }).join("");
 
@@ -1917,6 +1926,7 @@ function vReglages() {
     ${S.players.some(p => p.characterId) ? `<p class="hint">🎴 Emoji verrouillé pendant qu'un héros est incarné — retire-le dans l'onglet Héros pour reprendre ton emoji personnel.</p>` : ""}
     ${samePlayerColor() ? `<p class="hint warn" id="colorClashHint">⚠️ Les deux chasseurs ont la même couleur — le duel devient difficile à lire. Change l'une des deux.</p>` : ""}
     ${sameEmoji() ? `<p class="hint warn" id="emojiClashHint">⚠️ Les deux chasseurs ont le même emoji — les boutons de quête ⚔️/🏹 deviennent difficiles à distinguer. Change l'un des deux.</p>` : ""}
+    ${sameName() ? `<p class="hint warn" id="nameClashHint">⚠️ Les deux chasseurs ont le même nom — toasts, Journal et cartes deviennent ambigus. Change l'un des deux.</p>` : ""}
   </section>
   <section class="panel">
     <h2>Tâches ménagères</h2>
@@ -3093,7 +3103,8 @@ function onboarding() {
         <input type="color" data-ob-color="${p.id}" value="${esc(p.color || "#4DC3FF")}" style="flex:0 0 46px;height:42px;padding:2px;background:var(--field);border:1px solid var(--line);border-radius:3px" aria-label="Couleur">
       </div>`).join("")}
       <p class="hint warn" id="obColorClash" style="display:none;margin-top:6px">⚠️ Les deux chasseurs ont la même couleur — le duel devient difficile à lire. Change l'une des deux.</p>
-      <p class="hint warn" id="obEmojiClash" style="display:none;margin-top:6px">⚠️ Les deux chasseurs ont le même emoji — les boutons de quête deviennent difficiles à distinguer. Change l'un des deux.</p>`;
+      <p class="hint warn" id="obEmojiClash" style="display:none;margin-top:6px">⚠️ Les deux chasseurs ont le même emoji — les boutons de quête deviennent difficiles à distinguer. Change l'un des deux.</p>
+      <p class="hint warn" id="obNameClash" style="display:none;margin-top:6px">⚠️ Les deux chasseurs ont le même nom — toasts, Journal et cartes deviennent ambigus. Change l'un des deux.</p>`;
     return `
       <div class="big gold">LA CHASSE</div>
       <div class="sub" style="text-align:left">⚔️ Touchez <b>votre emoji</b> sur une quête accomplie.<br>👑 L'onglet <b>Duel</b> compare vos scores — un trophée par semaine gagnée.<br>🏆 Créez des <b>objectifs communs</b> : atteints, ils débloquent vos récompenses (ciné, resto, surprise 🎲…).<br><br>Que le meilleur chasseur gagne 💙</div>`;
@@ -3153,6 +3164,16 @@ function onboarding() {
       };
       emojiInputs.forEach(inp => inp && (inp.oninput = checkEmojiClash));
       checkEmojiClash();
+      const nameInputs = S.players.map(p => document.querySelector(`[data-ob-name="${p.id}"]`));
+      const checkNameClash = () => {
+        const hint = $("#obNameClash");
+        if (!hint) return;
+        const a = nameInputs[0] && nameInputs[0].value.trim().toLowerCase();
+        const b = nameInputs[1] && nameInputs[1].value.trim().toLowerCase();
+        hint.style.display = a && b && a === b ? "" : "none";
+      };
+      nameInputs.forEach(inp => inp && (inp.oninput = checkNameClash));
+      checkNameClash();
     }
   };
   show();

@@ -192,6 +192,8 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await page.locator('[data-tab="objectifs"]').click();
   check("objectif surprise affiché 🎲", (await page.locator(".obj .oreward").last().textContent()).includes("surprise"));
   check("bouton de réclamation présent", (await page.locator("[data-claim]").count()) > 0);
+  check("aria-label du bouton de réclamation nomme le défi (Itération 47)",
+    (await page.locator("[data-claim]").last().getAttribute("aria-label")) === "Réclamer la récompense de Test défi");
   const objDot = (await page.locator('#tabs [data-tab="objectifs"] .tabdot').count())
     ? await page.locator('#tabs [data-tab="objectifs"] .tabdot').textContent() : "0";
   check("pastille « à réclamer » sur l'onglet Objectifs (" + objDot + ")", Number(objDot) >= 1);
@@ -257,6 +259,8 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
 
   // Abandonner un défi avec filet de rattrapage (toast « Annuler »)
   const sprintObjId = await page.evaluate(() => S.objectives.find(o => o.name === "Sprint de la semaine").id);
+  check("aria-label du bouton Abandonner nomme le défi (Itération 47)",
+    (await page.locator(`[data-delobj="${sprintObjId}"]`).getAttribute("aria-label")) === "Abandonner Sprint de la semaine");
   await page.locator(`[data-delobj="${sprintObjId}"]`).click();
   await page.waitForTimeout(150);
   check("défi abandonné disparaît de la liste", (await page.locator(`[data-oname="${sprintObjId}"]`).count()) === 0);
@@ -299,6 +303,19 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await page.locator(`[data-oname="${sprintObjId}"]`).evaluate(el => el.blur());
   await page.waitForTimeout(200);
   check("nom vide restaure l'ancien nom du défi", (await page.evaluate(id => S.objectives.find(o => o.id === id).name, sprintObjId)) === "Sprint du week-end");
+
+  // Bug corrigé (it. 47) : deux toasts rapprochés (ex. deux quêtes validées coup sur coup)
+  // s'affichaient exactement superposés (chaque .toast en position:fixed à la même coordonnée)
+  // — #toastZone est désormais le conteneur positionné (flex column-reverse) et empile les toasts.
+  await page.evaluate(() => { toast("Toast un"); toast("Toast deux"); });
+  await page.waitForTimeout(100);
+  check("deux toasts rapprochés restent tous deux affichés", (await page.locator(".toast").count()) === 2);
+  const toastTops = await page.locator(".toast").evaluateAll(els => els.map(e => e.getBoundingClientRect().top));
+  check("toasts empilés verticalement, pas superposés (" + toastTops.join(", ") + ")",
+    toastTops.length === 2 && toastTops[0] !== toastTops[1]);
+  check("#toastZone porte l'empilement (flex column-reverse)",
+    (await page.locator("#toastZone").evaluate(el => getComputedStyle(el).flexDirection)) === "column-reverse");
+  await page.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
 
   // Garde-fou : impossible de supprimer une récompense encore promise par un défi actif
   // (sinon le défi retomberait sur « Récompense au choix » sans que personne ne s'en aperçoive
@@ -638,6 +655,18 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await page.locator('[data-pemoji="p1"]').evaluate(el => el.dispatchEvent(new Event("change")));
   await page.waitForTimeout(200);
   check("alerte emoji disparaît dès que les emojis redeviennent différents", (await page.locator("#emojiClashHint").count()) === 0);
+
+  // Alerte si les deux chasseurs choisissent le même nom (itération 47, même mécanique)
+  check("pas d'alerte nom quand les noms diffèrent", (await page.locator("#nameClashHint").count()) === 0);
+  const p2Name = await page.evaluate(() => S.players[1].name);
+  await page.fill('[data-pname="p1"]', p2Name);
+  await page.locator('[data-pname="p1"]').evaluate(el => el.dispatchEvent(new Event("change")));
+  await page.waitForTimeout(200);
+  check("alerte nom affichée quand les deux noms sont identiques", (await page.locator("#nameClashHint").count()) === 1);
+  await page.fill('[data-pname="p1"]', "Max");
+  await page.locator('[data-pname="p1"]').evaluate(el => el.dispatchEvent(new Event("change")));
+  await page.waitForTimeout(200);
+  check("alerte nom disparaît dès que les noms redeviennent différents", (await page.locator("#nameClashHint").count()) === 0);
 
   // Thèmes : application + persistance
   await page.locator('[data-tab="reglages"]').click();

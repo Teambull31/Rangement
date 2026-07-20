@@ -2065,3 +2065,75 @@ donc pas une régression de contraste réelle à corriger.
   paramétré.
 - Revoir la taille du fichier index.html (grossit à chaque itération,
   maintenant ~3 225 lignes).
+
+## Itération 47 — 2026-07-20 (routine cloud)
+
+**Audit** : un audit ciblé (agent dédié, lecture complète d'index.html face à
+l'historique des 46 itérations) a fait remonter quatre frictions, aucune ne
+nécessitant de changement de schéma. Trois retenues ; la quatrième (bloquer
+ou avertir si les deux chasseurs incarnent le même héros) laissée de côté
+faute de temps, notée en piste. La piste `.duelbar .b` (dégradé hex figé),
+déjà vérifiée et écartée à l'itération 46 comme code mort (toujours écrasé
+par un `style` inline), a été reconfirmée écartée sans nouvelle inspection.
+
+**Améliorations livrées :**
+- 🐛 **Bug corrigé — deux toasts rapprochés s'affichaient exactement
+  superposés** : chaque `.toast` était en `position: fixed` à la même
+  coordonnée (`left: 50%; bottom: 96px`), et `toast()` (it. 1) empile
+  simplement les éléments dans `#toastZone` sans jamais repositionner les
+  précédents — deux actions coup sur coup (deux quêtes validées, deux
+  champs modifiés d'affilée) affichaient deux notifications, potentiellement
+  deux boutons « Annuler », strictement l'un sur l'autre et illisibles.
+  `#toastZone` porte désormais le positionnement fixe et devient un conteneur
+  flex (`column-reverse`, `gap: 8px`) ; chaque `.toast` reste en flux normal
+  à l'intérieur — la plus récente en bas (position historique inchangée),
+  les précédentes empilées au-dessus. Validation visuelle en situation
+  réelle : 5 toasts accumulés (changements de nom rapprochés + lancement
+  d'un défi) tous lisibles et distincts, aucune régression sur l'antériorité
+  ou le style de chaque toast individuel.
+- ♿ **`aria-label` nommant le défi sur les boutons « Réclamer la
+  récompense » et « Abandonner »** (`vObjectifs()`) : même défaut que celui
+  déjà corrigé pour les listes de suppression/incarnation (it. 44) et le
+  Journal (it. 46), jamais étendu aux défis — avec plusieurs défis actifs en
+  parallèle (permis depuis it. 17), un lecteur d'écran les annonçait
+  indiscernables. `aria-label="Réclamer la récompense de ${nom}"` /
+  `"Abandonner ${nom}"` ajoutés, aucune logique modifiée.
+- ⚠️ **Alerte si les deux chasseurs portent le même nom** (Réglages →
+  Chasseurs, et onboarding « VOS CHASSEURS »), extension directe des alertes
+  déjà en place pour la couleur identique (it. 38) et l'emoji identique
+  (it. 45) : un nom identique reste ambigu dans les toasts, les filtres du
+  Journal et les cartes canvas partageables. `sameName()` réutilise
+  exactement le schéma de `samePlayerColor()`/`sameEmoji()`, réactif en
+  direct dans l'onboarding comme dans Réglages.
+- ✅ Tests : 379 assertions au total (372 dans smoke.js +8, 7 dans
+  sync-test.js inchangée) — deux toasts déclenchés coup sur coup vérifiés
+  tous deux présents avec des positions verticales distinctes
+  (`getBoundingClientRect().top`), `#toastZone` vérifié en
+  `flex-direction: column-reverse` par `getComputedStyle`, `aria-label` du
+  bouton de réclamation et du bouton Abandonner vérifiés nommant le défi,
+  alerte de nom identique apparaît/disparaît selon les noms des deux
+  chasseurs (Réglages). Deux passages complets et isolés (jamais en
+  parallèle d'un autre processus) sont sortis entièrement verts
+  (`smoke.js` puis `sync-test.js`), aucun échec observé cette itération —
+  donc aucune reproduction isolée nécessaire au titre de la règle 2.
+  Validation visuelle (captures 390×844, script Playwright dédié puis
+  supprimé) : deux toasts nettement empilés l'un au-dessus de l'autre
+  (« Toast deux » / « Toast un »), alerte « ⚠️ Les deux chasseurs ont le
+  même nom… » affichée dans Réglages après renommage en doublon, `aria-label`
+  « Abandonner Défi visuel » confirmé programmatiquement, et un cas réel à 5
+  toasts accumulés (renommages + lancement de défi) tous lisibles et
+  distincts sans aucune superposition.
+
+**Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
+- Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
+  attente — rien ne sera créé en base sans accord explicite).
+- Restaurer l'emoji personnel entre deux téléphones différents (piste déjà
+  notée à l'itération 40) : nécessiterait une colonne Supabase dédiée, à
+  proposer à l'utilisateur avant toute migration.
+- Alerter (ou bloquer) si les deux chasseurs incarnent simultanément le même
+  héros — même famille que les alertes couleur/emoji/nom, pas encore traité.
+- Factoriser les fonctions `playerBlock` dupliquées (trophées, duel — la
+  carte héros a un layout à sujet unique, distinct) en un helper commun
+  paramétré.
+- Revoir la taille du fichier index.html (grossit à chaque itération,
+  maintenant ~3 250 lignes).
