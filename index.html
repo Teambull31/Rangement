@@ -969,6 +969,11 @@ function samePlayerColor() {
   const [a, b] = S.players.map(p => (p.color || "#4DC3FF").toLowerCase());
   return a === b;
 }
+function sameEmoji() {
+  if (S.players.length !== 2) return false;
+  const [a, b] = S.players.map(p => p.emoji || "");
+  return a && a === b;
+}
 function equipChar(p, c) {
   if (!p.characterId) localStorage.setItem(baseEmojiKey(p.id), p.emoji);
   p.characterId = c.id;
@@ -1909,6 +1914,7 @@ function vReglages() {
     <p class="hint" style="margin-top:6px">Enregistré automatiquement à chaque changement. La couleur personnalise ta carte, tes boutons de quête et la barre de duel — elle se synchronise sur les deux téléphones.</p>
     ${S.players.some(p => p.characterId) ? `<p class="hint">🎴 Emoji verrouillé pendant qu'un héros est incarné — retire-le dans l'onglet Héros pour reprendre ton emoji personnel.</p>` : ""}
     ${samePlayerColor() ? `<p class="hint warn" id="colorClashHint">⚠️ Les deux chasseurs ont la même couleur — le duel devient difficile à lire. Change l'une des deux.</p>` : ""}
+    ${sameEmoji() ? `<p class="hint warn" id="emojiClashHint">⚠️ Les deux chasseurs ont le même emoji — les boutons de quête ⚔️/🏹 deviennent difficiles à distinguer. Change l'un des deux.</p>` : ""}
   </section>
   <section class="panel">
     <h2>Tâches ménagères</h2>
@@ -2043,6 +2049,13 @@ function deleteWithUndo(table, id, msg) {
   save(); queueOp({ table, type: "delete", id });
   render();
   toast(msg, "Annuler", () => {
+    if (table === "tasks" && nameTaken(S.tasks, item.name, item.id)) {
+      toast(`Impossible de restaurer : une quête « ${item.name} » existe déjà`);
+      return;
+    }
+    // Un nouvel élément a pu être recréé avec le même id déterministe entre-temps (ex. un
+    // nouveau pari sur la même semaine) : ne pas dupliquer, la version actuelle prime.
+    if (S[table].some(x => x.id === item.id)) return;
     S[table].splice(Math.min(idx, S[table].length), 0, item);
     save(); queueOp({ table, type: "upsert", row: toRow[table](item) });
     render();
@@ -2732,7 +2745,10 @@ function bindView() {
   // Pari de duel
   const betAdd = $("#betAdd");
   if (betAdd) betAdd.onclick = () => {
-    const b = { id: uid(), week: weekKey(NOW()), rewardId: $("#betReward").value, createdAt: NOW(), claimed: false };
+    // Id déterministe par semaine (même motif que le bouclier de série, applyStreakShields) : si les
+    // deux téléphones misent hors ligne sur la même semaine, l'upsert Supabase fusionne en un seul pari
+    // au lieu de créer deux lignes réclamables séparément.
+    const b = { id: "bet-" + weekKey(NOW()), week: weekKey(NOW()), rewardId: $("#betReward").value, createdAt: NOW(), claimed: false };
     (S.bets ??= []).push(b);
     save(); queueOp({ table: "bets", type: "upsert", row: toRow.bets(b) });
     render(); toast("Enjeu misé ⚔️");
@@ -3074,7 +3090,8 @@ function onboarding() {
         <input type="text" data-ob-name="${p.id}" value="${esc(p.name)}" maxlength="20" aria-label="Nom">
         <input type="color" data-ob-color="${p.id}" value="${esc(p.color || "#4DC3FF")}" style="flex:0 0 46px;height:42px;padding:2px;background:var(--field);border:1px solid var(--line);border-radius:3px" aria-label="Couleur">
       </div>`).join("")}
-      <p class="hint warn" id="obColorClash" style="display:none;margin-top:6px">⚠️ Les deux chasseurs ont la même couleur — le duel devient difficile à lire. Change l'une des deux.</p>`;
+      <p class="hint warn" id="obColorClash" style="display:none;margin-top:6px">⚠️ Les deux chasseurs ont la même couleur — le duel devient difficile à lire. Change l'une des deux.</p>
+      <p class="hint warn" id="obEmojiClash" style="display:none;margin-top:6px">⚠️ Les deux chasseurs ont le même emoji — les boutons de quête deviennent difficiles à distinguer. Change l'un des deux.</p>`;
     return `
       <div class="big gold">LA CHASSE</div>
       <div class="sub" style="text-align:left">⚔️ Touchez <b>votre emoji</b> sur une quête accomplie.<br>👑 L'onglet <b>Duel</b> compare vos scores — un trophée par semaine gagnée.<br>🏆 Créez des <b>objectifs communs</b> : atteints, ils débloquent vos récompenses (ciné, resto, surprise 🎲…).<br><br>Que le meilleur chasseur gagne 💙</div>`;
@@ -3124,6 +3141,16 @@ function onboarding() {
       };
       colorInputs.forEach(inp => inp && (inp.oninput = checkClash));
       checkClash();
+      const emojiInputs = S.players.map(p => document.querySelector(`[data-ob-emoji="${p.id}"]`));
+      const checkEmojiClash = () => {
+        const hint = $("#obEmojiClash");
+        if (!hint) return;
+        const a = emojiInputs[0] && emojiInputs[0].value.trim();
+        const b = emojiInputs[1] && emojiInputs[1].value.trim();
+        hint.style.display = a && b && a === b ? "" : "none";
+      };
+      emojiInputs.forEach(inp => inp && (inp.oninput = checkEmojiClash));
+      checkEmojiClash();
     }
   };
   show();

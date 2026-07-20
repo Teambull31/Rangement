@@ -579,6 +579,36 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
     (await page.locator("[data-deltask]").count()) === taskCountBefore
     && (await page.evaluate(id => S.tasks.some(t => t.id === id), tLast)) === true);
 
+  // Bug corrigé (it. 45) : annuler une suppression de tâche pouvait recréer un doublon de
+  // nom si une nouvelle tâche homonyme avait été ajoutée pendant la fenêtre des 5 s du toast
+  // — la protection nameTaken() est désormais aussi appliquée côté restauration.
+  await page.locator(`[data-deltask="${tLast}"]`).click();
+  await page.waitForTimeout(150);
+  await page.fill("#tIcon", "🆕");
+  await page.fill("#tName", tLastName);
+  await page.locator("#tAdd").click();
+  await page.waitForTimeout(150);
+  check("nouvelle tâche homonyme ajoutée pendant la fenêtre d'annulation",
+    (await page.evaluate(n => S.tasks.filter(t => t.name === n).length, tLastName)) === 1);
+  await page.locator(".toast-action").click();
+  await page.waitForTimeout(150);
+  check("annulation refusée : aucun doublon recréé, message explicite",
+    (await page.evaluate(n => S.tasks.filter(t => t.name === n).length, tLastName)) === 1
+    && (await page.locator(".toast", { hasText: "Impossible de restaurer" }).count()) === 1);
+  await page.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
+
+  // Alerte si les deux chasseurs choisissent le même emoji (extension de l'alerte couleur)
+  check("pas d'alerte emoji quand les emojis diffèrent", (await page.locator("#emojiClashHint").count()) === 0);
+  const p2Emoji = await page.evaluate(() => S.players[1].emoji);
+  await page.fill('[data-pemoji="p1"]', p2Emoji);
+  await page.locator('[data-pemoji="p1"]').evaluate(el => el.dispatchEvent(new Event("change")));
+  await page.waitForTimeout(200);
+  check("alerte emoji affichée quand les deux emojis sont identiques", (await page.locator("#emojiClashHint").count()) === 1);
+  await page.fill('[data-pemoji="p1"]', "⚔️");
+  await page.locator('[data-pemoji="p1"]').evaluate(el => el.dispatchEvent(new Event("change")));
+  await page.waitForTimeout(200);
+  check("alerte emoji disparaît dès que les emojis redeviennent différents", (await page.locator("#emojiClashHint").count()) === 0);
+
   // Thèmes : application + persistance
   await page.locator('[data-tab="reglages"]').click();
   check("onglet Réglages porte aria-current (Itération 31)",
@@ -824,6 +854,13 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await page.locator(".toast-action").click();
   await page.waitForTimeout(150);
   check("enjeu actif restauré après Annuler depuis le toast", (await page.locator(".betline.hot").count()) === 1);
+
+  // Bug corrigé (it. 45) : id de pari déterministe par semaine (même motif que le bouclier
+  // de série) — deux mises hors ligne simultanées sur la même semaine fusionnent en un seul
+  // pari via l'upsert Supabase au lieu de rester réclamables deux fois.
+  const betDeterministicId = await page.evaluate(() => S.bets.find(b => !b.claimed).id);
+  const expectedBetId = await page.evaluate(() => "bet-" + weekKey(NOW()));
+  check("id du pari déterministe par semaine (" + betDeterministicId + ")", betDeterministicId === expectedBetId);
 
   await page.locator('[data-tab="quetes"]').click();
   check("rappel de l'enjeu visible sur l'onglet Quêtes", (await page.locator(".betremind").count()) === 1);

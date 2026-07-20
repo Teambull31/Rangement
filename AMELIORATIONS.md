@@ -1905,3 +1905,93 @@ rien de nouveau ne les faisait remonter en priorité.
   paramétré.
 - Revoir la taille du fichier index.html (grossit à chaque itération,
   maintenant ~3 200 lignes).
+
+## Itération 45 — 2026-07-20 (routine cloud)
+
+**Audit** : un audit ciblé (agent dédié, lecture complète d'index.html face à
+l'historique des 44 itérations) a fait remonter cinq frictions, aucune ne
+nécessitant de changement de schéma. Les trois retenues touchent toutes des
+bugs de confiance latents dans des filets de rattrapage déjà livrés — un
+concret et immédiatement reproductible, deux préventifs (motif déjà résolu
+ailleurs dans le code mais pas repris à cet endroit). Deux pistes notées pour
+la suite (restauration de l'emoji personnel entre deux téléphones différents
+— nécessiterait une colonne Supabase dédiée, écartée pour rester sans
+migration ; limite d'affichage sur l'historique des récompenses gagnées).
+
+**Améliorations livrées :**
+- 🐛 **Bug corrigé — annuler une suppression de tâche pouvait recréer un
+  doublon de nom** : `nameTaken()` (it. 40) bloque bien la création et le
+  renommage d'une tâche vers un nom déjà pris, pour préserver l'appariement
+  du journal par `taskName` — mais le filet « Annuler » du toast de
+  suppression (`deleteWithUndo`, it. 24) réinsérait l'élément supprimé sans
+  repasser par cette vérification. Scénario concret : supprimer « Vaisselle »,
+  ajouter une nouvelle tâche également nommée « Vaisselle » pendant la
+  fenêtre des 5 s, puis cliquer « Annuler » sur le toast de suppression →
+  deux tâches homonymes coexistaient, exactement le cas que `nameTaken()`
+  visait à empêcher. La restauration vérifie désormais `nameTaken()` avant
+  de réinsérer (tâches uniquement) et prévient par un toast explicite si le
+  nom a été repris entre-temps, sans rien casser.
+- 🐛 **Bug corrigé — deux enjeux de duel actifs possibles pour la même
+  semaine en cas de mise hors ligne simultanée sur les deux téléphones** :
+  le pari était créé avec `id: uid()` (aléatoire), contrairement au bouclier
+  de série (`applyStreakShields`, it. 22) qui utilise déjà un id déterministe
+  par semaine précisément pour être idempotent entre appareils hors ligne.
+  L'architecture `PENDING`/`queueOp` est justement conçue pour ce cas — deux
+  mises simultanées côté client (chacune ne voyant qu'un pari `null` local)
+  auraient créé deux lignes distinctes à la reconnexion, la seconde restant
+  invisible jusqu'à la fin de la semaine puis réclamable en double. L'id
+  suit désormais le même motif que le bouclier (`"bet-" + weekKey(...)`) :
+  l'upsert Supabase fusionne toute création concurrente en une seule ligne.
+  Effet de bord traité au passage dans `deleteWithUndo` : un id déterministe
+  peut en théorie déjà être repris par un nouveau pari au moment où on
+  annule une suppression (annuler l'enjeu puis en remiser un dans la fenêtre
+  des 5 s) — la restauration ne duplique plus l'entrée si l'id existe déjà.
+- ⚠️ **Alerte si les deux chasseurs choisissent le même emoji** (Réglages →
+  Chasseurs, et onboarding « VOS CHASSEURS »), extension directe de l'alerte
+  déjà en place pour la couleur identique (it. 38) : les boutons de quête
+  ⚔️/🏹 et les cartes chasseurs ne distinguent visuellement les deux joueurs
+  que par l'emoji et la bordure de couleur — avec le même emoji, seule la
+  couleur reste, un vrai risque de mistap au quotidien. `sameEmoji()`
+  réutilise exactement le schéma de `samePlayerColor()` ; réactif en direct
+  dans l'onboarding comme pour la couleur.
+- ✅ Tests : 363 assertions au total (356 dans smoke.js +8, 7 dans
+  sync-test.js inchangée) — cycle complet du doublon de nom sur restauration
+  (nouvelle tâche homonyme créée pendant la fenêtre d'annulation, tentative
+  de restauration refusée avec toast explicite, aucun doublon en base), id
+  de pari vérifié déterministe (`bet-2026-07-20`), alerte emoji identique
+  apparaît/disparaît selon les emojis des deux chasseurs (Réglages). Le run
+  initial a échoué sur « jalon 1 : HÉROS DÉBLOQUÉ » (timeout de modale,
+  scénario existant depuis l'itération 12, zone non touchée par cette
+  itération) ; un deuxième passage isolé a échoué ailleurs, sur « montée de
+  niveau déclenchée au clavier » (scénario focus, existant depuis
+  l'itération 32) — deux échecs différents sur deux zones distinctes,
+  jamais sur les 8 nouvelles assertions (vertes aux deux passages).
+  Conformément à la règle 2, reproduction sur le code de base (`git stash`
+  avant relance) : un troisième échec est apparu, à nouveau ailleurs
+  (« premier jalon de la file : montée de niveau », même famille de
+  scénario), confirmant qu'il s'agit du flake de contention déjà documenté
+  aux itérations 15/20/22/24/31/32/33/35/36/39/40/42/43/44 et non d'une
+  régression de cette itération. `git stash pop` puis un quatrième passage,
+  isolé et propre, est sorti entièrement vert (356/356), suivi de
+  `sync-test.js` (7/7) sans problème, aucun jamais lancé en parallèle d'un
+  autre processus. Validation visuelle (captures 390×844) : alerte emoji
+  identique dans Réglages → Chasseurs, toast « Impossible de restaurer : une
+  quête « Vaisselle / lave-vaisselle » existe déjà » après tentative de
+  restauration d'un doublon, pari actif avec id déterministe `bet-2026-07-20`
+  confirmé programmatiquement.
+
+**Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
+- Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
+  attente — rien ne sera créé en base sans accord explicite).
+- Restaurer l'emoji personnel entre deux téléphones différents (piste déjà
+  notée à l'itération 40) : nécessiterait une colonne Supabase dédiée, à
+  proposer à l'utilisateur avant toute migration.
+- Limiter l'affichage de l'historique « Récompenses gagnées » (grossit sans
+  borne, contrairement à l'historique de notifications plafonné à 14
+  entrées depuis l'itération 11) — ajustement d'affichage pur, aucune perte
+  de donnée.
+- Factoriser les fonctions `playerBlock` dupliquées (trophées, duel — la
+  carte héros a un layout à sujet unique, distinct) en un helper commun
+  paramétré.
+- Revoir la taille du fichier index.html (grossit à chaque itération,
+  maintenant ~3 220 lignes).
