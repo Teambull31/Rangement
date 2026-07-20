@@ -374,6 +374,16 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   check("aria-label sur l'icône et le nom de récompense (formulaire de création)",
     (await page.locator("#rwIcon[aria-label]").count()) === 1
     && (await page.locator("#rwName[aria-label]").count()) === 1);
+  // Bug corrigé (it. 46) : cliquer Ajouter sans nom ne donnait aucun feedback (retour silencieux)
+  const rwCountBeforeEmpty = await page.evaluate(() => S.rewards.length);
+  await page.fill("#rwName", "");
+  await page.locator("#rwAdd").click();
+  await page.waitForTimeout(150);
+  check("ajout de récompense sans nom refusé avec un toast explicite",
+    (await page.evaluate(() => S.rewards.length)) === rwCountBeforeEmpty
+    && (await page.locator(".toast", { hasText: "Nom requis" }).count()) === 1);
+  await page.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
+
   await page.fill("#rwIcon", "🎯");
   await page.fill("#rwName", "Test récompense entrée");
   await page.locator("#rwName").press("Enter");
@@ -446,6 +456,15 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await page.locator('[data-jf="all"]').click();
   await page.waitForTimeout(150);
   check("filtre « Tous » restaure toutes les lignes", (await page.locator(".logline").count()) === totalLines);
+
+  // Bug corrigé (it. 46) : boutons du journal (note, Annuler) répétés à l'identique sur
+  // chaque ligne avec un aria-label générique — même défaut déjà corrigé pour les listes
+  // de suppression/incarnation à l'itération 44, jamais étendu au journal.
+  const firstLogName = await page.locator(".logline .lname").first().textContent();
+  check("aria-label du bouton note nomme la tâche du journal (Itération 46)",
+    (await page.locator(".notebtn").first().getAttribute("aria-label")).includes(firstLogName.trim().replace(/^\S+\s/, "")));
+  check("aria-label du bouton Annuler nomme la tâche du journal (Itération 46)",
+    (await page.locator(".undo[data-undo]").first().getAttribute("aria-label")).startsWith("Annuler "));
 
   // Note libre sur une entrée du journal (édition en place, comme les tâches/récompenses)
   await page.locator(".notebtn").first().click();
@@ -533,6 +552,17 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   check("aria-label sur l'icône et le nom de tâche (formulaire de création)",
     (await page.locator("#tIcon[aria-label]").count()) === 1
     && (await page.locator("#tName[aria-label]").count()) === 1);
+  // Bug corrigé (it. 46) : cliquer Ajouter sans nom ne donnait aucun feedback (retour silencieux),
+  // même défaut que sur les récompenses, corrigé au même endroit avec le même toast
+  const tCountBeforeEmpty = await page.evaluate(() => S.tasks.length);
+  await page.fill("#tName", "");
+  await page.locator("#tAdd").click();
+  await page.waitForTimeout(150);
+  check("ajout de tâche sans nom refusé avec un toast explicite",
+    (await page.evaluate(() => S.tasks.length)) === tCountBeforeEmpty
+    && (await page.locator(".toast", { hasText: "Nom requis" }).count()) === 1);
+  await page.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
+
   await page.fill("#tIcon", "🪣");
   await page.fill("#tName", "Test tâche entrée");
   await page.locator("#tName").press("Enter");
@@ -1735,6 +1765,29 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   check("« Importer quand même » : journal remplacé par celui du fichier",
     (await it35Page.evaluate(() => S.log.length === 1 && S.log[0].taskName === "Tâche importée")));
   await it35Context.close();
+
+  // Itération 46 : historique "Récompenses gagnées" (S.won) plafonné à l'affichage, comme
+  // notifHistory (14 entrées) — mais sans perte de donnée, contrairement à ce dernier.
+  const it46Context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const it46Page = await it46Context.newPage();
+  await it46Page.addInitScript(() => {
+    localStorage.setItem("rangement-onboard-v1", "1");
+    localStorage.setItem("rangement-recap", "off");
+  });
+  await it46Page.goto(APP_URL);
+  await it46Page.waitForSelector(".quest");
+  await it46Page.evaluate(() => {
+    for (let i = 0; i < 25; i++) S.won.push({ id: "it46won" + i, name: "Récompense " + i, icon: "🎁", ts: Date.now() - i * 1000 });
+    save(); render();
+  });
+  await it46Page.locator('[data-tab="objectifs"]').click();
+  await it46Page.waitForTimeout(150);
+  check("historique des récompenses gagnées plafonné à 20 lignes affichées (25 en mémoire)",
+    (await it46Page.locator(".wonline").count()) === 20);
+  check("indication du nombre de récompenses non affichées",
+    (await it46Page.locator(".panel", { hasText: "Récompenses gagnées" }).textContent()).includes("+ 5 de plus"));
+  check("aucune donnée perdue : les 25 récompenses restent en mémoire", (await it46Page.evaluate(() => S.won.length)) === 25);
+  await it46Context.close();
 
   await browser.close();
   done();

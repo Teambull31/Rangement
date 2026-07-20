@@ -1995,3 +1995,73 @@ migration ; limite d'affichage sur l'historique des récompenses gagnées).
   paramétré.
 - Revoir la taille du fichier index.html (grossit à chaque itération,
   maintenant ~3 220 lignes).
+
+## Itération 46 — 2026-07-20 (routine cloud)
+
+**Audit** : un audit ciblé (agent dédié, lecture complète d'index.html face à
+l'historique des 45 itérations) a fait remonter trois frictions, complétées
+par la piste déjà notée à l'itération 45 (historique « Récompenses gagnées »
+non plafonné). Aucune ne nécessite de changement de schéma. Une quatrième
+piste de l'audit (dégradé `.duelbar .b` codé en hex fixe, potentiellement le
+même défaut « couleur non liée au thème » que les corrections précédentes)
+a été vérifiée puis écartée : l'élément reçoit systématiquement un `style`
+inline (`background:${a.color}` / `${b.color}`, couleur du joueur) qui
+écrase toujours le dégradé CSS — la règle est du code mort, jamais visible,
+donc pas une régression de contraste réelle à corriger.
+
+**Améliorations livrées :**
+- 🐛 **Bug corrigé — ajouter une tâche ou une récompense avec un champ nom
+  vide ne donnait aucun feedback** : `tAdd.onclick` et `rwAdd.onclick`
+  faisaient `if (!name) return;` en silence, alors que la création d'un défi
+  juste à côté gère déjà ce cas avec `toast("Nom et cible requis")`. Un tap
+  sur « Ajouter »/« + » avec le champ resté vide (ou par mégarde après une
+  frappe sur Entrée) ne faisait donc rien de visible, sans indiquer pourquoi.
+  Les deux gestionnaires affichent désormais `toast("Nom requis")`, même
+  pattern que le formulaire de défi.
+- 🏅 **Historique « Récompenses gagnées » plafonné à l'affichage** (piste
+  notée à l'itération 45) : `S.won` grossit sans borne au fil des mois,
+  contrairement à `notifHistory()` plafonné à 14 entrées depuis l'itération
+  11 — mais `notifHistory()` supprime les entrées en trop, ce qui serait
+  une perte de données inacceptable pour un historique de récompenses
+  gagnées. Les 20 plus récentes s'affichent, avec une ligne « + N de plus,
+  pas affichées. » sous la liste si le total dépasse 20 — aucune entrée
+  supprimée, `S.won` et sa synchro Supabase restent intacts, ajustement
+  d'affichage pur.
+- ♿ **`aria-label` nommant la tâche sur les boutons du Journal** : le bouton
+  note (✏️, `aria-label="Ajouter ou modifier une note"`) et le bouton
+  « Annuler » de chaque ligne du journal (aucun `aria-label`, seul le texte
+  visible « Annuler ») étaient strictement identiques sur potentiellement des
+  dizaines de lignes — un lecteur d'écran qui navigue par liste de boutons
+  les annonçait indiscernables. Même défaut déjà corrigé pour les listes de
+  suppression/incarnation à l'itération 44, jamais étendu au Journal. Les deux
+  `aria-label` incluent désormais le nom de la tâche (`Ajouter ou modifier une
+  note sur ${nom}`, `Annuler ${nom}`).
+- ✅ Tests : 363 assertions au total (356 dans smoke.js +7, 7 dans
+  sync-test.js inchangée) — ajout de tâche/récompense sans nom refusé avec
+  toast « Nom requis » vérifié aux deux endroits, 25 récompenses gagnées
+  injectées puis vérifié exactement 20 lignes affichées + indication « + 5 de
+  plus » + `S.won.length` toujours égal à 25 (aucune perte), `aria-label` du
+  bouton note et du bouton Annuler du Journal vérifiés nommant la tâche.
+  Deux passages complets sont sortis entièrement verts (363/363 puis à
+  nouveau 363/363 lors du comptage détaillé), aucun échec observé cette
+  itération — donc aucune reproduction isolée nécessaire au titre de la
+  règle 2. `sync-test.js` repassée sans problème juste après, jamais lancée
+  en parallèle d'un autre processus. Validation visuelle (captures 390×844,
+  script Playwright dédié puis supprimé) : toast « Nom requis » sur le
+  formulaire de tâche et sur celui de récompense, historique des récompenses
+  gagnées limité à 20 lignes avec « + 5 de plus, pas affichées. » en bas de
+  liste (25 injectées), `aria-label` du Journal confirmés programmatiquement
+  (« Ajouter ou modifier une note sur Vaisselle / lave-vaisselle »,
+  « Annuler Vaisselle / lave-vaisselle »).
+
+**Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
+- Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
+  attente — rien ne sera créé en base sans accord explicite).
+- Restaurer l'emoji personnel entre deux téléphones différents (piste déjà
+  notée à l'itération 40) : nécessiterait une colonne Supabase dédiée, à
+  proposer à l'utilisateur avant toute migration.
+- Factoriser les fonctions `playerBlock` dupliquées (trophées, duel — la
+  carte héros a un layout à sujet unique, distinct) en un helper commun
+  paramétré.
+- Revoir la taille du fichier index.html (grossit à chaque itération,
+  maintenant ~3 225 lignes).

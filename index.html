@@ -1792,9 +1792,11 @@ function vObjectifs() {
     </div>`;
   }).join("");
 
-  const wonRows = S.won.slice().reverse().map(w =>
+  const WON_SHOWN = 20;
+  const wonSorted = S.won.slice().reverse();
+  const wonRows = wonSorted.slice(0, WON_SHOWN).map(w =>
     `<div class="wonline"><span>${esc(w.icon)} ${esc(w.name)}</span><span class="d">${new Date(w.ts).toLocaleDateString("fr-FR")} <button class="notebtn" data-delwon="${w.id}" aria-label="Retirer ${esc(w.name)} de l'historique">✕</button></span></div>`
-  ).join("");
+  ).join("") + (wonSorted.length > WON_SHOWN ? `<p class="hint" style="margin-top:6px">+ ${wonSorted.length - WON_SHOWN} de plus, pas affichées.</p>` : "");
 
   return `
   <section class="panel">
@@ -1877,13 +1879,13 @@ function vJournal() {
       const editable = l.note !== "bouclier";
       const noteZone = journalEditing === l.id
         ? `<input type="text" class="jnote-edit" data-noteedit="${l.id}" value="${esc(l.note)}" maxlength="40" placeholder="Note…" aria-label="Note sur cette entrée">`
-        : `${l.note && editable ? ` <span class="chip gold">${esc(l.note)}</span>` : ""}${editable ? `<button class="notebtn" data-noteeditopen="${l.id}" aria-label="Ajouter ou modifier une note">✏️</button>` : ""}`;
+        : `${l.note && editable ? ` <span class="chip gold">${esc(l.note)}</span>` : ""}${editable ? `<button class="notebtn" data-noteeditopen="${l.id}" aria-label="Ajouter ou modifier une note sur ${esc(l.taskName)}">✏️</button>` : ""}`;
       return `<div class="logline">
         <span>${esc(l.icon || "✅")}</span>
         <span class="lname">${p ? esc(p.emoji + " ") : ""}${esc(l.taskName)}</span>
         ${noteZone}
         <span class="lxp">+${l.xp} XP</span>
-        <button class="undo" data-undo="${l.id}">Annuler</button>
+        <button class="undo" data-undo="${l.id}" aria-label="Annuler ${esc(l.taskName)}">Annuler</button>
       </div>`;
     }).join("");
   }).join("");
@@ -2807,7 +2809,7 @@ function bindView() {
   const rwAdd = $("#rwAdd");
   if (rwAdd) rwAdd.onclick = () => {
     const name = $("#rwName").value.trim();
-    if (!name) return;
+    if (!name) { toast("Nom requis"); return; }
     const r = { id: uid(), name, icon: $("#rwIcon").value.trim() || "🎁" };
     S.rewards.push(r);
     save(); queueOp({ table: "rewards", type: "upsert", row: toRow.rewards(r) });
@@ -2868,7 +2870,7 @@ function bindView() {
   const tAdd = $("#tAdd");
   if (tAdd) tAdd.onclick = () => {
     const name = $("#tName").value.trim();
-    if (!name) return;
+    if (!name) { toast("Nom requis"); return; }
     if (nameTaken(S.tasks, name)) { toast("Une quête porte déjà ce nom"); return; }
     const t = { id: uid(), name, icon: $("#tIcon").value.trim() || "🧼", prio: $("#tPrio").value, createdAt: NOW() };
     S.tasks.push(t);
