@@ -242,6 +242,8 @@
   .cal-cell[data-lvl="2"] { background: color-mix(in oklab, var(--gold) 62%, var(--field)); }
   .cal-cell[data-lvl="3"] { background: var(--gold); }
   .cal-cell.today { outline: 2px solid var(--sys); outline-offset: 1px; }
+  /* Jour gelé par un bouclier : un trou *couvert* ne doit pas se lire comme un trou. */
+  .cal-cell.frozen { background: repeating-linear-gradient(45deg, var(--field), var(--field) 3px, var(--sys) 3px, var(--sys) 4px); }
   .cal-legend { display: flex; gap: 5px; align-items: center; justify-content: flex-end; margin-top: 8px; }
   .cal-legend .cal-cell { flex: 0 0 14px; height: 14px; }
   .feat {
@@ -306,10 +308,29 @@
     background: none; border: none; color: var(--sys); font-size: 12.5px; font-weight: 700;
     letter-spacing: .04em; padding: 2px 0; text-decoration: underline; text-underline-offset: 3px; flex: 0 0 auto;
   }
+  /* Deux actions dans un même .panelhead : elles restent groupées à droite et
+     passent à la ligne ensemble sur un écran étroit plutôt que d'écraser le titre. */
+  .headbtns { display: flex; align-items: baseline; gap: 12px; flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; }
   .sr-only {
     position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
     overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
   }
+
+  /* ---------- Boucliers de série ---------- */
+  .shieldrow { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; padding: 8px 0; border-bottom: 1px dashed var(--line); }
+  .shieldrow:last-of-type { border-bottom: none; }
+  .shieldrow .sname { display: flex; align-items: center; gap: 7px; font-size: 14.5px; flex: 1 1 auto; }
+  .spips { display: flex; gap: 3px; flex: 0 0 auto; }
+  .pip { font-size: 15px; opacity: .22; filter: grayscale(1); }
+  .pip.on { opacity: 1; filter: none; }
+  .sstate { flex: 1 0 100%; }
+
+  /* ---------- Rattrapage d'une quête oubliée ---------- */
+  .retroform { display: flex; flex-direction: column; gap: 5px; text-align: left; margin-top: 14px; }
+  .retroform label { font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--sys); }
+  .retroform select { width: 100%; }
+  .retroform label + select { margin-bottom: 6px; }
+  .retrostate { margin-top: 4px; }
   .tblwrap { overflow-x: auto; }
   .datatable { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
   .datatable th, .datatable td { text-align: right; padding: 6px 8px; border-bottom: 1px dashed var(--line); }
@@ -648,7 +669,6 @@ async function loadRemote() {
     if (fresh.players.length < 2) fresh.players = defaultState().players;
     S = applyPending(fresh);
     SYNCED = true;
-    applyStreakShields();
     save(); scheduleRender();
   } catch (e) { SYNCED = false; }
   renderSync();
@@ -726,58 +746,97 @@ function rankOf(lvl) {
   if (lvl >= 5)  return { r: "D", s: false };
   return { r: "E", s: false };
 }
-// Série : jours consécutifs (finissant aujourd'hui ou hier) avec >= 1 tâche
-function streakOf(pid) {
-  const days = new Set(S.log.filter(l => l.playerId === pid).map(l => dayKey(l.ts)));
-  let n = 0;
-  const d = new Date();
-  if (!days.has(dayKey(d.getTime()))) d.setDate(d.getDate() - 1); // série encore vivante si tâche hier
-  while (days.has(dayKey(d.getTime()))) { n++; d.setDate(d.getDate() - 1); }
-  return n;
+/* ================= Série, boucliers et rattrapage rétroactif =================
+   Tout est *rejoué jour par jour* depuis le journal : aucune écriture, aucune
+   colonne en plus. Deux téléphones qui ont le même journal calculent forcément
+   la même série (l'ancien mécanisme insérait une entrée « bouclier » dans le
+   journal, ce qui pouvait diverger entre les deux appareils hors ligne).
+
+   C'est aussi ce rejeu qui rend le rattrapage rétroactif efficace : combler un
+   jour oublié relance la série *et* rembourse automatiquement le bouclier qui
+   avait été dépensé pour geler ce jour-là. */
+const SHIELD_STREAK_STEP = 7;  // +1 bouclier tous les 7 jours de série consécutifs
+const SHIELD_MAX = 3;          // réserve maximale : une longue série ne rend pas la chaîne incassable
+const RETRO_MAX_DAYS = 7;      // on peut rattraper jusqu'à 7 jours en arrière
+
+// Entrées de l'ancien mécanisme de bouclier : elles marquaient un jour comblé,
+// ce ne sont pas de vraies quêtes et le rejeu regèle ce jour-là lui-même.
+// (La note est modifiable dans le Journal : l'id, lui, ne bouge jamais.)
+function isShieldEntry(l) { return l.note === "bouclier" || String(l.id).startsWith("shield-"); }
+// Quête ajoutée après coup — « je l'ai faite, j'ai oublié de la cocher ».
+function isRetroEntry(l) { return String(l.id).startsWith("retro-"); }
+
+/* Rejeu complet pour un joueur. Renvoie la série en cours, le record, les
+   boucliers en réserve et l'état de chaque journée :
+     done    — au moins une quête ce jour-là
+     frozen  — journée manquée, gelée par un bouclier (la série continue)
+     missed  — journée manquée sans bouclier (la série repart de zéro)
+     pending — aujourd'hui, encore rien : la journée n'est pas finie, on ne
+               casse ni ne gèle la série tant qu'elle n'est pas écoulée. */
+function streakState(pid) {
+  const byDay = new Map();
+  for (const l of S.log) {
+    if (l.playerId !== pid || isShieldEntry(l)) continue;
+    const k = dayKey(l.ts);
+    const e = byDay.get(k) || { n: 0, xp: 0, retro: 0 };
+    e.n++; e.xp += l.xp; if (isRetroEntry(l)) e.retro++;
+    byDay.set(k, e);
+  }
+  const todayK = dayKey(NOW());
+  const state = { streak: 0, best: 0, shields: 0, earned: 0, used: 0, days: new Map(), todayK };
+  if (!byDay.size) return state;
+
+  let streak = 0, best = 0, shields = 0, earned = 0, used = 0;
+  const cur = new Date([...byDay.keys()].sort()[0] + "T12:00:00");
+  const end = new Date(todayK + "T12:00:00");
+  while (cur <= end) {
+    const k = dayKey(cur.getTime());
+    const act = byDay.get(k);
+    if (act) {
+      streak++; best = Math.max(best, streak);
+      // Le bouclier se mérite *avant* l'oubli qu'il servira à couvrir : un palier
+      // de 7 jours consécutifs en crédite un, dans la limite de la réserve.
+      const gain = (streak % SHIELD_STREAK_STEP === 0 && shields < SHIELD_MAX) ? 1 : 0;
+      shields += gain; earned += gain;
+      state.days.set(k, { status: "done", n: act.n, xp: act.xp, retro: act.retro, streak, gain });
+    } else if (k === todayK) {
+      state.days.set(k, { status: "pending", n: 0, xp: 0, retro: 0, streak, gain: 0 });
+    } else if (streak > 0 && shields > 0) {
+      // Journée absorbée : la série est préservée, mais elle ne progresse pas —
+      // rien n'a été fait ce jour-là.
+      shields--; used++;
+      state.days.set(k, { status: "frozen", n: 0, xp: 0, retro: 0, streak, gain: 0 });
+    } else {
+      streak = 0;
+      state.days.set(k, { status: "missed", n: 0, xp: 0, retro: 0, streak: 0, gain: 0 });
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+  return Object.assign(state, { streak, best, shields, earned, used });
+}
+
+function streakOf(pid) { return streakState(pid).streak; }
+function bestStreakOf(pid) { return streakState(pid).best; }
+function availableShields(pid) { return streakState(pid).shields; }
+function earnedShields(pid) { return streakState(pid).earned; }
+function usedShields(pid) { return streakState(pid).used; }
+function frozenDayKeys(pid) {
+  return new Set([...streakState(pid).days].filter(([, d]) => d.status === "frozen").map(([k]) => k));
 }
 function streakMult(pid) { return 1 + Math.min(streakOf(pid), 10) * 0.05; } // +5%/jour, max +50%
 
-/* --- Bouclier de série façon Duolingo : dérivé du journal, zéro nouvelle colonne ---
-   Un bouclier est gagné automatiquement tous les 7 jours consécutifs de série réelle
-   (hors jours déjà couverts par un bouclier). Un log { note: "bouclier", xp: 0 } marque
-   un jour comblé — il compte pour streakOf() mais pas pour en gagner un nouveau. */
-function shieldDayKeys(pid) {
-  return new Set(S.log.filter(l => l.playerId === pid && l.note === "bouclier").map(l => dayKey(l.ts)));
-}
-function earnedShields(pid) {
-  const shielded = shieldDayKeys(pid);
-  const days = [...new Set(S.log.filter(l => l.playerId === pid).map(l => dayKey(l.ts)))]
-    .filter(k => !shielded.has(k)).sort();
-  let earned = 0, run = 0, prev = null;
-  for (const k of days) {
-    const d = new Date(k + "T00:00:00");
-    run = (prev !== null && Math.round((d - prev) / 86400000) === 1) ? run + 1 : 1;
-    if (run % 7 === 0) earned++;
-    prev = d;
+// Multiplicateur de série applicable à une quête rattrapée : celui du jour
+// concerné, pas celui d'aujourd'hui — sinon rattraper récrirait le passé au
+// tarif du présent.
+function streakMultAt(pid, k) {
+  const st = streakState(pid), d = st.days.get(k);
+  let s;
+  if (d && d.status === "done") s = d.streak;
+  else {
+    const prev = st.days.get(dayKey(new Date(k + "T12:00:00").getTime() - 864e5));
+    s = (prev && prev.status !== "missed" ? prev.streak : 0) + 1;
   }
-  return earned;
-}
-function usedShields(pid) { return shieldDayKeys(pid).size; }
-function availableShields(pid) { return Math.max(0, earnedShields(pid) - usedShields(pid)); }
-// Comble automatiquement UNE journée manquée (hier) si la série était vivante avant-hier
-// et qu'un bouclier est disponible. Idempotent entre les deux téléphones (id déterministe).
-function applyStreakShields() {
-  const yKey = dayKey(NOW() - 864e5), twoKey = dayKey(NOW() - 2 * 864e5);
-  let changed = false;
-  S.players.forEach(p => {
-    const hasYesterday = S.log.some(l => l.playerId === p.id && dayKey(l.ts) === yKey);
-    const hasTwoAgo = S.log.some(l => l.playerId === p.id && dayKey(l.ts) === twoKey);
-    if (hasYesterday || !hasTwoAgo || availableShields(p.id) <= 0) return;
-    const id = "shield-" + p.id + "-" + yKey;
-    if (S.log.some(l => l.id === id)) return;
-    const entry = { id, ts: new Date(yKey + "T20:00:00").getTime(), playerId: p.id, taskName: "Bouclier de série", icon: "🛡️", xp: 0, note: "bouclier" };
-    S.log.push(entry);
-    queueOp({ table: "log", type: "upsert", row: toRow.log(entry) });
-    changed = true;
-    toast(`🛡️ Bouclier de série activé pour ${p.name} — série préservée !`);
-  });
-  if (changed) save();
-  return changed;
+  return 1 + Math.min(s, 10) * 0.05;
 }
 
 // Tâche bonus du jour (déterministe à partir de la date)
@@ -810,21 +869,9 @@ const FEATS = [
   { id: "heroH",  icon: "🌌", name: "Moitié du panthéon",         test: st => st.heroes >= Math.ceil(CHARACTERS.length / 2) },
   { id: "soul",   icon: "🧬", name: "Âme liée (héros incarné)",   test: st => st.embodied },
 ];
-function bestStreakOf(pid) {
-  const days = [...new Set(S.log.filter(l => l.playerId === pid).map(l => dayKey(l.ts)))].sort();
-  let best = 0, run = 0, prev = null;
-  for (const d of days) {
-    if (prev) {
-      const nd = new Date(prev + "T12:00"); nd.setDate(nd.getDate() + 1);
-      run = dayKey(nd.getTime()) === d ? run + 1 : 1;
-    } else run = 1;
-    best = Math.max(best, run); prev = d;
-  }
-  return best;
-}
 function featStats(pid) {
   // Les entrées "bouclier" comblent un jour pour la série mais ne sont pas de vraies quêtes.
-  const mine = S.log.filter(l => l.playerId === pid && l.note !== "bouclier");
+  const mine = S.log.filter(l => l.playerId === pid && !isShieldEntry(l));
   const xp = mine.reduce((a, l) => a + l.xp, 0);
   return {
     count: mine.length, xp,
@@ -1011,7 +1058,7 @@ function objProgress(o) {
   const f = l => l.ts >= o.createdAt;
   return o.type === "xp"
     ? S.log.filter(f).reduce((a, l) => a + l.xp, 0)
-    : S.log.filter(f).filter(l => l.note !== "bouclier").length;
+    : S.log.filter(f).filter(l => !isShieldEntry(l)).length;
 }
 
 /* ================= Rendering ================= */
@@ -1276,8 +1323,8 @@ function weeklyRecapModal() {
   const [a, b] = S.players;
   const wa = weekXp(a.id), wb = weekXp(b.id);
   const lead = wa === wb ? null : (wa > wb ? a : b);
-  const qa = S.log.filter(l => l.playerId === a.id && l.note !== "bouclier" && weekKey(l.ts) === weekKey(NOW())).length;
-  const qb = S.log.filter(l => l.playerId === b.id && l.note !== "bouclier" && weekKey(l.ts) === weekKey(NOW())).length;
+  const qa = S.log.filter(l => l.playerId === a.id && !isShieldEntry(l) && weekKey(l.ts) === weekKey(NOW())).length;
+  const qb = S.log.filter(l => l.playerId === b.id && !isShieldEntry(l) && weekKey(l.ts) === weekKey(NOW())).length;
   const bet = activeBet();
   sysModal(`
     <div class="big">RÉCAP DE LA SEMAINE</div>
@@ -1354,11 +1401,100 @@ function vQuetes() {
   <section class="panel">
     <div class="panelhead">
       <h2 style="margin-bottom:0">Quêtes disponibles</h2>
-      <button class="linkbtn" id="qSortToggle" aria-pressed="${questSortMode() === "prio"}">${questSortMode() === "prio" ? "Ordre habituel" : "Trier par priorité"}</button>
+      <span class="headbtns">
+        <button class="linkbtn" id="retroBtn">↩️ Quête oubliée</button>
+        <button class="linkbtn" id="qSortToggle" aria-pressed="${questSortMode() === "prio"}">${questSortMode() === "prio" ? "Ordre habituel" : "Trier par priorité"}</button>
+      </span>
     </div>
     ${rows || '<p class="hint">Aucune quête. Ajoute des tâches dans Réglages.</p>'}
     <p class="hint">Touche ton emoji quand c'est fait. Bonus de série : +5&nbsp;% d'XP par jour d'activité consécutif (max +50&nbsp;%). La quête dorée rapporte le double aujourd'hui${suggestId ? ", et 👉 marque la tâche la plus en attente" : ""}.</p>
+    <p class="hint">↩️ <b>Quête oubliée</b> : une tâche faite mais pas cochée se rattrape jusqu'à ${RETRO_MAX_DAYS} jours en arrière — elle recompte pour la série et peut la relancer.</p>
+  </section>
+  ${shieldPanel()}`;
+}
+
+/* ---------- Boucliers de série : le bonus qui absorbe un jour manqué ---------- */
+function shieldPanel() {
+  const rows = S.players.map(p => {
+    const st = streakState(p.id);
+    const pips = Array.from({ length: SHIELD_MAX }, (_, i) =>
+      `<span class="pip${i < st.shields ? " on" : ""}" aria-hidden="true">🛡️</span>`).join("");
+    const today = st.days.get(st.todayK);
+    let state;
+    if (st.streak === 0) {
+      state = "série à relancer";
+    } else if (today && today.status === "pending") {
+      state = st.shields > 0
+        ? `série de ${st.streak} j · rien aujourd'hui, un bouclier prendra le relais`
+        : `série de ${st.streak} j · rien aujourd'hui, elle tombe à minuit`;
+    } else {
+      const left = SHIELD_STREAK_STEP - (st.streak % SHIELD_STREAK_STEP);
+      state = `série de ${st.streak} j` + (st.shields < SHIELD_MAX
+        ? ` · encore ${left} j pour le prochain bouclier` : " · réserve pleine");
+    }
+    return `
+    <div class="shieldrow">
+      <span class="sname"><i class="dot" style="background:${esc(p.color)}"></i>${esc(p.emoji)} ${esc(p.name)}</span>
+      <span class="spips" role="img" aria-label="${st.shields} bouclier${st.shields > 1 ? "s" : ""} sur ${SHIELD_MAX} en réserve">${pips}</span>
+      <span class="hint sstate">${esc(state)}</span>
+    </div>`;
+  }).join("");
+  return `
+  <section class="panel">
+    <h2>Boucliers de série 🛡️</h2>
+    ${rows}
+    <p class="hint" style="margin-top:12px">Un bouclier <b>absorbe une journée manquée</b> : la série ne repart pas de zéro, elle est mise en pause pour ce jour-là puis reprend. Il se dépense tout seul, rien à faire.</p>
+    <p class="hint">On en gagne <b>un tous les ${SHIELD_STREAK_STEP} jours de série consécutifs</b>, ${SHIELD_MAX} en réserve au maximum. Il se mérite donc <b>avant</b> l'oubli qu'il couvrira.</p>
+    <p class="hint">Et si tu rattrapes après coup une quête sur un jour gelé, le bouclier t'est <b>rendu</b>.</p>
   </section>`;
+}
+
+/* Rattrapage : ajouter une quête faite mais jamais cochée, à sa vraie date. */
+function retroModal() {
+  if (!S.tasks.length) { toast("Ajoute d'abord des tâches dans Réglages"); return; }
+  const days = [];
+  for (let i = 1; i <= RETRO_MAX_DAYS; i++) {
+    const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() - i);
+    const long = d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "short" });
+    days.push({ k: dayKey(d.getTime()), label: i === 1 ? `Hier — ${long}` : i === 2 ? `Avant-hier — ${long}` : long });
+  }
+  // sysModal vide #modal *avant* d'exécuter l'action du bouton : les valeurs sont
+  // mémorisées au fil des changements, pas relues dans le DOM au moment du clic.
+  const sel = { task: S.tasks[0].id, player: S.players[0].id, day: days[0].k };
+  // L'XP vit ici plutôt que dans le libellé des <option> : sur 390 px de large, un nom
+  // de tâche un peu long faisait tronquer le suffixe « — 20 XP » en plein caractère.
+  const dayState = () => {
+    const t = S.tasks.find(x => x.id === sel.task);
+    const xp = t ? PRIOS[t.prio].xp + " XP · " : "";
+    const d = streakState(sel.player).days.get(sel.day);
+    if (!d || d.status === "missed") return `${xp}❌ jour manqué — le rattraper relancera la série`;
+    if (d.status === "frozen") return `${xp}🛡️ jour gelé par un bouclier — le rattraper te le rendra`;
+    return `${xp}✅ déjà ${d.n} quête${d.n > 1 ? "s" : ""} ce jour-là — la série est intacte`;
+  };
+  sysModal(`
+    <div class="big">QUÊTE OUBLIÉE</div>
+    <div class="sub">Une tâche faite mais jamais cochée ? Ajoute-la à sa vraie date : elle compte pour l'XP et pour la série.</div>
+    <div class="retroform">
+      <label for="retroTask">Quête</label>
+      <select id="retroTask">${S.tasks.map(t => `<option value="${t.id}">${esc(t.icon)} ${esc(t.name)}</option>`).join("")}</select>
+      <label for="retroPlayer">Par qui</label>
+      <select id="retroPlayer">${S.players.map(p => `<option value="${p.id}">${esc(p.emoji)} ${esc(p.name)}</option>`).join("")}</select>
+      <label for="retroDay">Quel jour</label>
+      <select id="retroDay">${days.map(d => `<option value="${d.k}">${esc(d.label)}</option>`).join("")}</select>
+      <p class="hint retrostate" id="retroState" aria-live="polite">${esc(dayState())}</p>
+    </div>`,
+    null,
+    { label: "Ajouter ↩️", onclick: () => doTask(sel.task, sel.player, sel.day) },
+    "Annuler");
+  [["retroTask", "task"], ["retroPlayer", "player"], ["retroDay", "day"]].forEach(([id, key]) => {
+    const el = $("#" + id);
+    if (!el) return;
+    el.onchange = () => {
+      sel[key] = el.value;
+      const out = $("#retroState");
+      if (out) out.textContent = dayState();
+    };
+  });
 }
 
 /* ---------- Duel ---------- */
@@ -1523,12 +1659,17 @@ function activityDays() {
   const WEEKS = 8;
   const counts = {};
   for (const l of S.log) {
-    if (l.note === "bouclier") continue;
+    if (isShieldEntry(l)) continue;
     const k = dayKey(l.ts);
-    (counts[k] ??= { total: 0, byP: {} });
+    (counts[k] ??= { total: 0, byP: {}, retro: 0 });
     counts[k].total++;
     counts[k].byP[l.playerId] = (counts[k].byP[l.playerId] || 0) + 1;
+    if (isRetroEntry(l)) counts[k].retro++;
   }
+  // Journées gelées par un bouclier : marquées dans le calendrier pour qu'un trou
+  // « couvert » ne se lise pas comme un trou tout court.
+  const frozen = {};
+  S.players.forEach(p => frozenDayKeys(p.id).forEach(k => (frozen[k] ??= []).push(p.emoji)));
   const monday = new Date(); monday.setHours(0, 0, 0, 0);
   monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7)); // lundi de la semaine en cours
   const todayK = dayKey(NOW());
@@ -1543,7 +1684,8 @@ function activityDays() {
       const lvl = day.getTime() > NOW() ? -1 : n === 0 ? 0 : n === 1 ? 1 : n <= 3 ? 2 : 3;
       const label = day.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
       const det = c ? S.players.map(p => c.byP[p.id] ? `${p.emoji} ${c.byP[p.id]}` : "").filter(Boolean).join(" · ") : "";
-      days.push({ weekStart: start, lvl, n, label, det, today: k === todayK });
+      days.push({ weekStart: start, lvl, n, label, det, today: k === todayK,
+        frozen: frozen[k] || null, retro: c ? c.retro : 0 });
     }
   }
   return { WEEKS, days };
@@ -1554,9 +1696,15 @@ function activityCalendar({ WEEKS, days }) {
   const rows = [];
   for (let i = 0; i < days.length; i += 7) {
     const week = days.slice(i, i + 7);
-    const cells = week.map(day =>
-      `<span class="cal-cell${day.today ? " today" : ""}" data-lvl="${day.lvl}" title="${esc(day.label)} — ${day.n} quête${day.n > 1 ? "s" : ""}${day.det ? ` (${day.det})` : ""}"></span>`
-    ).join("");
+    const cells = week.map(day => {
+      const extra = (day.frozen ? ` — 🛡️ gelé par un bouclier (${day.frozen.join(" ")})` : "")
+        + (day.retro ? ` — ↩️ ${day.retro} rattrapage${day.retro > 1 ? "s" : ""}` : "");
+      // La hachure ne remplace la couleur d'activité que sur une journée réellement
+      // vide : si l'autre chasseur a joué ce jour-là, son niveau doré reste le signal
+      // le plus utile — le gel n'est plus rappelé que dans l'infobulle.
+      const frozenLook = day.frozen && !day.n ? " frozen" : "";
+      return `<span class="cal-cell${day.today ? " today" : ""}${frozenLook}" data-lvl="${day.lvl}" title="${esc(day.label)} — ${day.n} quête${day.n > 1 ? "s" : ""}${day.det ? ` (${day.det})` : ""}${esc(extra)}"></span>`;
+    }).join("");
     rows.push(`<div class="cal-row"><span class="cal-wk">${week[0].weekStart.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span>${cells}</div>`);
   }
   return `
@@ -1568,15 +1716,21 @@ function activityCalendar({ WEEKS, days }) {
 }
 
 function activityTable({ days }) {
-  const withQuests = days.filter(d => d.n > 0).slice().reverse();
-  if (!withQuests.length) return '<p class="hint">Aucune quête accomplie sur les 8 dernières semaines.</p>';
+  // Les journées gelées apparaissent aussi : sans elles, un trou couvert par un
+  // bouclier serait invisible dans l'équivalent textuel du calendrier.
+  const rows = days.filter(d => d.n > 0 || d.frozen).slice().reverse();
+  if (!rows.length) return '<p class="hint">Aucune quête accomplie sur les 8 dernières semaines.</p>';
   return `
   <div class="tblwrap">
     <table class="datatable">
-      <caption class="sr-only">Jours avec au moins une quête accomplie, 8 dernières semaines</caption>
+      <caption class="sr-only">Jours avec au moins une quête accomplie ou gelés par un bouclier, 8 dernières semaines</caption>
       <thead><tr><th scope="col">Jour</th><th scope="col">Quêtes</th><th scope="col">Détail</th></tr></thead>
       <tbody>
-        ${withQuests.map(d => `<tr><th scope="row">${esc(d.label)}</th><td>${d.n}</td><td>${esc(d.det || "—")}</td></tr>`).join("")}
+        ${rows.map(d => {
+          const det = [d.det, d.frozen ? `🛡️ gelé (${d.frozen.join(" ")})` : "", d.retro ? `↩️ ${d.retro} rattrapage${d.retro > 1 ? "s" : ""}` : ""]
+            .filter(Boolean).join(" · ");
+          return `<tr><th scope="row">${esc(d.label)}</th><td>${d.n}</td><td>${esc(det || "—")}</td></tr>`;
+        }).join("")}
       </tbody>
     </table>
   </div>`;
@@ -1601,7 +1755,7 @@ function vDuel() {
     ["Cette semaine", weekXp(a.id), weekXp(b.id), " XP"],
     ["Ce mois-ci", monthXp(a.id), monthXp(b.id), " XP"],
     ["XP total", totalXp(a.id), totalXp(b.id), " XP"],
-    ["Quêtes accomplies", taskCount(a.id, l => l.note !== "bouclier"), taskCount(b.id, l => l.note !== "bouclier"), ""],
+    ["Quêtes accomplies", taskCount(a.id, l => !isShieldEntry(l)), taskCount(b.id, l => !isShieldEntry(l)), ""],
     ["Série en cours", streakOf(a.id), streakOf(b.id), " j"],
     ["Meilleure série 🏆", bestStreakOf(a.id), bestStreakOf(b.id), " j"],
     ["Boucliers 🛡️ disponibles", availableShields(a.id), availableShields(b.id), ""],
@@ -1885,7 +2039,7 @@ function vJournal() {
     const label = new Date(k + "T12:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
     return `<div class="day-h">${label}</div>` + byDay[k].map(l => {
       const p = S.players.find(x => x.id === l.playerId);
-      const editable = l.note !== "bouclier";
+      const editable = !isShieldEntry(l);
       const noteZone = journalEditing === l.id
         ? `<input type="text" class="jnote-edit" data-noteedit="${l.id}" value="${esc(l.note)}" maxlength="40" placeholder="Note…" aria-label="Note sur cette entrée">`
         : `${l.note && editable ? ` <span class="chip gold">${esc(l.note)}</span>` : ""}${editable ? `<button class="notebtn" data-noteeditopen="${l.id}" aria-label="Ajouter ou modifier une note sur ${esc(l.taskName)}">✏️</button>` : ""}`;
@@ -2467,10 +2621,15 @@ function playMilestones(queue, i) {
     } })) : null);
 }
 
-function doTask(taskId, playerId) {
+// retroDay (optionnel) : clé de jour passée (AAAA-MM-JJ) pour une quête faite mais
+// oubliée. L'entrée est datée de ce jour-là, ce qui suffit à relancer la série —
+// streakState() rejoue le journal et voit le trou comblé.
+function doTask(taskId, playerId, retroDay) {
   const t = S.tasks.find(x => x.id === taskId);
   const p = S.players.find(x => x.id === playerId);
   if (!t || !p) return;
+  const retro = retroDay && retroDay !== dayKey(NOW()) ? retroDay : null;
+  const streakBefore = streakOf(playerId), shieldsBefore = availableShields(playerId);
   const before = levelInfo(totalXp(playerId)).lvl;
   const objsBeforeIds = new Set(S.objectives.filter(o => !o.claimed && objProgress(o) >= o.target).map(o => o.id));
   const featsBefore = new Set(unlockedFeats(playerId).map(f => f.id));
@@ -2478,11 +2637,17 @@ function doTask(taskId, playerId) {
 
   let xp = PRIOS[t.prio].xp;
   const notes = [];
-  if (t.id === bonusTaskId()) { xp *= 2; notes.push("×2"); }
-  const mult = streakMult(playerId);
+  // La quête dorée vaut double *aujourd'hui* : un rattrapage ne rejoue pas le tirage du jour.
+  if (!retro && t.id === bonusTaskId()) { xp *= 2; notes.push("×2"); }
+  const mult = retro ? streakMultAt(playerId, retro) : streakMult(playerId);
   if (mult > 1) { xp = Math.round(xp * mult); notes.push("🔥+" + Math.round((mult - 1) * 100) + "%"); }
+  if (retro) notes.unshift("↩️");
 
-  const entry = { id: uid(), ts: NOW(), playerId, taskName: t.name, icon: t.icon, xp, note: notes.join(" ") };
+  const entry = {
+    id: (retro ? "retro-" : "") + uid(),
+    ts: retro ? new Date(retro + "T12:00:00").getTime() : NOW(),
+    playerId, taskName: t.name, icon: t.icon, xp, note: notes.join(" "),
+  };
   S.log.push(entry);
   save();
   queueOp({ table: "log", type: "upsert", row: toRow.log(entry) });
@@ -2555,7 +2720,17 @@ function doTask(taskId, playerId) {
   });
 
   if (queue.length) playMilestones(queue);
-  else toast(`${p.emoji} ${p.name} +${xp} XP`, "Annuler", undoTask);
+  else if (!retro) toast(`${p.emoji} ${p.name} +${xp} XP`, "Annuler", undoTask);
+
+  // Un rattrapage mérite son propre retour : c'est justement son effet sur la
+  // série (et sur les boucliers rendus) qui motive de le saisir.
+  if (retro) {
+    const streakAfter = streakOf(playerId), shieldsAfter = availableShields(playerId);
+    const bits = [`${p.emoji} ${p.name} +${xp} XP`];
+    if (streakAfter > streakBefore) bits.push(`🔥 série relancée : ${streakAfter} j`);
+    if (shieldsAfter > shieldsBefore) bits.push(`🛡️ +${shieldsAfter - shieldsBefore} bouclier rendu`);
+    toast("↩️ " + bits.join(" · "), "Annuler", undoTask, 6000);
+  }
 }
 
 function bindView() {
@@ -2571,6 +2746,9 @@ function bindView() {
     localStorage.setItem("rangement-qsort", questSortMode() === "prio" ? "habituel" : "prio");
     render();
   };
+
+  const retroBtn = $("#retroBtn");
+  if (retroBtn) retroBtn.onclick = retroModal;
 
   // Héros : sélecteur de joueur, incarnation, retrait
   document.querySelectorAll("[data-hv]").forEach(b =>
@@ -2757,9 +2935,10 @@ function bindView() {
   // Pari de duel
   const betAdd = $("#betAdd");
   if (betAdd) betAdd.onclick = () => {
-    // Id déterministe par semaine (même motif que le bouclier de série, applyStreakShields) : si les
-    // deux téléphones misent hors ligne sur la même semaine, l'upsert Supabase fusionne en un seul pari
-    // au lieu de créer deux lignes réclamables séparément.
+    // Id déterministe par semaine : si les deux téléphones misent hors ligne sur la même
+    // semaine, l'upsert Supabase fusionne en un seul pari au lieu de créer deux lignes
+    // réclamables séparément. (Le bouclier de série suivait ce motif jusqu'à l'it. 48 ;
+    // il ne stocke plus rien du tout, il est entièrement recalculé — voir streakState.)
     const b = { id: "bet-" + weekKey(NOW()), week: weekKey(NOW()), rewardId: $("#betReward").value, createdAt: NOW(), claimed: false };
     (S.bets ??= []).push(b);
     save(); queueOp({ table: "bets", type: "upsert", row: toRow.bets(b) });
@@ -3225,7 +3404,6 @@ if (!localStorage.getItem("rangement-onboard-v1")) {
 } else if (shouldShowWeeklyRecap()) {
   weeklyRecapModal();
 }
-if (applyStreakShields()) render(); // repli mode local (sans Supabase) ou avant la première synchro
 maybeSendStreakNotification();
 LAST_REMIND_STATE = shouldShowEveningReminder(); // état de départ des rappels vivants
 setInterval(reminderTick, 60000);

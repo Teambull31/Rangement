@@ -49,6 +49,26 @@ score de l'autre.
 - **Quête dorée** : chaque jour, une tâche tirée au sort rapporte le **double** d'XP.
 - **Bonus de série 🔥** : +5 % d'XP par jour d'activité consécutif (max +50 %). Ne cassez pas la chaîne !
 
+### Série : rattrapage et boucliers
+La série ne doit pas tomber pour un simple oubli de validation.
+
+- **↩️ Quête oubliée** : bouton en tête de l'onglet *Quêtes*. Une tâche réellement
+  faite mais jamais cochée s'ajoute **à sa vraie date**, jusqu'à **7 jours en
+  arrière**. Elle rapporte son XP au multiplicateur **du jour concerné** (pas celui
+  d'aujourd'hui) et **relance la série** si elle comble le trou. La quête dorée du
+  jour n'est pas rejouée : pas de ×2 sur un rattrapage.
+- **🛡️ Bouclier de série** : on en gagne **un tous les 7 jours de série
+  consécutifs**, **3 en réserve** au maximum. Il **absorbe automatiquement une
+  journée manquée** — la série est mise en pause pour ce jour-là puis reprend, au
+  lieu de repartir de zéro. Rien à déclencher : il se dépense seul.
+  Un bouclier se mérite donc *avant* l'oubli qu'il couvrira.
+- Les deux se combinent : rattraper après coup une quête sur un jour gelé **rend le
+  bouclier**. La réserve et l'échéance du prochain bouclier sont affichées sous les
+  quêtes ; le calendrier d'activité (onglet *Duel*) hachure les jours gelés.
+
+Tout est **recalculé depuis le journal** : rien n'est stocké en plus, et les deux
+téléphones qui partagent le même journal affichent forcément la même série.
+
 ### Niveaux & rangs
 Passer un niveau coûte de plus en plus d'XP. Les rangs de chasseur :
 

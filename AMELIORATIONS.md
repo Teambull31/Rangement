@@ -2137,3 +2137,81 @@ par un `style` inline), a été reconfirmée écartée sans nouvelle inspection.
   paramétré.
 - Revoir la taille du fichier index.html (grossit à chaque itération,
   maintenant ~3 250 lignes).
+
+## Itération 48 — 2026-07-25 (demande utilisateur)
+
+**Origine** : pas un audit — une demande explicite. Deux besoins liés : (1)
+pouvoir saisir *après coup* une tâche réellement effectuée mais oubliée, de
+façon à ce qu'elle soit comptabilisée et **réactive la série** ; (2) gagner un
+bonus, sous conditions obtenues **avant**, permettant de louper un jour sans que
+la série s'arrête. Le second existait déjà à moitié (bouclier de série, it. 27)
+mais était invisible dans l'UI et écrivait en base.
+
+**Décisions prises avec l'utilisateur** (questions posées avant implémentation) :
+condition de gain **unique** (7 jours de série consécutifs — les pistes « grosse
+journée » et « semaine à 300 XP » ont été écartées) ; un jour gelé **ne compte
+pas** dans la longueur de la série ; rattrapage possible jusqu'à **7 jours** en
+arrière. Le plafond de réserve (3 boucliers) est une décision de conception non
+demandée, isolée dans la constante `SHIELD_MAX`.
+
+**Améliorations livrées :**
+- ↩️ **Rattrapage d'une quête oubliée** : bouton en tête de l'onglet *Quêtes*
+  ouvrant une modale (quête / chasseur / jour parmi les 7 derniers). L'entrée est
+  datée du jour concerné, ce qui suffit à relancer la série. Elle rapporte l'XP au
+  multiplicateur **du jour rattrapé** (`streakMultAt`) et non celui d'aujourd'hui —
+  sinon rattraper récrirait le passé au tarif du présent ; la quête dorée du jour
+  n'est pas rejouée (pas de ×2). La modale annonce l'effet du jour choisi avant
+  validation (« jour manqué → relancera la série », « jour gelé → rendra le
+  bouclier », « déjà N quêtes »). Réversible via le bouton *Annuler* du toast,
+  comme une quête normale.
+- 🛡️ **Bouclier de série rendu lisible et robuste** : nouveau panneau sous les
+  quêtes (réserve sur 3, état de la série, jours restants avant le prochain
+  bouclier, règle de gain explicitée). Le calendrier d'activité hachure désormais
+  les jours gelés (`.cal-cell.frozen`) et la vue tableau les liste — un trou
+  *couvert* ne se lisait pas différemment d'un trou tout court.
+- 🔧 **Refonte du moteur de série en rejeu jour par jour** (`streakState`), qui
+  remplace `applyStreakShields` / `earnedShields` / `usedShields` / `shieldDayKeys`
+  et l'ancien `bestStreakOf`. L'ancien mécanisme **écrivait une fausse entrée**
+  `{ note: "bouclier", xp: 0 }` dans le journal partagé pour combler un jour : deux
+  téléphones hors ligne pouvaient l'écrire chacun de leur côté. Tout est maintenant
+  **dérivé** du journal, zéro écriture, zéro colonne en plus — même journal, même
+  série, forcément. Deux propriétés tombent gratuitement du rejeu : combler un jour
+  passé relance la série, et rattraper une quête sur un jour gelé **rembourse** le
+  bouclier (la journée repasse en `done`, il n'est plus dépensé) — aucun code de
+  remboursement à écrire.
+- ⚠️ **Changement de sémantique assumé** : un jour gelé **préserve** la série sans
+  l'allonger (série de 7 j → jour manqué gelé → toujours 7 j → 8 j le lendemain).
+  L'ancien mécanisme affichait 8 j, parce que la fausse entrée qu'il insérait
+  comptait comme une journée d'activité. Le test correspondant a été mis à jour.
+- 🔁 **Compatibilité ascendante** : les entrées `bouclier` déjà présentes en base
+  restent reconnues (`isShieldEntry`, par id *et* par note) et exclues des vraies
+  quêtes ; le rejeu regèle ces journées lui-même. Le marqueur d'un rattrapage est
+  le **préfixe d'id** `retro-`, pas la note — la note est modifiable dans le
+  Journal (it. 46) et ne peut donc pas servir de marqueur fiable.
+- ✅ Tests : bloc bouclier de `smoke.js` réécrit (l'ancien testait le mécanisme
+  supprimé) + nouveau bloc rattrapage — jour gelé vs jour manqué, absence de fausse
+  entrée en base, remboursement du bouclier, date et multiplicateur de l'entrée
+  rattrapée, absence de ×2, annulation depuis le toast, panneau et calendrier.
+  Deux passages complets isolés de `smoke.js` puis `sync-test.js`, tous verts.
+  À noter : l'assertion « montée de niveau déclenchée au clavier (scénario focus) »
+  s'est révélée **déjà instable sur `origin` avant cette itération** (vérifié en
+  rejouant la suite d'origine dans un dépôt propre) — flake préexistant, hors
+  périmètre, laissé en piste.
+
+**Pistes pour les prochaines itérations** (à réévaluer à chaque audit) :
+- Flake préexistant à traiter : « montée de niveau déclenchée au clavier
+  (scénario focus) » dans `smoke.js`, reproduit sur `origin` sans aucune
+  modification — probablement une course entre `render()` et la capture du
+  focus, à isoler proprement.
+- Mode saison : schéma `seasons` proposé à l'utilisateur (validation en
+  attente — rien ne sera créé en base sans accord explicite).
+- Restaurer l'emoji personnel entre deux téléphones différents (piste déjà
+  notée à l'itération 40) : nécessiterait une colonne Supabase dédiée, à
+  proposer à l'utilisateur avant toute migration.
+- Alerter (ou bloquer) si les deux chasseurs incarnent simultanément le même
+  héros — même famille que les alertes couleur/emoji/nom, pas encore traité.
+- Factoriser les fonctions `playerBlock` dupliquées (trophées, duel — la
+  carte héros a un layout à sujet unique, distinct) en un helper commun
+  paramétré.
+- Revoir la taille du fichier index.html (grossit à chaque itération,
+  maintenant ~3 350 lignes).

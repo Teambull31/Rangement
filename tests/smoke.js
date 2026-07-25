@@ -1543,27 +1543,50 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await shieldPage.reload();
   await shieldPage.waitForSelector(".quest");
   check("1 bouclier gagné après 7 jours naturels consécutifs (p1)", (await shieldPage.evaluate(() => earnedShields("p1"))) === 1);
-  check("bouclier automatiquement utilisé pour combler hier (p1)",
-    (await shieldPage.evaluate(() => S.log.some(l => l.playerId === "p1" && l.note === "bouclier"))) === true);
-  check("série de p1 préservée et prolongée par le bouclier (8 j)", (await shieldPage.evaluate(() => streakOf("p1"))) === 8);
+  check("hier est gelé par le bouclier, pas comblé par une fausse quête (p1)",
+    (await shieldPage.evaluate(() => {
+      const y = new Date(); y.setDate(y.getDate() - 1);
+      return streakState("p1").days.get(dayKey(y.getTime())).status;
+    })) === "frozen");
+  // Sémantique retenue (it. 48) : le bouclier *préserve* la série sans l'allonger — rien
+  // n'a été fait ce jour-là. L'ancien mécanisme insérait une entrée et affichait 8 j.
+  check("série de p1 préservée par le bouclier sans être gonflée (7 j)", (await shieldPage.evaluate(() => streakOf("p1"))) === 7);
   check("bouclier consommé après usage (0 disponible pour p1)", (await shieldPage.evaluate(() => availableShields("p1"))) === 0);
-  check("l'entrée bouclier ne compte pas comme une vraie quête (7, pas 8)", (await shieldPage.evaluate(() => featStats("p1").count)) === 7);
-  check("l'entrée bouclier n'inflate pas non plus un défi « nombre de quêtes » à deux (bug corrigé, it. 28)",
+  check("aucune fausse entrée « bouclier » écrite dans le journal partagé (it. 48)",
+    (await shieldPage.evaluate(() => S.log.some(l => isShieldEntry(l)))) === false);
+  check("les 7 jours restent 7 vraies quêtes", (await shieldPage.evaluate(() => featStats("p1").count)) === 7);
+  check("le gel n'inflate pas un défi « nombre de quêtes » à deux (bug corrigé, it. 28)",
     (await shieldPage.evaluate(() => objProgress({ type: "count", createdAt: Date.now() - 20 * 86400000 }))) === 10);
   check("pas de bouclier gagné avec seulement 3 jours naturels (p2)", (await shieldPage.evaluate(() => earnedShields("p2"))) === 0);
-  check("série de p2 cassée normalement, aucun bouclier utilisé",
-    (await shieldPage.evaluate(() => S.log.some(l => l.playerId === "p2" && l.note === "bouclier"))) === false
+  check("série de p2 cassée normalement, aucun jour gelé",
+    (await shieldPage.evaluate(() => frozenDayKeys("p2").size)) === 0
     && (await shieldPage.evaluate(() => streakOf("p2"))) === 0);
-  check("l'entrée bouclier ne compte pas non plus dans le calendrier d'activité (bug corrigé)",
+  check("le jour gelé apparaît à 0 quête et marqué gelé dans le calendrier",
     (await shieldPage.evaluate(() => {
-      // Le jour comblé automatiquement par le bouclier doit apparaître avec 0 quête dans le
-      // calendrier (aucune tâche réellement faite ce jour-là), pas 1.
-      const shieldEntry = S.log.find(l => l.playerId === "p1" && l.note === "bouclier");
-      if (!shieldEntry) return false;
-      const day = new Date(shieldEntry.ts);
-      const label = day.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
-      return activityCalendar(activityDays()).includes(`${label} — 0 quête`);
+      const y = new Date(); y.setDate(y.getDate() - 1);
+      const label = y.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+      const html = activityCalendar(activityDays());
+      return html.includes(`${label} — 0 quête`) && html.includes("gelé par un bouclier") && html.includes("cal-cell frozen");
     })) === true);
+  check("panneau boucliers : réserve et règle de gain affichées dans Quêtes",
+    (await shieldPage.evaluate(() => {
+      const panel = Array.from(document.querySelectorAll(".panel")).find(s => s.textContent.includes("Boucliers de série"));
+      return panel && panel.querySelectorAll(".shieldrow").length === 2
+        && panel.textContent.includes("7 jours de série consécutifs");
+    })) === true);
+
+  // Rattrapage rétroactif sur un jour gelé : le bouclier doit être rendu (le rejeu
+  // repasse la journée en "done", donc il n'est plus dépensé).
+  await shieldPage.evaluate(() => {
+    const y = new Date(); y.setDate(y.getDate() - 1);
+    doTask(S.tasks[0].id, "p1", dayKey(y.getTime()));
+  });
+  await shieldPage.waitForTimeout(200);
+  await closeModals(shieldPage);
+  check("rattraper un jour gelé rend le bouclier", (await shieldPage.evaluate(() => availableShields("p1"))) === 1);
+  check("et la série repart de plus belle (8 j)", (await shieldPage.evaluate(() => streakOf("p1"))) === 8);
+  check("plus aucun jour gelé après le rattrapage", (await shieldPage.evaluate(() => frozenDayKeys("p1").size)) === 0);
+
   await shieldPage.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
   await shieldPage.locator('[data-tab="duel"]').click();
   check("compte de boucliers disponibles affiché dans Duel", (await shieldPage.locator(".statgrid").textContent()).includes("Boucliers"));
@@ -1584,6 +1607,97 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await shieldPage.waitForTimeout(100);
   check("retour à la vue calendrier", (await shieldPage.locator(".cal").count()) === 1);
   await shieldContext.close();
+
+  /* Rattrapage d'une quête oubliée (it. 48) : saisir après coup une tâche réellement
+     faite doit créditer l'XP au tarif du jour concerné et relancer la série. */
+  const retroContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const retroPage = await retroContext.newPage();
+  const retroErrors = [];
+  retroPage.on("pageerror", e => retroErrors.push(e.message));
+  await retroPage.addInitScript(() => {
+    localStorage.setItem("rangement-onboard-v1", "1");
+    localStorage.setItem("rangement-recap", "off");
+  });
+  await retroPage.goto(APP_URL);
+  await retroPage.waitForSelector(".quest");
+  await retroPage.evaluate(() => {
+    // p1 : actif il y a 3 et 2 jours, rien hier ni aujourd'hui -> série morte (aucun bouclier)
+    for (const i of [3, 2]) {
+      const d = new Date(); d.setDate(d.getDate() - i); d.setHours(12, 0, 0, 0);
+      S.log.push({ id: "pre-" + i, ts: d.getTime(), playerId: "p1", taskName: "Vitres", icon: "🪟", xp: 20, note: "" });
+    }
+    save();
+  });
+  await retroPage.reload();
+  await retroPage.waitForSelector(".quest");
+  check("série cassée au départ (oubli d'hier, aucun bouclier)", (await retroPage.evaluate(() => streakOf("p1"))) === 0);
+
+  await retroPage.locator("#retroBtn").click();
+  await retroPage.waitForTimeout(150);
+  check("la modale de rattrapage propose quête, chasseur et jour",
+    (await retroPage.locator("#retroTask").count()) === 1
+    && (await retroPage.locator("#retroPlayer").count()) === 1
+    && (await retroPage.locator("#retroDay").count()) === 1);
+  check("les 7 derniers jours sont proposés (RETRO_MAX_DAYS)", (await retroPage.locator("#retroDay option").count()) === 7);
+  check("le premier choix est hier, libellé en clair",
+    (await retroPage.locator("#retroDay option").first().textContent()).startsWith("Hier"));
+  check("l'état du jour choisi annonce l'effet sur la série",
+    (await retroPage.locator("#retroState").textContent()).includes("relancera la série"));
+  // La quête sélectionnée par défaut est S.tasks[0] (Vaisselle, priorité normale, 20 XP)
+  await retroPage.locator("#veilExtra").click();
+  await retroPage.waitForTimeout(250);
+  await closeModals(retroPage);
+
+  const retroEntry = await retroPage.evaluate(() => {
+    const y = new Date(); y.setDate(y.getDate() - 1);
+    const e = S.log.find(l => String(l.id).startsWith("retro-"));
+    return e ? { xp: e.xp, day: dayKey(e.ts), yday: dayKey(y.getTime()), note: e.note, name: e.taskName } : null;
+  });
+  check("l'entrée rattrapée est datée du bon jour (" + JSON.stringify(retroEntry) + ")",
+    !!retroEntry && retroEntry.day === retroEntry.yday);
+  check("elle est marquée ↩️ dans sa note", !!retroEntry && retroEntry.note.includes("↩️"));
+  // Série reconstituée : il y a 3 j, 2 j, puis hier -> 3 jours consécutifs.
+  check("la série est relancée par le rattrapage (3 j)", (await retroPage.evaluate(() => streakOf("p1"))) === 3);
+  // 20 XP × 1,15 (série de 3 j *ce jour-là*) = 23 ; au tarif d'aujourd'hui (série 0) ce serait 20.
+  check("l'XP est calculée au multiplicateur du jour rattrapé, pas celui d'aujourd'hui (23)",
+    !!retroEntry && retroEntry.xp === 23);
+
+  // p2 n'a encore rien fait : au jour -4 sa série vaut 1, donc ×1,05 et rien de plus.
+  // Si le ×2 de la quête dorée s'appliquait, on lirait le double.
+  const goldRetro = await retroPage.evaluate(() => {
+    const bonus = S.tasks.find(t => t.id === bonusTaskId());
+    const d = new Date(); d.setDate(d.getDate() - 4);
+    doTask(bonus.id, "p2", dayKey(d.getTime()));
+    const e = S.log.filter(l => String(l.id).startsWith("retro-")).pop();
+    return { xp: e.xp, attendu: Math.round(PRIOS[bonus.prio].xp * 1.05) };
+  });
+  check("un rattrapage ne rejoue pas la quête dorée du jour (pas de ×2) — " + JSON.stringify(goldRetro),
+    goldRetro.xp === goldRetro.attendu);
+  await retroPage.waitForTimeout(200);
+  await closeModals(retroPage);
+
+  // Annulation : le rattrapage est réversible comme une quête normale
+  await retroPage.evaluate(() => document.querySelectorAll(".toast").forEach(t => t.remove()));
+  const beforeUndoStreak = await retroPage.evaluate(() => streakOf("p1"));
+  await retroPage.evaluate(() => {
+    const d = new Date(); d.setDate(d.getDate() - 5);
+    doTask(S.tasks[1].id, "p1", dayKey(d.getTime()));
+  });
+  await retroPage.waitForTimeout(200);
+  await closeModals(retroPage);
+  const undoRetro = retroPage.locator(".toast-action").last();
+  if (await undoRetro.count()) {
+    await undoRetro.click();
+    await retroPage.waitForTimeout(150);
+    check("le rattrapage s'annule depuis le toast",
+      (await retroPage.evaluate(() => streakOf("p1"))) === beforeUndoStreak
+      && (await retroPage.evaluate(() => S.log.filter(l => String(l.id).startsWith("retro-")).length)) === 2);
+  } else {
+    check("le rattrapage s'annule depuis le toast (toast absent)", false);
+  }
+  check("aucune erreur de page pendant le parcours de rattrapage" + (retroErrors.length ? " (" + retroErrors.join(" | ") + ")" : ""),
+    retroErrors.length === 0);
+  await retroContext.close();
 
   // Mouvement réduit : aucune animation de confettis ne doit être créée
   const rmContext = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
