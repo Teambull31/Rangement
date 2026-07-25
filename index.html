@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rangement — Série, Rétroactif & Bonus</title>
+<style>
+  :root{
+    --bg:#0f1225; --card:#1a1f3a; --card2:#232a4d; --accent:#6c8cff;
+    --accent2:#33d69f; --warn:#ffb454; --danger:#ff6b81; --text:#eef1ff;
+    --muted:#9aa3c7; --border:#2c3560;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    background:linear-gradient(160deg,#0f1225,#151a35); color:var(--text);
+    min-height:100vh; padding:16px;
+  }
+  h1{font-size:1.4rem; margin:0 0 4px}
+  .sub{color:var(--muted); font-size:.85rem; margin-bottom:16px}
+  .wrap{max-width:760px; margin:0 auto}
+  .stats{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:16px}
+  .stat{background:var(--card); border:1px solid var(--border); border-radius:14px; padding:12px; text-align:center}
+  .stat .val{font-size:1.5rem; font-weight:700}
+  .stat .lbl{font-size:.7rem; color:var(--muted); text-transform:uppercase; letter-spacing:.5px}
+  .streak .val{color:var(--warn)}
+  .jokers .val{color:var(--accent2)}
+  .card{background:var(--card); border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:16px}
+  .card h2{font-size:1rem; margin:0 0 12px}
+  label{display:block; font-size:.78rem; color:var(--muted); margin:10px 0 4px}
+  input,select{
+    width:100%; padding:10px; border-radius:10px; border:1px solid var(--border);
+    background:var(--card2); color:var(--text); font-size:.95rem;
+  }
+  .row{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+  button{
+    cursor:pointer; border:none; border-radius:10px; padding:11px 14px;
+    font-size:.95rem; font-weight:600; color:#fff; background:var(--accent);
+    width:100%; margin-top:14px; transition:transform .05s;
+  }
+  button:active{transform:scale(.98)}
+  button.ghost{background:transparent; border:1px solid var(--border); color:var(--muted); margin-top:0}
+  .retro-note{background:rgba(108,140,255,.12); border:1px dashed var(--accent); border-radius:10px; padding:10px; font-size:.82rem; color:#c5d0ff; margin-top:12px}
+  .xpbar{height:10px; background:var(--card2); border-radius:6px; overflow:hidden; margin-top:8px}
+  .xpbar > i{display:block; height:100%; background:linear-gradient(90deg,var(--accent),var(--accent2))}
+  .day{border-top:1px solid var(--border); padding:10px 0}
+  .day:first-child{border-top:none}
+  .day-head{display:flex; justify-content:space-between; align-items:center; font-size:.85rem}
+  .day-date{font-weight:600}
+  .badge{font-size:.68rem; padding:2px 8px; border-radius:20px; margin-left:6px}
+  .badge.frozen{background:rgba(51,214,159,.15); color:var(--accent2); border:1px solid var(--accent2)}
+  .badge.broken{background:rgba(255,107,129,.15); color:var(--danger); border:1px solid var(--danger)}
+  .badge.bonus{background:rgba(255,180,84,.15); color:var(--warn); border:1px solid var(--warn)}
+  .act{display:flex; justify-content:space-between; font-size:.85rem; color:var(--muted); padding:3px 0 3px 8px}
+  .act .del{color:var(--danger); cursor:pointer; background:none; width:auto; margin:0; padding:0 4px; font-weight:700}
+  .empty{color:var(--muted); font-size:.85rem; text-align:center; padding:16px}
+  .rules{font-size:.8rem; color:var(--muted); line-height:1.5}
+  .rules b{color:var(--text)}
+  details summary{cursor:pointer; color:var(--accent); font-size:.85rem}
+  .pts{color:var(--accent2); font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🧹 Rangement</h1>
+  <div class="sub">Range, gagne des niveaux, garde ta série — et rattrape tes oublis.</div>
+
+  <div class="stats">
+    <div class="stat"><div class="val" id="s-level">1</div><div class="lbl">Niveau</div></div>
+    <div class="stat streak"><div class="val" id="s-streak">0🔥</div><div class="lbl">Série</div></div>
+    <div class="stat jokers"><div class="val" id="s-jokers">0🧊</div><div class="lbl">Jokers</div></div>
+    <div class="stat"><div class="val" id="s-xp">0</div><div class="lbl">XP total</div></div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--muted)">
+      <span id="xp-cur">Niv. 1</span><span id="xp-next"></span>
+    </div>
+    <div class="xpbar"><i id="xp-fill" style="width:0%"></i></div>
+  </div>
+
+  <div class="card">
+    <h2>➕ Ajouter une activité</h2>
+    <label>Activité</label>
+    <select id="f-act"></select>
+    <div class="row">
+      <div>
+        <label>Date de réalisation</label>
+        <input type="date" id="f-date">
+      </div>
+      <div>
+        <label>Durée / intensité</label>
+        <select id="f-mult">
+          <option value="1">Normale (×1)</option>
+          <option value="1.5">Longue (×1.5)</option>
+          <option value="2">Grosse session (×2)</option>
+        </select>
+      </div>
+    </div>
+    <div id="retro-note" class="retro-note" style="display:none"></div>
+    <button id="btn-add">Enregistrer l'activité</button>
+  </div>
+
+  <div class="card">
+    <h2>📜 Historique</h2>
+    <div id="history"></div>
+  </div>
+
+  <div class="card">
+    <details>
+      <summary>ℹ️ Comment marchent la série, le rétroactif et les bonus ?</summary>
+      <div class="rules" style="margin-top:10px">
+        <p><b>Série (🔥)</b> : nombre de jours consécutifs avec au moins une activité, jusqu'à aujourd'hui.</p>
+        <p><b>Rétroactif</b> : choisis une <b>date passée</b> pour une action oubliée. L'appli recalcule tout l'historique : si la journée manquante est comblée, <b>ta série est réactivée</b> automatiquement.</p>
+        <p><b>Bonus / Joker (🧊)</b> — obtenus <b>avant</b> grâce à ces conditions :</p>
+        <p>• Chaque palier de <b>7 jours</b> de série &rarr; <b>+1 joker</b><br>
+           • Une <b>journée productive</b> (≥ 3 activités le même jour) &rarr; <b>+1 joker</b><br>
+           • Maximum <b>3 jokers</b> en réserve.</p>
+        <p>Quand un jour est <b>manqué</b>, un joker est <b>dépensé automatiquement</b> pour geler ce jour : la série <b>ne s'arrête pas</b>. Sans joker, la série repart de zéro.</p>
+        <button class="ghost" id="btn-reset" style="margin-top:10px">Tout réinitialiser</button>
+      </div>
+    </details>
+  </div>
+</div>
+
+<script>
+// ---------- Config ----------
+const MAX_JOKERS = 3;
+const WEEK_MILESTONE = 7;          // +1 joker tous les 7 jours de série
+const PRODUCTIVE_THRESHOLD = 3;    // ≥3 activités le même jour => +1 joker
+const XP_PER_LEVEL = 100;
+
+const ACTIVITIES = [
+  {id:"vaisselle",  name:"🍽️ Vaisselle",            pts:10},
+  {id:"aspirateur", name:"🧹 Passer l'aspirateur",   pts:15},
+  {id:"lit",        name:"🛏️ Faire le lit",          pts:5},
+  {id:"linge",      name:"🧺 Lessive / linge",        pts:15},
+  {id:"sol",        name:"🧽 Laver le sol",           pts:20},
+  {id:"tri",        name:"📦 Trier / désencombrer",   pts:20},
+  {id:"poubelle",   name:"🗑️ Sortir les poubelles",  pts:8},
+  {id:"salledebain",name:"🚿 Nettoyer salle de bain", pts:25},
+  {id:"cuisine",    name:"🔥 Nettoyer la cuisine",    pts:25},
+  {id:"bureau",     name:"🗂️ Ranger le bureau",       pts:12},
+];
+
+// ---------- State ----------
+const STORAGE_KEY = "rangement_state_v1";
+let state = load();
+
+function load(){
+  try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {activities:[]}; }
+  catch(e){ return {activities:[]}; }
+}
+function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+// ---------- Date helpers ----------
+function todayISO(){ return new Date().toISOString().slice(0,10); }
+function dayAdd(iso, n){
+  const d = new Date(iso+"T00:00:00"); d.setDate(d.getDate()+n);
+  return d.toISOString().slice(0,10);
+}
+function frDate(iso){
+  return new Date(iso+"T00:00:00").toLocaleDateString("fr-FR",
+    {weekday:"short", day:"numeric", month:"short"});
+}
+
+// ---------- Core: replay history day by day ----------
+// Rejoue chaque jour du premier au dernier pour calculer série + jokers.
+// C'est ce rejeu qui rend le rétroactif "réactivant" : combler un jour passé
+// supprime la cassure/le gel de ce jour lors du recalcul.
+function computeEngine(){
+  const acts = state.activities;
+  const byDay = {};
+  acts.forEach(a => { (byDay[a.date] = byDay[a.date] || []).push(a); });
+
+  const dayInfo = {}; // date -> {status, count, earnedJoker}
+  let streak = 0, jokers = 0, totalXP = 0;
+
+  const today = todayISO();
+  if(acts.length === 0){
+    return {streak:0, jokers:0, level:1, totalXP:0, dayInfo:{}, days:[]};
+  }
+
+  const dates = acts.map(a=>a.date).sort();
+  let start = dates[0];
+  // rejoue jusqu'à aujourd'hui (pour gérer les jours manqués récents)
+  let end = today > dates[dates.length-1] ? today : dates[dates.length-1];
+
+  const orderedDays = [];
+  for(let d = start; d <= end; d = dayAdd(d,1)){
+    orderedDays.push(d);
+    const dayActs = byDay[d] || [];
+    const count = dayActs.length;
+    let earnedJoker = 0;
+    let status;
+
+    if(count > 0){
+      // XP du jour
+      dayActs.forEach(a => totalXP += a.pts);
+      streak += 1;
+      status = "active";
+      // Conditions de bonus (obtenues AVANT tout futur oubli)
+      if(streak % WEEK_MILESTONE === 0 && jokers < MAX_JOKERS){
+        jokers += 1; earnedJoker += 1;
+      }
+      if(count >= PRODUCTIVE_THRESHOLD && jokers < MAX_JOKERS){
+        jokers += 1; earnedJoker += 1;
+      }
+    } else {
+      // jour sans activité
+      if(d === today){
+        status = "pending"; // aujourd'hui pas encore fait, ne casse pas la série
+      } else if(jokers > 0){
+        jokers -= 1;
+        status = "frozen"; // gelé par un joker : série préservée
+      } else {
+        streak = 0;
+        status = "broken";
+      }
+    }
+    dayInfo[d] = {status, count, earnedJoker, acts:dayActs};
+  }
+
+  const level = Math.floor(totalXP / XP_PER_LEVEL) + 1;
+  return {streak, jokers, level, totalXP, dayInfo, days:orderedDays.reverse()};
+}
+
+// ---------- Render ----------
+function render(){
+  const e = computeEngine();
+
+  document.getElementById("s-level").textContent = e.level;
+  document.getElementById("s-streak").textContent = e.streak + "🔥";
+  document.getElementById("s-jokers").textContent = e.jokers + "🧊";
+  document.getElementById("s-xp").textContent = e.totalXP;
+
+  const into = e.totalXP % XP_PER_LEVEL;
+  document.getElementById("xp-fill").style.width = (into) + "%";
+  document.getElementById("xp-cur").textContent = "Niv. " + e.level;
+  document.getElementById("xp-next").textContent = (XP_PER_LEVEL - into) + " XP → niv. " + (e.level+1);
+
+  // Historique
+  const h = document.getElementById("history");
+  h.innerHTML = "";
+  const daysWithActs = e.days.filter(d => (e.dayInfo[d].count>0) || e.dayInfo[d].status==="frozen" || e.dayInfo[d].status==="broken");
+  if(daysWithActs.length === 0){
+    h.innerHTML = '<div class="empty">Aucune activité pour l\'instant. Ajoute ta première tâche 🧹</div>';
+    return;
+  }
+  daysWithActs.forEach(d => {
+    const info = e.dayInfo[d];
+    const wrap = document.createElement("div");
+    wrap.className = "day";
+    let badges = "";
+    if(info.status==="frozen") badges += '<span class="badge frozen">🧊 Gelé (joker)</span>';
+    if(info.status==="broken") badges += '<span class="badge broken">💔 Série cassée</span>';
+    if(info.earnedJoker>0) badges += '<span class="badge bonus">🎁 +'+info.earnedJoker+' joker</span>';
+
+    let actsHtml = "";
+    info.acts.forEach(a=>{
+      actsHtml += '<div class="act"><span>'+a.name+' <span class="pts">+'+a.pts+'</span></span>'+
+                  '<button class="del" data-id="'+a.id+'">✕</button></div>';
+    });
+    wrap.innerHTML =
+      '<div class="day-head"><span class="day-date">'+frDate(d)+'</span><span>'+badges+'</span></div>'+actsHtml;
+    h.appendChild(wrap);
+  });
+
+  document.querySelectorAll(".del").forEach(b=>{
+    b.onclick = ()=>{ removeActivity(b.dataset.id); };
+  });
+}
+
+// ---------- Actions ----------
+function addActivity(){
+  const actId = document.getElementById("f-act").value;
+  const date = document.getElementById("f-date").value || todayISO();
+  const mult = parseFloat(document.getElementById("f-mult").value);
+  const base = ACTIVITIES.find(a=>a.id===actId);
+  state.activities.push({
+    id: "a_" + Date.now() + "_" + Math.random().toString(36).slice(2,7),
+    name: base.name,
+    pts: Math.round(base.pts * mult),
+    date: date
+  });
+  save();
+  render();
+  flashRetro(date);
+}
+function removeActivity(id){
+  state.activities = state.activities.filter(a=>a.id!==id);
+  save(); render();
+}
+function flashRetro(date){
+  const note = document.getElementById("retro-note");
+  if(date < todayISO()){
+    note.style.display = "block";
+    note.innerHTML = "↩️ Activité ajoutée <b>rétroactivement</b> au "+frDate(date)+
+      ". La série a été recalculée — si ce jour comblait un trou, elle est réactivée ✅";
+    setTimeout(()=>{ note.style.display="none"; }, 6000);
+  } else {
+    note.style.display = "none";
+  }
+}
+
+// ---------- Init ----------
+function init(){
+  const sel = document.getElementById("f-act");
+  ACTIVITIES.forEach(a=>{
+    const o = document.createElement("option");
+    o.value=a.id; o.textContent=a.name+" (+"+a.pts+")";
+    sel.appendChild(o);
+  });
+  document.getElementById("f-date").value = todayISO();
+  document.getElementById("f-date").max = todayISO();
+  document.getElementById("btn-add").onclick = addActivity;
+  document.getElementById("btn-reset").onclick = ()=>{
+    if(confirm("Effacer toutes les données ?")){ state={activities:[]}; save(); render(); }
+  };
+  render();
+}
+init();
+</script>
+</body>
+</html>
