@@ -1,10 +1,9 @@
 /* Service worker : l'appli fonctionne hors ligne, mise à jour en arrière-plan. */
-const CACHE = "rangement-v2";
+const CACHE = "rangement-v3";
 const ASSETS = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
-  "./supabase.js",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
   "./icons/icon-180.png",
