@@ -1,0 +1,3425 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Rangement — Système de Chasse</title>
+<meta name="description" content="Ménage gamifié pour deux, style Solo Leveling : quêtes, XP, rangs, duel et récompenses.">
+<meta name="theme-color" content="#060A13">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Rangement">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="supabase.js"></script>
+<style>
+  :root {
+    --abyss: #060A13;
+    --panel: #0C1526;
+    --panel-2: #101D33;
+    --line: #1C3252;
+    --line-glow: #2B5A8F;
+    --sys: #4DC3FF;
+    --sys-dim: #2E7FB8;
+    --mana: #8B7BFF;
+    --gold: #F0C550;
+    --crit: #FF5C6E;
+    --high: #FF9D5C;
+    --prio-basse: #8AA3C2;
+    --prio-normale: #4DC3FF;
+    --ok: #5CE0A5;
+    --ink: #D9E7F7;
+    --ink-dim: #8AA3C2;
+    --field: #0A1120;
+    --navbg: rgba(8,13,24,.92);
+    --logo-top: #EAF6FF;
+    --modalbg: linear-gradient(180deg, #0E1B30, #0A1322);
+    --toastbg: #0E1B30;
+    --display: 'Orbitron', 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
+    --body: 'Rajdhani', 'Segoe UI', system-ui, sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    background: var(--abyss);
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -10%, color-mix(in oklab, var(--sys) 10%, transparent), transparent),
+      radial-gradient(ellipse 60% 40% at 90% 110%, color-mix(in oklab, var(--mana) 7%, transparent), transparent);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 17px;
+    line-height: 1.45;
+    min-height: 100vh;
+    padding-bottom: 90px;
+  }
+  button { font-family: var(--body); cursor: pointer; }
+  input, select, textarea { font-family: var(--body); }
+  :focus-visible { outline: 2px solid var(--sys); outline-offset: 2px; }
+
+  .wrap { max-width: 640px; margin: 0 auto; padding: 14px 14px 0; }
+
+  /* ---------- Header ---------- */
+  header { text-align: center; padding: 10px 0 4px; }
+  .sys-tag {
+    display: inline-block;
+    font-family: var(--display);
+    font-size: 10px; font-weight: 700;
+    letter-spacing: .35em;
+    color: var(--sys);
+    border: 1px solid var(--line-glow);
+    padding: 4px 12px 3px 15px;
+    border-radius: 2px;
+    text-transform: uppercase;
+    background: color-mix(in oklab, var(--sys) 6%, transparent);
+  }
+  h1 {
+    font-family: var(--display);
+    font-size: clamp(20px, 6vw, 28px);
+    font-weight: 900;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    margin-top: 8px;
+    background: linear-gradient(180deg, var(--logo-top) 30%, var(--sys) 90%);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-wrap: balance;
+  }
+  .week-lead {
+    font-size: 14px; color: var(--ink-dim);
+    letter-spacing: .06em; margin-top: 2px;
+  }
+  .week-lead b { color: var(--gold); font-weight: 700; }
+  .syncline { font-size: 12px; color: var(--ink-dim); letter-spacing: .08em; margin-top: 4px; text-transform: uppercase; }
+
+  /* ---------- Player cards ---------- */
+  .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 0; }
+  .hunter {
+    position: relative;
+    background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    border: 1px solid var(--line);
+    border-top: 2px solid var(--sys-dim);
+    border-radius: 4px;
+    padding: 12px 12px 14px;
+    overflow: hidden;
+  }
+  .hunter.leader { border-top-color: var(--gold); }
+  .hunter .crown { position: absolute; top: 8px; right: 10px; font-size: 15px; }
+  .hunter .face { font-size: 30px; line-height: 1; }
+  .hunter .name {
+    font-weight: 700; font-size: 17px; letter-spacing: .04em; margin-top: 4px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .rankline { display: flex; align-items: baseline; gap: 8px; margin-top: 2px; }
+  .rank {
+    font-family: var(--display); font-weight: 900; font-size: 22px;
+    color: var(--mana);
+  }
+  .rank.s { color: var(--gold); text-shadow: 0 0 12px color-mix(in oklab, var(--gold) 55%, transparent); }
+  .lvl { font-family: var(--display); font-size: 12px; font-weight: 700; color: var(--sys); letter-spacing: .1em; }
+  .xpbar { height: 7px; background: var(--field); border: 1px solid var(--line); border-radius: 99px; margin-top: 9px; overflow: hidden; }
+  .xpbar > i {
+    display: block; height: 100%;
+    background: linear-gradient(90deg, var(--sys-dim), var(--sys));
+    box-shadow: 0 0 8px color-mix(in oklab, var(--sys) 70%, transparent);
+    border-radius: 99px;
+    transition: width .5s ease;
+  }
+  .xpnums { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--ink-dim); margin-top: 5px; font-variant-numeric: tabular-nums; }
+  .streak { color: var(--high); font-weight: 600; }
+
+  /* ---------- Tabs ---------- */
+  nav {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 40;
+    background: var(--navbg);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid var(--line);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .tabs { max-width: 640px; margin: 0 auto; display: flex; }
+  .tabs button {
+    flex: 1; background: none; border: none; color: var(--ink-dim);
+    font-size: 9.5px; font-weight: 600; letter-spacing: 0;
+    padding: 9px 1px 11px; text-transform: uppercase;
+    border-top: 2px solid transparent; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .tabs button .ico { display: block; font-size: 18px; margin-bottom: 2px; position: relative; width: fit-content; margin-inline: auto; }
+  .tabdot {
+    position: absolute; top: -4px; right: -12px;
+    background: var(--gold); color: var(--abyss);
+    font-size: 10px; font-weight: 700; font-family: var(--body);
+    border-radius: 8px; min-width: 15px; height: 15px; line-height: 15px;
+    text-align: center; padding: 0 3px;
+  }
+  .tabs button.on { color: var(--sys); border-top-color: var(--sys); }
+
+  /* ---------- Panels / sections ---------- */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+  h2 {
+    font-family: var(--display); font-size: 13px; font-weight: 700;
+    letter-spacing: .25em; text-transform: uppercase; color: var(--sys);
+    margin-bottom: 12px;
+  }
+  h2 small { color: var(--ink-dim); letter-spacing: .1em; font-weight: 500; }
+  .hint { font-size: 14px; color: var(--ink-dim); }
+  .hint.warn { color: var(--high); }
+
+  /* ---------- Quest list ---------- */
+  .quest {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--pcol, var(--sys-dim));
+    border-radius: 3px;
+    padding: 11px 12px;
+    margin-bottom: 9px;
+  }
+  .quest.bonus { border-color: var(--gold); border-left-color: var(--gold); background: linear-gradient(90deg, color-mix(in oklab, var(--gold) 8%, transparent), var(--panel-2) 55%); }
+  .quest .qi { font-size: 24px; }
+  .quest .qmain { flex: 1; min-width: 0; }
+  .quest .qname { font-weight: 700; font-size: 16.5px; letter-spacing: .02em; }
+  .qmeta { display: flex; gap: 8px; align-items: center; margin-top: 2px; flex-wrap: wrap; }
+  .chip {
+    font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    padding: 2px 8px; border-radius: 2px; border: 1px solid var(--pcol, var(--sys-dim));
+    color: var(--pcol, var(--sys));
+    background: color-mix(in srgb, var(--pcol, #4DC3FF) 14%, transparent);
+  }
+  .chip.gold { color: var(--gold); border-color: var(--gold); background: color-mix(in oklab, var(--gold) 10%, transparent); }
+  .lastdone { font-size: 12px; color: var(--ink-dim); letter-spacing: .03em; }
+  .qbtns { display: flex; gap: 7px; }
+  .doer {
+    border: 1px solid var(--line-glow); background: color-mix(in oklab, var(--sys) 8%, transparent);
+    color: var(--ink); border-radius: 3px;
+    font-size: 20px; width: 44px; height: 44px;
+    display: grid; place-items: center;
+    transition: transform .1s, background .15s;
+  }
+  .doer:active { transform: scale(.9); background: color-mix(in oklab, var(--sys) 25%, transparent); }
+
+  /* ---------- Duel ---------- */
+  .vsrow { display: flex; align-items: center; gap: 10px; margin: 6px 0 14px; }
+  .vsname { font-weight: 700; width: 30%; }
+  .vsname.r { text-align: right; }
+  .vs {
+    font-family: var(--display); font-weight: 900; color: var(--crit);
+    font-size: 15px; letter-spacing: .1em;
+  }
+  .duelbar { display: flex; height: 14px; border-radius: 99px; overflow: hidden; border: 1px solid var(--line); background: var(--field); }
+  .duelbar .a { background: linear-gradient(90deg, var(--sys-dim), var(--sys)); transition: width .5s; }
+  .duelbar .b { background: linear-gradient(90deg, var(--mana), #6455D6); transition: width .5s; }
+  .statgrid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 6px 14px; font-variant-numeric: tabular-nums; }
+  .statgrid .l { text-align: right; font-family: var(--display); font-weight: 700; color: var(--sys); }
+  .statgrid .c { text-align: center; color: var(--ink-dim); font-size: 14px; text-transform: uppercase; letter-spacing: .08em; align-self: center; }
+  .statgrid .r2 { font-family: var(--display); font-weight: 700; color: var(--mana); }
+  .winbadge { text-align: center; margin-top: 14px; font-size: 15px; color: var(--gold); font-weight: 600; letter-spacing: .04em; }
+
+  /* ---------- Graphique & hauts faits ---------- */
+  .legend { display: flex; gap: 18px; font-size: 13.5px; color: var(--ink-dim); margin-bottom: 8px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
+  .feathead { display: flex; align-items: center; gap: 7px; font-weight: 700; font-size: 15px; margin: 10px 0 7px; }
+  .featgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  /* Calendrier d'activité : ramp séquentiel doré sur la variable de champ (suit le thème) */
+  .cal { display: flex; flex-direction: column; gap: 3px; }
+  .cal-row { display: flex; gap: 3px; align-items: center; }
+  .cal-wk { flex: 0 0 46px; font-size: 10.5px; color: var(--ink-dim); text-align: right; padding-right: 5px; }
+  .cal-d { flex: 1; text-align: center; font-size: 10.5px; color: var(--ink-dim); }
+  .cal-cell { flex: 1; height: 22px; border-radius: 4px; background: var(--field); min-width: 0; }
+  .cal-cell[data-lvl="-1"] { background: transparent; border: 1px dashed var(--line); }
+  .cal-cell[data-lvl="1"] { background: color-mix(in oklab, var(--gold) 32%, var(--field)); }
+  .cal-cell[data-lvl="2"] { background: color-mix(in oklab, var(--gold) 62%, var(--field)); }
+  .cal-cell[data-lvl="3"] { background: var(--gold); }
+  .cal-cell.today { outline: 2px solid var(--sys); outline-offset: 1px; }
+  /* Jour gelé par un bouclier : un trou *couvert* ne doit pas se lire comme un trou. */
+  .cal-cell.frozen { background: repeating-linear-gradient(45deg, var(--field), var(--field) 3px, var(--sys) 3px, var(--sys) 4px); }
+  .cal-legend { display: flex; gap: 5px; align-items: center; justify-content: flex-end; margin-top: 8px; }
+  .cal-legend .cal-cell { flex: 0 0 14px; height: 14px; }
+  .feat {
+    display: flex; align-items: center; gap: 7px;
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 3px;
+    padding: 6px 8px; font-size: 12.5px; color: var(--ink-dim);
+    opacity: .38; filter: grayscale(.9);
+  }
+  .feat.on { opacity: 1; filter: none; border-color: var(--line-glow); color: var(--ink); }
+  .feat .fi { font-size: 17px; }
+  .feat small { line-height: 1.15; }
+  .trophyline { display: flex; align-items: center; gap: 10px; padding: 7px 2px; border-bottom: 1px dashed var(--line); font-size: 15px; }
+  .trophyline:last-child { border-bottom: none; }
+  .trophyline .tw { color: var(--ink-dim); font-size: 13px; flex: 0 0 92px; }
+  .trophyline .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .trophyline .tscore { font-family: var(--display); font-size: 12px; font-weight: 700; color: var(--sys); font-variant-numeric: tabular-nums; }
+  .themerow { display: flex; gap: 8px; flex-wrap: wrap; }
+  .themebtn {
+    display: inline-flex; align-items: center; gap: 7px;
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--ink-dim);
+    border-radius: 3px; padding: 9px 12px; font-size: 14px; font-weight: 600;
+  }
+  .themebtn i { width: 12px; height: 12px; border-radius: 50%; }
+  .themebtn.on { border-color: var(--sys); color: var(--ink); background: color-mix(in oklab, var(--sys) 10%, transparent); }
+  .togglerow { display: flex; align-items: center; gap: 11px; margin-top: 12px; font-size: 14.5px; }
+  .switch { position: relative; display: inline-block; width: 42px; height: 24px; flex: 0 0 auto; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch span {
+    position: absolute; inset: 0; background: var(--field); border: 1px solid var(--line);
+    border-radius: 99px; transition: background .15s, border-color .15s;
+  }
+  .switch span::before {
+    content: ""; position: absolute; width: 16px; height: 16px; left: 3px; top: 50%;
+    transform: translateY(-50%); background: var(--ink-dim); border-radius: 50%; transition: transform .15s, background .15s;
+  }
+  .switch input:checked + span { background: color-mix(in oklab, var(--sys) 18%, transparent); border-color: var(--sys); }
+  .switch input:checked + span::before { transform: translate(18px, -50%); background: var(--sys); }
+  .switch input:focus-visible + span { outline: 2px solid var(--sys); outline-offset: 2px; }
+  .suggested { border-left-color: var(--gold) !important; }
+  .suggested .qname::after { content: " 👉"; }
+  .betremind {
+    display: flex; align-items: center; gap: 8px;
+    background: color-mix(in oklab, var(--gold) 8%, transparent); border: 1px solid var(--gold); border-radius: 3px;
+    padding: 9px 12px; margin-bottom: 12px; font-size: 14px; color: var(--ink);
+  }
+  .daystat {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    background: color-mix(in oklab, var(--sys) 8%, transparent); border: 1px solid var(--line-glow);
+    border-radius: 3px; padding: 8px 12px; margin-bottom: 12px; font-size: 14px; color: var(--ink);
+  }
+  .daystat-by { margin-left: auto; font-size: 13px; color: var(--ink-dim); }
+  .uvcount { font-size: 12px; color: var(--ink-dim); font-weight: 400; }
+  .betline { font-size: 15px; padding: 4px 0 10px; border-bottom: 1px dashed var(--line); margin-bottom: 8px; }
+  .betline:last-child { border-bottom: none; margin-bottom: 0; }
+  .betline.hot { border: 1px solid var(--gold); border-radius: 3px; padding: 10px 12px; background: color-mix(in oklab, var(--gold) 7%, transparent); }
+  .splitline { display: flex; align-items: center; gap: 9px; padding: 7px 0 4px; font-size: 14.5px; }
+  .splitcounts { font-family: var(--display); font-size: 12px; font-weight: 700; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+  .splitbar { display: flex; height: 5px; border-radius: 99px; overflow: hidden; background: var(--field); margin-bottom: 9px; }
+  .splitbar i { display: block; height: 100%; }
+  .panelhead { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+  .linkbtn {
+    background: none; border: none; color: var(--sys); font-size: 12.5px; font-weight: 700;
+    letter-spacing: .04em; padding: 2px 0; text-decoration: underline; text-underline-offset: 3px; flex: 0 0 auto;
+  }
+  /* Deux actions dans un même .panelhead : elles restent groupées à droite et
+     passent à la ligne ensemble sur un écran étroit plutôt que d'écraser le titre. */
+  .headbtns { display: flex; align-items: baseline; gap: 12px; flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+  }
+
+  /* ---------- Boucliers de série ---------- */
+  .shieldrow { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; padding: 8px 0; border-bottom: 1px dashed var(--line); }
+  .shieldrow:last-of-type { border-bottom: none; }
+  .shieldrow .sname { display: flex; align-items: center; gap: 7px; font-size: 14.5px; flex: 1 1 auto; }
+  .spips { display: flex; gap: 3px; flex: 0 0 auto; }
+  .pip { font-size: 15px; opacity: .22; filter: grayscale(1); }
+  .pip.on { opacity: 1; filter: none; }
+  .sstate { flex: 1 0 100%; }
+
+  /* ---------- Rattrapage d'une quête oubliée ---------- */
+  .retroform { display: flex; flex-direction: column; gap: 5px; text-align: left; margin-top: 14px; }
+  .retroform label { font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--sys); }
+  .retroform select { width: 100%; }
+  .retroform label + select { margin-bottom: 6px; }
+  .retrostate { margin-top: 4px; }
+  .tblwrap { overflow-x: auto; }
+  .datatable { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+  .datatable th, .datatable td { text-align: right; padding: 6px 8px; border-bottom: 1px dashed var(--line); }
+  .datatable th[scope="row"] { text-align: left; color: var(--ink-dim); font-weight: 500; }
+  .datatable thead th { color: var(--sys); font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; border-bottom: 1px solid var(--line); }
+  .datatable thead th:first-child { text-align: left; }
+  .evremind {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+    background: color-mix(in oklab, var(--mana) 8%, transparent); border: 1px solid var(--mana); border-radius: 3px;
+    padding: 9px 12px; margin-bottom: 12px; font-size: 14px; color: var(--ink);
+  }
+  .evremind button { background: none; border: 1px solid var(--line); color: var(--ink-dim); border-radius: 3px; font-size: 12px; padding: 5px 10px; }
+  .filterrow { display: flex; gap: 7px; flex-wrap: wrap; }
+  .filterbtn {
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--ink-dim);
+    border-radius: 99px; padding: 6px 13px; font-size: 13px; font-weight: 600;
+  }
+  .filterbtn.on { border-color: var(--sys); color: var(--ink); background: color-mix(in oklab, var(--sys) 10%, transparent); }
+  .notifhist { margin: 10px 0 4px; }
+  .notifhistline {
+    display: flex; align-items: center; gap: 8px; padding: 5px 0;
+    border-bottom: 1px dashed var(--line); font-size: 13px; color: var(--ink-dim);
+  }
+  .notifhistline:last-child { border-bottom: none; }
+  .notifhistline .hint { font-size: 12px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
+
+  /* ---------- Héros ---------- */
+  .charline { font-size: 12.5px; color: var(--gold); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rarity {
+    font-family: var(--display); font-size: 11px; font-weight: 900; letter-spacing: .06em;
+    color: var(--rcol, var(--sys)); border: 1px solid var(--rcol, var(--sys));
+    border-radius: 2px; padding: 1px 6px;
+    background: color-mix(in srgb, var(--rcol, #4DC3FF) 14%, transparent);
+  }
+  .curchar {
+    display: flex; gap: 13px; align-items: flex-start;
+    border: 1px solid var(--rcol, var(--line)); border-radius: 3px;
+    background: var(--panel-2); padding: 12px;
+  }
+  .curchar-emoji { font-size: 44px; line-height: 1; }
+  .curchar-name { font-weight: 700; font-size: 17px; display: flex; align-items: center; gap: 8px; }
+  .gearline { display: flex; flex-direction: column; gap: 2px; margin: 7px 0 5px; }
+  .gearstep { font-size: 13px; color: var(--ink-dim); }
+  .gearstep.on { color: var(--ink); }
+  .chargrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 4px; }
+  .charcard {
+    background: var(--panel-2); border: 1px solid var(--line); border-top: 2px solid var(--rcol, var(--line));
+    border-radius: 3px; padding: 10px; display: flex; flex-direction: column; gap: 5px;
+  }
+  .charcard.locked { opacity: .5; filter: grayscale(.55); }
+  .charcard.current { border-color: var(--rcol); box-shadow: 0 0 10px color-mix(in srgb, var(--rcol) 35%, transparent); }
+  .charcard-top { display: flex; justify-content: space-between; align-items: center; }
+  .charcard-emoji { font-size: 30px; line-height: 1; }
+  .charcard-name { font-weight: 700; font-size: 15px; }
+  .charcard-cond { font-size: 12px; color: var(--ink-dim); line-height: 1.3; }
+  .charcard-cond .condok { color: var(--rcol); font-weight: 600; }
+  .charcard-btn { padding: 6px 10px; font-size: 12.5px; margin-top: 2px; }
+  .charcard-cur { font-size: 13px; color: var(--gold); font-weight: 700; }
+
+  /* ---------- Objectives ---------- */
+  .obj { border: 1px solid var(--line); border-radius: 3px; background: var(--panel-2); padding: 12px; margin-bottom: 10px; }
+  .obj .oname { font-weight: 700; font-size: 16.5px; }
+  .obj .oreward { font-size: 14px; color: var(--gold); margin-top: 1px; }
+  .obj .obar { height: 9px; background: var(--field); border: 1px solid var(--line); border-radius: 99px; overflow: hidden; margin-top: 9px; }
+  .obj .obar i { display: block; height: 100%; background: linear-gradient(90deg, var(--mana), var(--sys)); border-radius: 99px; transition: width .5s; }
+  .obj .onums { display: flex; justify-content: space-between; font-size: 13px; color: var(--ink-dim); margin-top: 5px; font-variant-numeric: tabular-nums; }
+  .obj.done { border-color: var(--gold); }
+  .claim {
+    width: 100%; margin-top: 10px;
+    background: linear-gradient(180deg, #F5D77A, var(--gold));
+    color: #201800; font-weight: 700; font-size: 15px; letter-spacing: .08em; text-transform: uppercase;
+    border: none; border-radius: 3px; padding: 10px;
+  }
+  .wonline { display: flex; justify-content: space-between; align-items: center; padding: 8px 2px; border-bottom: 1px dashed var(--line); font-size: 15px; }
+  .wonline:last-child { border-bottom: none; }
+  .wonline .d { color: var(--ink-dim); font-size: 13px; }
+
+  /* ---------- Journal ---------- */
+  .day-h { font-family: var(--display); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-dim); margin: 14px 0 6px; }
+  .logline { display: flex; align-items: center; gap: 10px; padding: 7px 2px; border-bottom: 1px dashed var(--line); font-size: 15.5px; flex-wrap: wrap; }
+  .logline:last-child { border-bottom: none; }
+  .logline .lname { flex: 1 1 auto; min-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .logline .lxp { margin-left: auto; font-family: var(--display); font-size: 12px; font-weight: 700; color: var(--sys); white-space: nowrap; }
+  .undo { background: none; border: 1px solid var(--line); color: var(--ink-dim); border-radius: 3px; font-size: 13px; padding: 7px 12px; }
+  .notebtn { background: none; border: none; color: var(--ink-dim); font-size: 14px; padding: 4px 6px; opacity: .7; }
+  .notebtn:hover { opacity: 1; }
+  .jnote-edit { flex: 1; min-width: 60px; max-width: 160px; padding: 4px 7px; font-size: 13px; }
+
+  /* ---------- Forms ---------- */
+  .frow { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+  .frow > * { flex: 1; }
+  input[type=text], input[type=number], select {
+    background: var(--field); border: 1px solid var(--line); color: var(--ink);
+    border-radius: 3px; padding: 9px 10px; font-size: 16px; min-width: 0;
+  }
+  .btn {
+    background: color-mix(in oklab, var(--sys) 12%, transparent); border: 1px solid var(--line-glow); color: var(--sys);
+    border-radius: 3px; padding: 9px 14px; font-weight: 700; font-size: 14px;
+    letter-spacing: .08em; text-transform: uppercase;
+  }
+  .btn.ghost { background: none; color: var(--ink-dim); border-color: var(--line); }
+  .btn.danger { color: var(--crit); border-color: color-mix(in oklab, var(--crit) 45%, var(--line)); background: color-mix(in oklab, var(--crit) 8%, transparent); }
+  .mgline { display: flex; align-items: center; gap: 6px; padding: 7px 0; border-bottom: 1px dashed var(--line); }
+  .mgline select { padding-left: 6px; padding-right: 4px; }
+  .mgline input[data-ticon] { text-align: center; padding-left: 4px; padding-right: 4px; }
+  .mgline:last-child { border-bottom: none; }
+  .mgline .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .x { background: none; border: none; color: var(--crit); font-size: 17px; padding: 2px 6px; }
+
+  /* ---------- System notification modal ---------- */
+  .veil {
+    position: fixed; inset: 0; z-index: 50;
+    background: rgba(3,6,12,.75); backdrop-filter: blur(3px);
+    display: grid; place-items: center; padding: 24px;
+  }
+  .sysbox {
+    width: 100%; max-width: 380px;
+    background: var(--modalbg);
+    border: 1px solid var(--sys);
+    box-shadow: 0 0 30px color-mix(in oklab, var(--sys) 35%, transparent), inset 0 0 25px color-mix(in oklab, var(--sys) 6%, transparent);
+    border-radius: 3px;
+    padding: 22px 20px 20px;
+    text-align: center;
+    animation: sysin .35s ease;
+  }
+  @keyframes sysin { from { transform: scale(.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .sysbox .bang {
+    font-family: var(--display); font-weight: 900; letter-spacing: .3em;
+    color: var(--sys); font-size: 12px; text-transform: uppercase;
+  }
+  .sysbox .bang::before, .sysbox .bang::after { content: " ‼ "; color: var(--crit); }
+  .sysbox .big { font-family: var(--display); font-weight: 900; font-size: 26px; margin: 12px 0 4px; letter-spacing: .06em; }
+  .sysbox .sub { color: var(--ink-dim); font-size: 15px; }
+  .sysbox .gold { color: var(--gold); }
+  .sysbox button { margin-top: 16px; }
+
+  /* toast */
+  #toastZone {
+    position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%);
+    z-index: 60; display: flex; flex-direction: column-reverse;
+    align-items: center; gap: 8px; pointer-events: none;
+  }
+  .toast {
+    background: var(--toastbg); border: 1px solid var(--sys-dim); color: var(--ink);
+    padding: 8px 16px; border-radius: 3px; font-size: 15px;
+    box-shadow: 0 0 14px color-mix(in oklab, var(--sys) 30%, transparent);
+    animation: toastin .25s ease;
+    white-space: nowrap; pointer-events: auto;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .toast-action {
+    background: none; border: 1px solid var(--line-glow); color: var(--sys);
+    border-radius: 3px; font-size: 13px; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; padding: 3px 10px;
+  }
+  @keyframes toastin { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+  @media (min-width: 560px) { .quest .qname { font-size: 17.5px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="sys-tag">Système</span>
+    <h1>Rangement</h1>
+    <div class="week-lead" id="weekLead"></div>
+    <div class="syncline" id="sync"></div>
+  </header>
+
+  <div class="duo" id="duo"></div>
+
+  <main id="view"></main>
+</div>
+
+<nav>
+  <div class="tabs" id="tabs"></div>
+</nav>
+
+<div id="modal"></div>
+<div id="toastZone" aria-live="polite"></div>
+
+<script>
+"use strict";
+
+/* ================= State ================= */
+const KEY = "rangement-sl-v2";
+const PRIOS = {
+  basse:    { label: "Basse",    xp: 10, col: "var(--prio-basse)" },
+  normale:  { label: "Normale",  xp: 20, col: "var(--prio-normale)" },
+  haute:    { label: "Haute",    xp: 35, col: "var(--high)" },
+  critique: { label: "Critique", xp: 50, col: "var(--crit)" },
+};
+const uid = () => Math.random().toString(36).slice(2, 10);
+
+function defaultState() {
+  return {
+    players: [
+      { id: "p1", name: "Chasseur", emoji: "⚔️", color: "#4DC3FF", characterId: null },
+      { id: "p2", name: "Chasseuse", emoji: "🏹", color: "#8B7BFF", characterId: null },
+    ],
+    tasks: [
+      { id: uid(), name: "Vaisselle / lave-vaisselle", icon: "🍽️", prio: "normale" },
+      { id: uid(), name: "Aspirateur", icon: "🧹", prio: "normale" },
+      { id: uid(), name: "Salle de bain", icon: "🛁", prio: "haute" },
+      { id: uid(), name: "Sortir les poubelles", icon: "🗑️", prio: "basse" },
+      { id: uid(), name: "Lessive", icon: "👕", prio: "normale" },
+      { id: uid(), name: "Étendre / plier le linge", icon: "🧺", prio: "normale" },
+      { id: uid(), name: "Cuisine & plans de travail", icon: "🍳", prio: "normale" },
+      { id: uid(), name: "Serpillière / sols", icon: "🧽", prio: "haute" },
+      { id: uid(), name: "Ranger le salon", icon: "🛋️", prio: "basse" },
+      { id: uid(), name: "Changer les draps", icon: "🛏️", prio: "haute" },
+      { id: uid(), name: "Courses", icon: "🛒", prio: "normale" },
+      { id: uid(), name: "Nettoyer le frigo", icon: "🧊", prio: "critique" },
+      { id: uid(), name: "Vitres", icon: "🪟", prio: "critique" },
+    ],
+    rewards: [
+      { id: uid(), name: "Séance de ciné", icon: "🎬" },
+      { id: uid(), name: "Uber Eats au choix", icon: "🍔" },
+      { id: uid(), name: "Journée Calicéo", icon: "💆" },
+      { id: uid(), name: "Resto en amoureux", icon: "🍝" },
+      { id: uid(), name: "Grasse matinée protégée", icon: "😴" },
+    ],
+    objectives: [],
+    won: [],   // { id, name, icon, ts }
+    log: [],   // { id, ts, playerId, taskName, icon, xp, note }
+    bets: [],  // { id, week, rewardId, createdAt, claimed }
+  };
+}
+
+/* ================= Synchronisation (Supabase) =================
+   L'état de référence vit dans la base partagée ; chaque téléphone garde
+   une copie locale (cache) et une file d'actions à envoyer (mode hors ligne). */
+const SUPA_URL = "https://vnisnfjfnxrjuxwgwibs.supabase.co";
+const SUPA_KEY = "sb_publishable_X9VC-plIXr3Xs26wYtVA0g_YhYW_WoG";
+const sb = (typeof window.supabase !== "undefined")
+  ? window.supabase.createClient(SUPA_URL, SUPA_KEY)
+  : null;
+
+let S, PENDING = [];
+(function initFromCache() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(KEY));
+    if (raw && raw.S) {
+      S = Object.assign(defaultState(), raw.S);
+      PENDING = raw.pending || [];
+      return;
+    }
+  } catch (e) { /* cache corrompu -> repart de zéro */ }
+  S = defaultState();
+  if (!sb) {
+    S.objectives.push({
+      id: uid(), name: "Semaine de choc", type: "xp", target: 300,
+      rewardId: S.rewards[0].id, createdAt: Date.now(), claimed: false,
+    });
+  }
+})();
+function save() { localStorage.setItem(KEY, JSON.stringify({ S, pending: PENDING })); }
+
+/* --- correspondance lignes SQL <-> état de l'appli --- */
+const fromRow = {
+  players: r => ({ id: r.id, name: r.name, emoji: r.emoji, color: r.color || "#4DC3FF", characterId: r.character_id || null }),
+  tasks: r => ({ id: r.id, name: r.name, icon: r.icon, prio: r.prio, createdAt: Number(r.created_at) }),
+  rewards: r => ({ id: r.id, name: r.name, icon: r.icon }),
+  objectives: r => ({ id: r.id, name: r.name, type: r.type, target: r.target, rewardId: r.reward_id, createdAt: Number(r.created_at), claimed: r.claimed }),
+  log: r => ({ id: r.id, ts: Number(r.ts), playerId: r.player_id, taskName: r.task_name, icon: r.icon, xp: r.xp, note: r.note || "" }),
+  won: r => ({ id: r.id, name: r.name, icon: r.icon, ts: Number(r.ts) }),
+  bets: r => ({ id: r.id, week: r.week, rewardId: r.reward_id, createdAt: Number(r.created_at), claimed: r.claimed }),
+};
+const toRow = {
+  players: p => ({ id: p.id, name: p.name, emoji: p.emoji, color: p.color || "#4DC3FF", character_id: p.characterId || null }),
+  tasks: t => ({ id: t.id, name: t.name, icon: t.icon, prio: t.prio, created_at: t.createdAt || Date.now() }),
+  rewards: r => ({ id: r.id, name: r.name, icon: r.icon }),
+  objectives: o => ({ id: o.id, name: o.name, type: o.type, target: o.target, reward_id: o.rewardId, created_at: o.createdAt, claimed: o.claimed }),
+  log: l => ({ id: l.id, ts: l.ts, player_id: l.playerId, task_name: l.taskName, icon: l.icon, xp: l.xp, note: l.note || "" }),
+  won: w => ({ id: w.id, name: w.name, icon: w.icon, ts: w.ts }),
+  bets: b => ({ id: b.id, week: b.week, reward_id: b.rewardId, created_at: b.createdAt, claimed: b.claimed }),
+};
+const TABLES = ["players", "tasks", "rewards", "objectives", "log", "won", "bets"];
+
+/* --- file d'actions : envoyées tout de suite si possible, sinon plus tard --- */
+let FLUSHING = false;
+function queueOp(op) { PENDING.push(op); save(); flushOps(); renderSync(); }
+async function flushOps() {
+  if (!sb || FLUSHING) return;
+  FLUSHING = true;
+  while (PENDING.length) {
+    const op = PENDING[0];
+    try {
+      let res;
+      if (op.type === "upsert") res = await sb.from(op.table).upsert(op.row);
+      else if (op.type === "delete") res = await sb.from(op.table).delete().eq("id", op.id);
+      else if (op.type === "clear") res = await sb.from(op.table).delete().neq("id", "");
+      if (res && res.error) throw res.error;
+      PENDING.shift(); save();
+    } catch (e) { break; /* hors ligne : on réessaiera */ }
+  }
+  FLUSHING = false;
+  renderSync();
+}
+function applyPending(state) {
+  for (const op of PENDING) {
+    const coll = state[op.table];
+    if (!coll) continue;
+    if (op.type === "upsert") {
+      const item = fromRow[op.table](op.row);
+      const i = coll.findIndex(x => x.id === item.id);
+      if (i >= 0) coll[i] = item; else coll.push(item);
+    } else if (op.type === "delete") {
+      state[op.table] = coll.filter(x => x.id !== op.id);
+    } else if (op.type === "clear") {
+      state[op.table] = [];
+    }
+  }
+  return state;
+}
+
+let SYNCED = false;
+async function loadRemote() {
+  if (!sb) return;
+  try {
+    const res = await Promise.all([
+      sb.from("players").select("*").order("id"),
+      sb.from("tasks").select("*").order("created_at").order("id"),
+      sb.from("rewards").select("*").order("id"),
+      sb.from("objectives").select("*").order("created_at"),
+      sb.from("log").select("*").order("ts"),
+      sb.from("won").select("*").order("ts"),
+      sb.from("bets").select("*").order("created_at"),
+    ]);
+    for (const r of res) if (r.error) throw r.error;
+    const fresh = { players: [], tasks: [], rewards: [], objectives: [], log: [], won: [], bets: [] };
+    TABLES.forEach((n, i) => { fresh[n] = res[i].data.map(fromRow[n]); });
+    if (fresh.players.length < 2) fresh.players = defaultState().players;
+    S = applyPending(fresh);
+    SYNCED = true;
+    save(); scheduleRender();
+  } catch (e) { SYNCED = false; }
+  renderSync();
+}
+
+/* --- rendu différé si l'utilisateur est en train de taper --- */
+let RENDER_DIRTY = false;
+function isTyping() {
+  const a = document.activeElement;
+  return a && (a.tagName === "INPUT" || a.tagName === "SELECT" || a.tagName === "TEXTAREA");
+}
+function scheduleRender() {
+  if (isTyping()) { RENDER_DIRTY = true; return; }
+  render();
+}
+document.addEventListener("focusout", () => {
+  setTimeout(() => {
+    if (RENDER_DIRTY && !isTyping()) { RENDER_DIRTY = false; render(); }
+  }, 50);
+});
+
+function renderSync() {
+  const el = $("#sync");
+  if (!el) return;
+  if (!sb) { el.textContent = "⛔ mode local — synchro indisponible"; return; }
+  if (PENDING.length) el.textContent = "⏳ " + PENDING.length + " action(s) à synchroniser";
+  else if (SYNCED) el.textContent = "☁️ synchronisé";
+  else el.textContent = "📴 hors ligne — synchro à la reconnexion";
+}
+
+/* --- temps réel : toute action de l'autre téléphone rafraîchit l'écran --- */
+let rtTimer = null;
+if (sb) {
+  sb.channel("rangement-sync")
+    .on("postgres_changes", { event: "*", schema: "public" }, () => {
+      clearTimeout(rtTimer);
+      rtTimer = setTimeout(loadRemote, 400);
+    })
+    .subscribe();
+  window.addEventListener("online", () => { flushOps(); loadRemote(); });
+  setInterval(flushOps, 15000);
+}
+
+/* ================= Time helpers ================= */
+const dayKey = ts => { const d = new Date(ts); return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); };
+function weekKey(ts) {
+  const d = new Date(ts); d.setHours(0,0,0,0);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // lundi
+  return dayKey(d.getTime());
+}
+const monthKey = ts => dayKey(ts).slice(0, 7);
+const NOW = () => Date.now();
+
+/* ================= Derived stats ================= */
+function xpOf(pid, filter) {
+  return S.log.reduce((a, l) => a + ((l.playerId === pid && (!filter || filter(l))) ? l.xp : 0), 0);
+}
+function totalXp(pid) { return xpOf(pid); }
+function weekXp(pid) { const wk = weekKey(NOW()); return xpOf(pid, l => weekKey(l.ts) === wk); }
+function monthXp(pid) { const mk = monthKey(NOW()); return xpOf(pid, l => monthKey(l.ts) === mk); }
+function taskCount(pid, filter) { return S.log.filter(l => l.playerId === pid && (!filter || filter(l))).length; }
+
+// Niveau : chaque niveau N -> N+1 coûte 100 + 30*(N-1) XP
+function levelInfo(xp) {
+  let lvl = 1, need = 100, rest = xp;
+  while (rest >= need) { rest -= need; lvl++; need = 100 + 30 * (lvl - 1); }
+  return { lvl, into: rest, need };
+}
+function rankOf(lvl) {
+  if (lvl >= 50) return { r: "MONARQUE", s: true };
+  if (lvl >= 30) return { r: "S", s: true };
+  if (lvl >= 20) return { r: "A", s: false };
+  if (lvl >= 15) return { r: "B", s: false };
+  if (lvl >= 10) return { r: "C", s: false };
+  if (lvl >= 5)  return { r: "D", s: false };
+  return { r: "E", s: false };
+}
+/* ================= Série, boucliers et rattrapage rétroactif =================
+   Tout est *rejoué jour par jour* depuis le journal : aucune écriture, aucune
+   colonne en plus. Deux téléphones qui ont le même journal calculent forcément
+   la même série (l'ancien mécanisme insérait une entrée « bouclier » dans le
+   journal, ce qui pouvait diverger entre les deux appareils hors ligne).
+
+   C'est aussi ce rejeu qui rend le rattrapage rétroactif efficace : combler un
+   jour oublié relance la série *et* rembourse automatiquement le bouclier qui
+   avait été dépensé pour geler ce jour-là. */
+const SHIELD_STREAK_STEP = 7;  // +1 bouclier tous les 7 jours de série consécutifs
+const SHIELD_MAX = 3;          // réserve maximale : une longue série ne rend pas la chaîne incassable
+const RETRO_MAX_DAYS = 7;      // on peut rattraper jusqu'à 7 jours en arrière
+
+// Entrées de l'ancien mécanisme de bouclier : elles marquaient un jour comblé,
+// ce ne sont pas de vraies quêtes et le rejeu regèle ce jour-là lui-même.
+// (La note est modifiable dans le Journal : l'id, lui, ne bouge jamais.)
+function isShieldEntry(l) { return l.note === "bouclier" || String(l.id).startsWith("shield-"); }
+// Quête ajoutée après coup — « je l'ai faite, j'ai oublié de la cocher ».
+function isRetroEntry(l) { return String(l.id).startsWith("retro-"); }
+
+/* Rejeu complet pour un joueur. Renvoie la série en cours, le record, les
+   boucliers en réserve et l'état de chaque journée :
+     done    — au moins une quête ce jour-là
+     frozen  — journée manquée, gelée par un bouclier (la série continue)
+     missed  — journée manquée sans bouclier (la série repart de zéro)
+     pending — aujourd'hui, encore rien : la journée n'est pas finie, on ne
+               casse ni ne gèle la série tant qu'elle n'est pas écoulée. */
+function streakState(pid) {
+  const byDay = new Map();
+  for (const l of S.log) {
+    if (l.playerId !== pid || isShieldEntry(l)) continue;
+    const k = dayKey(l.ts);
+    const e = byDay.get(k) || { n: 0, xp: 0, retro: 0 };
+    e.n++; e.xp += l.xp; if (isRetroEntry(l)) e.retro++;
+    byDay.set(k, e);
+  }
+  const todayK = dayKey(NOW());
+  const state = { streak: 0, best: 0, shields: 0, earned: 0, used: 0, days: new Map(), todayK };
+  if (!byDay.size) return state;
+
+  let streak = 0, best = 0, shields = 0, earned = 0, used = 0;
+  const cur = new Date([...byDay.keys()].sort()[0] + "T12:00:00");
+  const end = new Date(todayK + "T12:00:00");
+  while (cur <= end) {
+    const k = dayKey(cur.getTime());
+    const act = byDay.get(k);
+    if (act) {
+      streak++; best = Math.max(best, streak);
+      // Le bouclier se mérite *avant* l'oubli qu'il servira à couvrir : un palier
+      // de 7 jours consécutifs en crédite un, dans la limite de la réserve.
+      const gain = (streak % SHIELD_STREAK_STEP === 0 && shields < SHIELD_MAX) ? 1 : 0;
+      shields += gain; earned += gain;
+      state.days.set(k, { status: "done", n: act.n, xp: act.xp, retro: act.retro, streak, gain });
+    } else if (k === todayK) {
+      state.days.set(k, { status: "pending", n: 0, xp: 0, retro: 0, streak, gain: 0 });
+    } else if (streak > 0 && shields > 0) {
+      // Journée absorbée : la série est préservée, mais elle ne progresse pas —
+      // rien n'a été fait ce jour-là.
+      shields--; used++;
+      state.days.set(k, { status: "frozen", n: 0, xp: 0, retro: 0, streak, gain: 0 });
+    } else {
+      streak = 0;
+      state.days.set(k, { status: "missed", n: 0, xp: 0, retro: 0, streak: 0, gain: 0 });
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+  return Object.assign(state, { streak, best, shields, earned, used });
+}
+
+function streakOf(pid) { return streakState(pid).streak; }
+function bestStreakOf(pid) { return streakState(pid).best; }
+function availableShields(pid) { return streakState(pid).shields; }
+function earnedShields(pid) { return streakState(pid).earned; }
+function usedShields(pid) { return streakState(pid).used; }
+function frozenDayKeys(pid) {
+  return new Set([...streakState(pid).days].filter(([, d]) => d.status === "frozen").map(([k]) => k));
+}
+function streakMult(pid) { return 1 + Math.min(streakOf(pid), 10) * 0.05; } // +5%/jour, max +50%
+
+// Multiplicateur de série applicable à une quête rattrapée : celui du jour
+// concerné, pas celui d'aujourd'hui — sinon rattraper récrirait le passé au
+// tarif du présent.
+function streakMultAt(pid, k) {
+  const st = streakState(pid), d = st.days.get(k);
+  let s;
+  if (d && d.status === "done") s = d.streak;
+  else {
+    const prev = st.days.get(dayKey(new Date(k + "T12:00:00").getTime() - 864e5));
+    s = (prev && prev.status !== "missed" ? prev.streak : 0) + 1;
+  }
+  return 1 + Math.min(s, 10) * 0.05;
+}
+
+// Tâche bonus du jour (déterministe à partir de la date)
+function bonusTaskId() {
+  if (!S.tasks.length) return null;
+  const k = dayKey(NOW());
+  let h = 0; for (const c of k) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return S.tasks[h % S.tasks.length].id;
+}
+
+/* --- Hauts faits (badges), calculés à partir du journal --- */
+const FEATS = [
+  { id: "q1",   icon: "🗡️", name: "Première quête",              test: st => st.count >= 1 },
+  { id: "q10",  icon: "⚔️", name: "10 quêtes",                    test: st => st.count >= 10 },
+  { id: "q50",  icon: "🛡️", name: "50 quêtes",                    test: st => st.count >= 50 },
+  { id: "q100", icon: "👑", name: "100 quêtes",                   test: st => st.count >= 100 },
+  { id: "s3",   icon: "🔥", name: "Série de 3 jours",             test: st => st.bestStreak >= 3 },
+  { id: "s7",   icon: "🌋", name: "Série de 7 jours",             test: st => st.bestStreak >= 7 },
+  { id: "s14",  icon: "☄️", name: "Série de 14 jours",            test: st => st.bestStreak >= 14 },
+  { id: "rd",   icon: "🥉", name: "Rang D (niveau 5)",            test: st => st.lvl >= 5 },
+  { id: "rc",   icon: "🥈", name: "Rang C (niveau 10)",           test: st => st.lvl >= 10 },
+  { id: "ra",   icon: "🥇", name: "Rang A (niveau 20)",           test: st => st.lvl >= 20 },
+  { id: "rs",   icon: "🌟", name: "Rang S (niveau 30)",           test: st => st.lvl >= 30 },
+  { id: "xp1k", icon: "💎", name: "1 000 XP au total",            test: st => st.xp >= 1000 },
+  { id: "big5", icon: "💥", name: "5 grosses quêtes (50+ XP)",    test: st => st.big >= 5 },
+  { id: "sun",  icon: "🌅", name: "Lève-tôt (quête avant 8 h)",   test: st => st.early },
+  { id: "moon", icon: "🌙", name: "Oiseau de nuit (après 22 h)",  test: st => st.night },
+  { id: "hero1",  icon: "🎴", name: "Premier héros débloqué",     test: st => st.heroes >= 1 },
+  { id: "hero5",  icon: "🎭", name: "5 héros débloqués",          test: st => st.heroes >= 5 },
+  { id: "heroH",  icon: "🌌", name: "Moitié du panthéon",         test: st => st.heroes >= Math.ceil(CHARACTERS.length / 2) },
+  { id: "soul",   icon: "🧬", name: "Âme liée (héros incarné)",   test: st => st.embodied },
+];
+function featStats(pid) {
+  // Les entrées "bouclier" comblent un jour pour la série mais ne sont pas de vraies quêtes.
+  const mine = S.log.filter(l => l.playerId === pid && !isShieldEntry(l));
+  const xp = mine.reduce((a, l) => a + l.xp, 0);
+  return {
+    count: mine.length, xp,
+    lvl: levelInfo(xp).lvl,
+    bestStreak: bestStreakOf(pid),
+    big: mine.filter(l => l.xp >= 50).length,
+    early: mine.some(l => new Date(l.ts).getHours() < 8),
+    night: mine.some(l => new Date(l.ts).getHours() >= 22),
+  };
+}
+// Stats étendues pour les hauts faits : ajoute la collection de héros et l'incarnation
+function fullFeatStats(pid) {
+  const p = S.players.find(x => x.id === pid);
+  return { ...featStats(pid), heroes: unlockedCharIds(pid).length, embodied: !!(p && p.characterId) };
+}
+function unlockedFeats(pid) {
+  const st = fullFeatStats(pid);
+  return FEATS.filter(f => f.test(st));
+}
+
+/* --- Héros à incarner : collection au mérite, difficultés selon la popularité --- */
+const RARITIES = {
+  B:   { label: "B",   col: "var(--ink-dim)" },
+  A:   { label: "A",   col: "var(--sys)" },
+  S:   { label: "S",   col: "var(--mana)" },
+  SS:  { label: "SS",  col: "var(--gold)" },
+  GOD: { label: "GOD", col: "var(--crit)" }, // divinité — au-dessus de SS
+};
+// cond : toutes les clés présentes doivent être atteintes (lvl, count, streak, trophies)
+const CHARACTERS = [
+  // Frieren
+  { id: "sein",     name: "Sein",        emoji: "🍺", univers: "Frieren",           rarity: "B",  cond: { lvl: 3 },                              gear: ["Gourde vide", "Gourde pleine", "Bénédiction de la déesse"] },
+  { id: "stark",    name: "Stark",       emoji: "🪓", univers: "Frieren",           rarity: "A",  cond: { lvl: 7,  count: 15 },                  gear: ["Hache ébréchée", "Hache d'Eisen", "Hache du dragon"] },
+  { id: "fern",     name: "Fern",        emoji: "🔮", univers: "Frieren",           rarity: "S",  cond: { lvl: 13, count: 35 },                  gear: ["Bâton d'apprentie", "Bâton de Frieren", "Zoltraak maîtrisé"] },
+  { id: "himmel",   name: "Himmel",      emoji: "🗡️", univers: "Frieren",           rarity: "S",  cond: { lvl: 15, streak: 7 },                  gear: ["Épée (réplique)", "Épée du héros", "Statue à ton effigie"] },
+  { id: "frieren",  name: "Frieren",     emoji: "❄️", univers: "Frieren",           rarity: "SS", cond: { lvl: 22, count: 60, streak: 7 },       gear: ["Grimoire de voyage", "Grimoire de Flamme", "Magie d'un millénaire"] },
+  // L'Apothicaire
+  { id: "jinshi",   name: "Jinshi",      emoji: "🌙", univers: "L'Apothicaire",     rarity: "S",  cond: { lvl: 14, count: 30 },                  gear: ["Éventail de soie", "Sceau impérial", "Ornement de jade"] },
+  { id: "maomao",   name: "Maomao",      emoji: "⚗️", univers: "L'Apothicaire",     rarity: "SS", cond: { lvl: 20, count: 50, streak: 7 },       gear: ["Nécessaire d'herboriste", "Coffret à poisons", "Insigne de la cour"] },
+  // Gachiakuta
+  { id: "rudo",     name: "Rudo",        emoji: "🥾", univers: "Gachiakuta",        rarity: "A",  cond: { lvl: 8,  count: 20 },                  gear: ["Gants usés", "3R affûté", "Instrument géant"] },
+  { id: "enjin",    name: "Enjin",       emoji: "🧹", univers: "Gachiakuta",        rarity: "S",  cond: { lvl: 14, streak: 5 },                  gear: ["Balai de nettoyeur", "Balai jinki", "Balai du capitaine"] },
+  // DanMachi
+  { id: "hestia",   name: "Hestia",      emoji: "🎀", univers: "DanMachi",          rarity: "B",  cond: { lvl: 5 },                              gear: ["Ruban divin", "Couteau de Hestia", "Faveur de la déesse"] },
+  { id: "bell",     name: "Bell Cranel", emoji: "🐇", univers: "DanMachi",          rarity: "A",  cond: { lvl: 9,  count: 22 },                  gear: ["Couteau du Minotaure", "Firebolt", "Argonaute"] },
+  { id: "aiz",      name: "Aiz Wallenstein", emoji: "⚜️", univers: "DanMachi",      rarity: "S",  cond: { lvl: 16, streak: 6 },                  gear: ["Désir", "Ariel", "Éveil du vent"] },
+  // Black Clover
+  { id: "noelle",   name: "Noelle",      emoji: "🌊", univers: "Black Clover",      rarity: "A",  cond: { lvl: 9,  count: 20 },                  gear: ["Baguette fêlée", "Robe de vaillance", "Armure marine"] },
+  { id: "yuno",     name: "Yuno",        emoji: "🌪️", univers: "Black Clover",      rarity: "S",  cond: { lvl: 15, count: 40 },                  gear: ["Grimoire quatre-feuilles", "Esprit du vent", "Étoile polaire"] },
+  { id: "asta",     name: "Asta",        emoji: "⚔️", univers: "Black Clover",      rarity: "SS", cond: { lvl: 21, count: 55, streak: 7 },       gear: ["Épée démoniaque", "Anti-magie déchaînée", "Forme de démon"] },
+  // One Piece
+  { id: "usopp",    name: "Usopp",       emoji: "🎯", univers: "One Piece",         rarity: "B",  cond: { lvl: 4 },                              gear: ["Lance-pierre", "Kabuto", "Kabuto vert"] },
+  { id: "nami",     name: "Nami",        emoji: "🍊", univers: "One Piece",         rarity: "A",  cond: { lvl: 8,  count: 18 },                  gear: ["Bâton climatique", "Clima-Tact parfait", "Zeus"] },
+  { id: "sanji",    name: "Sanji",       emoji: "🍳", univers: "One Piece",         rarity: "S",  cond: { lvl: 14, count: 35 },                  gear: ["Costume noir", "Diable Jambe", "Raid Suit"] },
+  { id: "zoro",     name: "Zoro",        emoji: "🔱", univers: "One Piece",         rarity: "SS", cond: { lvl: 24, count: 70 },                  gear: ["Deux sabres", "Santoryu", "Enma"] },
+  { id: "luffy",    name: "Luffy",       emoji: "👒", univers: "One Piece",         rarity: "SS", cond: { lvl: 28, count: 100, streak: 14, trophies: 2 }, gear: ["Gear 2", "Gear 4", "Gear 5"] },
+  // Boss final : divinité au-dessus de SS
+  { id: "yamato",   name: "Yamato",      emoji: "🐺", univers: "One Piece",         rarity: "GOD", cond: { lvl: 30, count: 120, streak: 15, trophies: 2 }, gear: ["Kanabō d'Oden", "Fruit du Loup divin", "Okuchi no Makami"] },
+  // Bleach
+  { id: "rukia",    name: "Rukia",       emoji: "🌨️", univers: "Bleach",            rarity: "S",  cond: { lvl: 13, streak: 5 },                  gear: ["Sode no Shirayuki", "Premier ban", "Bankai"] },
+  { id: "byakuya",  name: "Byakuya",     emoji: "🌸", univers: "Bleach",            rarity: "S",  cond: { lvl: 16, count: 40 },                  gear: ["Senbonzakura", "Kageyoshi", "Senkei"] },
+  { id: "ichigo",   name: "Ichigo",      emoji: "☠️", univers: "Bleach",            rarity: "SS", cond: { lvl: 23, count: 65, streak: 7 },       gear: ["Zangetsu", "Masque de hollow", "Getsuga final"] },
+  // Demon Slayer
+  { id: "zenitsu",  name: "Zenitsu",     emoji: "⚡", univers: "Demon Slayer",      rarity: "A",  cond: { lvl: 9,  count: 20 },                  gear: ["Sabre jaune", "Souffle de la foudre", "Éclair divin"] },
+  { id: "nezuko",   name: "Nezuko",      emoji: "🎍", univers: "Demon Slayer",      rarity: "SS", cond: { lvl: 20, streak: 14 },                 gear: ["Bambou", "Sang démoniaque", "Éveil"] },
+  { id: "tanjiro",  name: "Tanjiro",     emoji: "🔥", univers: "Demon Slayer",      rarity: "SS", cond: { lvl: 21, count: 60 },                  gear: ["Sabre noir", "Souffle de l'eau", "Danse du dieu du feu"] },
+  // Fullmetal Alchemist
+  { id: "alphonse", name: "Alphonse",    emoji: "🛡️", univers: "Fullmetal Alchemist", rarity: "A",  cond: { lvl: 10, count: 25 },               gear: ["Armure cabossée", "Armure gravée", "Âme polie"] },
+  { id: "mustang",  name: "Roy Mustang", emoji: "🧤", univers: "Fullmetal Alchemist", rarity: "S",  cond: { lvl: 15, count: 40 },               gear: ["Gants ignifugés", "Flammes maîtrisées", "Grand brasier"] },
+  { id: "edward",   name: "Edward",      emoji: "⚙️", univers: "Fullmetal Alchemist", rarity: "SS", cond: { lvl: 22, count: 60, streak: 7 },    gear: ["Automail standard", "Automail de combat", "Transmutation parfaite"] },
+];
+const UNIVERSES = [...new Set(CHARACTERS.map(c => c.univers))];
+
+function charStats(pid) {
+  const st = featStats(pid);
+  const t = trophyData();
+  const trophies = S.players[0] && pid === S.players[0].id ? t.winsA : t.winsB;
+  return { lvl: st.lvl, count: st.count, streak: st.bestStreak, trophies };
+}
+function condMet(cond, st) {
+  return (!cond.lvl || st.lvl >= cond.lvl)
+    && (!cond.count || st.count >= cond.count)
+    && (!cond.streak || st.streak >= cond.streak)
+    && (!cond.trophies || st.trophies >= cond.trophies);
+}
+function condText(cond) {
+  const parts = [];
+  if (cond.lvl) parts.push("niv. " + cond.lvl);
+  if (cond.count) parts.push(cond.count + " quêtes");
+  if (cond.streak) parts.push("série " + cond.streak + " j");
+  if (cond.trophies) parts.push(cond.trophies + " trophée" + (cond.trophies > 1 ? "s" : ""));
+  return parts.join(" · ");
+}
+// Version avec progression : « niv. 8/13 · 20/35 quêtes », les critères atteints cochés ✓
+function condProgress(cond, st) {
+  const seg = (cur, need, curTxt, okTxt) => cur >= need
+    ? `<span class="condok">${okTxt} ✓</span>` : curTxt;
+  const parts = [];
+  if (cond.lvl) parts.push(seg(st.lvl, cond.lvl, `niv. ${st.lvl}/${cond.lvl}`, `niv. ${cond.lvl}`));
+  if (cond.count) parts.push(seg(st.count, cond.count, `${st.count}/${cond.count} quêtes`, `${cond.count} quêtes`));
+  if (cond.streak) parts.push(seg(st.streak, cond.streak, `série ${st.streak}/${cond.streak} j`, `série ${cond.streak} j`));
+  if (cond.trophies) { const s = cond.trophies > 1 ? "s" : ""; parts.push(seg(st.trophies, cond.trophies, `${st.trophies}/${cond.trophies} trophée${s}`, `${cond.trophies} trophée${s}`)); }
+  return parts.join(" · ");
+}
+function unlockedCharIds(pid) {
+  const st = charStats(pid);
+  return CHARACTERS.filter(c => condMet(c.cond, st)).map(c => c.id);
+}
+// Héros verrouillé le plus proche du déblocage (moyenne des ratios critère par critère)
+function nextHeroFor(pid, universe) {
+  const st = charStats(pid);
+  const pool = universe ? CHARACTERS.filter(c => c.univers === universe) : CHARACTERS;
+  const locked = pool.filter(c => !condMet(c.cond, st));
+  if (!locked.length) return null;
+  const score = c => {
+    let s = 0, n = 0;
+    for (const k of ["lvl", "count", "streak", "trophies"]) {
+      if (c.cond[k]) { s += Math.min(st[k] / c.cond[k], 1); n++; }
+    }
+    return s / n;
+  };
+  return locked.reduce((a, b) => (score(b) > score(a) ? b : a));
+}
+// Stuff : 3 paliers par héros, seuils dérivés de la rareté (progression après le déblocage)
+const GEAR_STEPS = {
+  B:  [{ dl: 2, dc: 5 },  { dl: 4, dc: 12 },  { dl: 7,  dc: 25 }],
+  A:  [{ dl: 3, dc: 10 }, { dl: 6, dc: 20 },  { dl: 10, dc: 35 }],
+  S:  [{ dl: 3, dc: 15 }, { dl: 7, dc: 30 },  { dl: 12, dc: 50 }],
+  SS: [{ dl: 4, dc: 20 }, { dl: 8, dc: 40 },  { dl: 14, dc: 70 }],
+  GOD: [{ dl: 4, dc: 25 }, { dl: 9, dc: 50 }, { dl: 15, dc: 90 }],
+};
+function gearConds(ch) {
+  return GEAR_STEPS[ch.rarity].map(s => ({ lvl: (ch.cond.lvl || 1) + s.dl, count: (ch.cond.count || 0) + s.dc }));
+}
+function gearTier(ch, st) {
+  return gearConds(ch).filter(c => condMet(c, st)).length;
+}
+function charOf(p) {
+  return p && p.characterId ? CHARACTERS.find(c => c.id === p.characterId) || null : null;
+}
+// Emoji personnel du joueur, mémorisé sur cet appareil avant la première incarnation
+// d'un héros, pour pouvoir le restaurer réellement au retrait (au lieu de le perdre).
+function baseEmojiKey(pid) { return "rangement-baseemoji-" + pid; }
+function samePlayerColor() {
+  if (S.players.length !== 2) return false;
+  const [a, b] = S.players.map(p => (p.color || "#4DC3FF").toLowerCase());
+  return a === b;
+}
+function sameEmoji() {
+  if (S.players.length !== 2) return false;
+  const [a, b] = S.players.map(p => p.emoji || "");
+  return a && a === b;
+}
+function sameName() {
+  if (S.players.length !== 2) return false;
+  const [a, b] = S.players.map(p => (p.name || "").trim().toLowerCase());
+  return a && a === b;
+}
+function equipChar(p, c) {
+  if (!p.characterId) localStorage.setItem(baseEmojiKey(p.id), p.emoji);
+  p.characterId = c.id;
+  p.emoji = c.emoji;
+  save(); queueOp({ table: "players", type: "upsert", row: toRow.players(p) });
+  render(); toast(`${c.emoji} ${p.name} incarne ${c.name} !`);
+  try { if (navigator.vibrate) navigator.vibrate(35); } catch (e) {}
+}
+// Retrait d'un héros incarné, factorisé pour le bouton manuel, la remise à zéro
+// et l'annulation d'une quête ayant servi à le débloquer (mêmes conditions perdues).
+function unequipChar(p) {
+  p.characterId = null;
+  const baseEmoji = localStorage.getItem(baseEmojiKey(p.id));
+  if (baseEmoji) p.emoji = baseEmoji;
+  return !!baseEmoji;
+}
+
+// Rythme du duo : XP cumulés des 28 derniers jours, ramenés à la semaine
+function duoWeeklyPace() {
+  const cutoff = NOW() - 28 * 864e5;
+  const xp = S.log.filter(l => l.ts >= cutoff).reduce((a, l) => a + l.xp, 0);
+  return Math.round(xp / 4);
+}
+
+function objProgress(o) {
+  const f = l => l.ts >= o.createdAt;
+  return o.type === "xp"
+    ? S.log.filter(f).reduce((a, l) => a + l.xp, 0)
+    : S.log.filter(f).filter(l => !isShieldEntry(l)).length;
+}
+
+/* ================= Rendering ================= */
+const $ = sel => document.querySelector(sel);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+// Entrée valide un formulaire d'ajout court, comme le ferait le bouton "Terminé" du clavier mobile.
+function bindEnter(ids, btn) {
+  ids.forEach(id => {
+    const el = $(id);
+    if (el) el.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); btn && btn.click(); } };
+  });
+}
+// Entrée = valide (comme la note du Journal) sur les champs d'édition en place ;
+// Échap = annule et restaure la valeur d'origine, sans déclencher l'onchange.
+function bindEnterCommit(selector) {
+  document.querySelectorAll(selector).forEach(inp => {
+    const orig = inp.value;
+    inp.onkeydown = e => {
+      if (e.key === "Enter") { e.preventDefault(); inp.blur(); }
+      else if (e.key === "Escape") { e.preventDefault(); inp.value = orig; inp.blur(); }
+    };
+  });
+}
+let TAB = "quetes";
+
+const TABS = [
+  { id: "quetes",    label: "Quêtes",    ico: "⚔️" },
+  { id: "duel",      label: "Duel",      ico: "🔥" },
+  { id: "heros",     label: "Héros",     ico: "🎴" },
+  { id: "objectifs", label: "Objectifs", ico: "🏆" },
+  { id: "journal",   label: "Journal",   ico: "📜" },
+  { id: "reglages",  label: "Réglages",  ico: "⚙️" },
+];
+const validTab = id => TABS.some(t => t.id === id);
+// Lien profond : #duel, #heros… (raccourcis d'icône PWA, liens partagés)
+{ const h0 = location.hash.slice(1); if (validTab(h0)) TAB = h0; }
+
+// Navigation avec historique : le bouton retour (Android) revient à l'onglet
+// précédent, ou ferme la modale système ouverte, au lieu de quitter l'appli.
+function navTab(id) {
+  if (id !== TAB) {
+    TAB = id;
+    try { history.pushState({ tab: id }, "", "#" + id); } catch (e) {}
+  }
+  render(); // re-render aussi sur l'onglet courant (rafraîchissement attendu de longue date)
+}
+window.addEventListener("popstate", () => {
+  if (document.querySelector(".veil")) {
+    // une modale est ouverte : le retour la ferme (Continuer) et on reste sur place
+    try { history.pushState({ modal: true }, "", location.href); } catch (e) {}
+    const ok = document.getElementById("veilOk");
+    if (ok) ok.click();
+    return;
+  }
+  const h = location.hash.slice(1);
+  const target = validTab(h) ? h : "quetes";
+  if (target !== TAB) { TAB = target; render(); }
+});
+
+// Pastilles « à réclamer » : défis complétés non réclamés, paris résolus en attente
+function claimableCounts() {
+  const cur = weekKey(NOW());
+  const { byWeek } = trophyData();
+  const objN = S.objectives.filter(o => !o.claimed && objProgress(o) >= o.target).length;
+  const betN = (S.bets || []).filter(b => {
+    if (b.claimed || b.week >= cur) return false;
+    const x = byWeek[b.week] || { a: 0, b: 0 };
+    return x.a !== x.b;
+  }).length;
+  return { objectifs: objN, duel: betN };
+}
+
+function render() {
+  renderHeader();
+  renderSync();
+  renderDuo();
+  renderTabs();
+  const v = $("#view");
+  v.innerHTML = ({ quetes: vQuetes, duel: vDuel, heros: vHeros, objectifs: vObjectifs, journal: vJournal, reglages: vReglages })[TAB]();
+  bindView();
+}
+
+function renderHeader() {
+  const [a, b] = S.players;
+  const wa = weekXp(a.id), wb = weekXp(b.id);
+  const el = $("#weekLead");
+  if (wa === wb) el.innerHTML = wa === 0 ? "La chasse de la semaine n'a pas commencé…" : "Égalité parfaite cette semaine ! ⚡";
+  else {
+    const lead = wa > wb ? a : b;
+    el.innerHTML = `👑 <b>${esc(lead.name)}</b> mène la chasse cette semaine (+${Math.abs(wa - wb)} XP)`;
+  }
+}
+
+function renderDuo() {
+  const wk = { p1: weekXp("p1"), p2: weekXp("p2") };
+  const leadId = wk.p1 === wk.p2 ? null : (wk.p1 > wk.p2 ? "p1" : "p2");
+  $("#duo").innerHTML = S.players.map(p => {
+    const xp = totalXp(p.id), li = levelInfo(xp), rk = rankOf(li.lvl), st = streakOf(p.id);
+    return `
+    <div class="hunter ${p.id === leadId ? "leader" : ""}" style="border-top-color:${p.id === leadId ? "var(--gold)" : esc(p.color)}">
+      ${p.id === leadId ? '<span class="crown">👑</span>' : ""}
+      <div class="face">${esc(p.emoji)}</div>
+      <div class="name">${esc(p.name)}</div>
+      ${(() => { const c = charOf(p); return c ? `<div class="charline">${c.emoji} ${esc(c.name)} ${"⭐".repeat(gearTier(c, charStats(p.id)))}</div>` : ""; })()}
+      <div class="rankline">
+        <span class="rank ${rk.s ? "s" : ""}">${rk.r}</span>
+        <span class="lvl">NIV. ${li.lvl}</span>
+      </div>
+      <div class="xpbar"><i style="width:${Math.round(100 * li.into / li.need)}%"></i></div>
+      <div class="xpnums">
+        <span>${li.into}/${li.need} XP</span>
+        <span class="streak" title="Bonus de série : +5 % d'XP par jour, max +50 %">${st > 0 ? `🔥${st}j · +${Math.round((streakMult(p.id) - 1) * 100)}&nbsp;%` : ""}</span>
+      </div>
+      <div class="xpnums"><span>Semaine : ${wk[p.id]} XP</span></div>
+    </div>`;
+  }).join("");
+}
+
+function renderTabs() {
+  const cl = claimableCounts();
+  $("#tabs").innerHTML = TABS.map(t => {
+    const n = cl[t.id] || 0;
+    const on = TAB === t.id;
+    return `<button class="${on ? "on" : ""}" data-tab="${t.id}" aria-current="${on ? "page" : "false"}" ${n ? `title="${n} à réclamer"` : ""}><span class="ico">${t.ico}${n ? `<span class="tabdot">${n}</span>` : ""}</span>${t.label}</button>`;
+  }).join("");
+  document.querySelectorAll("#tabs button").forEach(b =>
+    b.onclick = () => navTab(b.dataset.tab));
+}
+
+/* ---------- Quêtes ---------- */
+function suggestionsOn() { return localStorage.getItem("rangement-suggest") !== "off"; }
+
+// Bilan du jour (dérivé du journal) : affiché en tête de l'onglet Quêtes
+function todayStats() {
+  const k = dayKey(NOW());
+  const logs = S.log.filter(l => dayKey(l.ts) === k);
+  return {
+    n: logs.length,
+    xp: logs.reduce((a, l) => a + l.xp, 0),
+    by: S.players.map(p => ({ p, n: logs.filter(l => l.playerId === p.id).length })),
+  };
+}
+
+/* --- Rappel du soir (dans l'appli uniquement, aucune notification push) --- */
+function eveningReminderOn() { return localStorage.getItem("rangement-evening") !== "off"; }
+function eveningReminderHour() {
+  const v = parseInt(localStorage.getItem("rangement-evening-hour"), 10);
+  return Number.isFinite(v) && v >= 0 && v <= 23 ? v : 20;
+}
+// Heure dédiée au rappel de série 🔥 (par défaut : la même que le rappel générique)
+function streakReminderHour() {
+  const v = parseInt(localStorage.getItem("rangement-streak-hour"), 10);
+  return Number.isFinite(v) && v >= 0 && v <= 23 ? v : eveningReminderHour();
+}
+function todayHasActivity() {
+  const k = dayKey(NOW());
+  return S.log.some(l => dayKey(l.ts) === k);
+}
+function playerHasActivityToday(pid) {
+  const k = dayKey(NOW());
+  return S.log.some(l => l.playerId === pid && dayKey(l.ts) === k);
+}
+// Série "en jeu" : vivante grâce à une quête d'hier, mais rien encore aujourd'hui.
+function streakAtRisk(pid) { return !playerHasActivityToday(pid) && streakOf(pid) > 0; }
+function atRiskPlayers() { return S.players.filter(p => streakAtRisk(p.id)); }
+function eveningDismissedToday() { return localStorage.getItem("rangement-evening-dismiss") === dayKey(NOW()); }
+function dismissEveningReminder() { localStorage.setItem("rangement-evening-dismiss", dayKey(NOW())); }
+function shouldShowEveningReminder() {
+  if (!eveningReminderOn() || eveningDismissedToday()) return false;
+  const h = new Date().getHours();
+  return (h >= streakReminderHour() && atRiskPlayers().length > 0)
+      || (h >= eveningReminderHour() && !todayHasActivity());
+}
+function eveningReminderText() {
+  const risky = atRiskPlayers();
+  if (risky.length) {
+    return risky.map(p => {
+      const n = streakOf(p.id);
+      return `🔥 <b>${esc(p.name)}</b> va perdre sa série de ${n} jour${n > 1 ? "s" : ""} !`;
+    }).join(" ");
+  }
+  return "🌙 Personne n'a encore chassé aujourd'hui — une petite quête avant la nuit ?";
+}
+function eveningReminderTextPlain() {
+  const risky = atRiskPlayers();
+  if (risky.length) {
+    return risky.map(p => `${p.name} : série de ${streakOf(p.id)} jour(s) en jeu`).join(" · ");
+  }
+  return "Personne n'a encore chassé aujourd'hui.";
+}
+
+/* --- Notification navigateur (best-effort, en plus du rappel dans l'appli) --- */
+function notifsSupported() { return typeof Notification !== "undefined"; }
+function notifsOn() { return notifsSupported() && localStorage.getItem("rangement-notifs") === "on"; }
+function notifiedToday() { return localStorage.getItem("rangement-notif-sent") === dayKey(NOW()); }
+function markNotifiedToday() { localStorage.setItem("rangement-notif-sent", dayKey(NOW())); }
+function notifHistory() {
+  try { return JSON.parse(localStorage.getItem("rangement-notif-log") || "[]"); } catch (e) { return []; }
+}
+function pushNotifHistory(body) {
+  const h = notifHistory();
+  h.push({ ts: NOW(), body });
+  localStorage.setItem("rangement-notif-log", JSON.stringify(h.slice(-14)));
+}
+async function sendBrowserNotification(title, body, tag) {
+  let sent = false;
+  try {
+    const reg = navigator.serviceWorker && (await navigator.serviceWorker.getRegistration());
+    if (reg && reg.showNotification) {
+      await reg.showNotification(title, { body, icon: "icons/icon-192.png", badge: "icons/icon-192.png", tag });
+      sent = true;
+    }
+  } catch (e) { /* pas de service worker actif -> repli sur Notification() */ }
+  if (!sent) {
+    try { new Notification(title, { body, icon: "icons/icon-192.png" }); sent = true; }
+    catch (e) { /* notification indisponible sur cet appareil, tant pis */ }
+  }
+  return sent;
+}
+async function maybeSendStreakNotification() {
+  if (!notifsOn() || notifiedToday() || Notification.permission !== "granted" || !shouldShowEveningReminder()) return;
+  const body = eveningReminderTextPlain();
+  const sent = await sendBrowserNotification("⚔️ Rangement — ne perds pas ta série !", body, "rangement-streak");
+  if (sent) { markNotifiedToday(); pushNotifHistory(body); }
+}
+// Test manuel depuis Réglages : vérifie tout de suite que le navigateur autorise bien l'envoi.
+async function sendTestNotification() {
+  if (!notifsSupported() || Notification.permission !== "granted") {
+    toast("Autorisation refusée — active la notification d'abord");
+    return;
+  }
+  const sent = await sendBrowserNotification("⚔️ Rangement — test", "Ceci est une notification de test.", "rangement-test");
+  if (sent) { pushNotifHistory("🧪 Test : notification envoyée avec succès"); toast("Notification de test envoyée"); render(); }
+  else toast("Échec de l'envoi — vérifie les réglages du navigateur");
+}
+
+/* --- Rappels vivants : jusqu'ici tout n'était évalué qu'au chargement ou lors d'un
+   render ; si l'appli restait ouverte (tablette posée, onglet du soir), le bandeau du
+   rappel et la notification n'apparaissaient jamais. Un tick par minute suffit. --- */
+let LAST_REMIND_STATE = null;
+function reminderTick() {
+  const due = shouldShowEveningReminder();
+  if (LAST_REMIND_STATE !== null && due !== LAST_REMIND_STATE && TAB === "quetes") scheduleRender();
+  LAST_REMIND_STATE = due;
+  maybeSendStreakNotification();
+  // Comme le bandeau du soir : le récap du dimanche doit apparaître même si l'appli
+  // était déjà ouverte avant 18h, sans attendre un rechargement (jamais si une modale
+  // système est déjà affichée, pour ne pas interrompre une chaîne de jalons en cours).
+  if (shouldShowWeeklyRecap() && !document.querySelector(".veil")) weeklyRecapModal();
+  return due;
+}
+
+/* --- Récap hebdo du dimanche soir (dans l'appli, une fois par semaine) --- */
+function weeklyRecapOn() { return localStorage.getItem("rangement-recap") !== "off"; }
+function recapDismissedThisWeek() { return localStorage.getItem("rangement-recap-dismiss") === weekKey(NOW()); }
+function dismissWeeklyRecap() { localStorage.setItem("rangement-recap-dismiss", weekKey(NOW())); }
+function shouldShowWeeklyRecap() {
+  const d = new Date();
+  return weeklyRecapOn() && d.getDay() === 0 && d.getHours() >= 18 && !recapDismissedThisWeek();
+}
+function weeklyRecapModal() {
+  const [a, b] = S.players;
+  const wa = weekXp(a.id), wb = weekXp(b.id);
+  const lead = wa === wb ? null : (wa > wb ? a : b);
+  const qa = S.log.filter(l => l.playerId === a.id && !isShieldEntry(l) && weekKey(l.ts) === weekKey(NOW())).length;
+  const qb = S.log.filter(l => l.playerId === b.id && !isShieldEntry(l) && weekKey(l.ts) === weekKey(NOW())).length;
+  const bet = activeBet();
+  sysModal(`
+    <div class="big">RÉCAP DE LA SEMAINE</div>
+    <div class="sub" style="text-align:left">
+      ${esc(a.emoji)} <b>${esc(a.name)}</b> : ${wa} XP (${qa} quête${qa > 1 ? "s" : ""})<br>
+      ${esc(b.emoji)} <b>${esc(b.name)}</b> : ${wb} XP (${qb} quête${qb > 1 ? "s" : ""})<br><br>
+      ${lead ? "👑 <b>" + esc(lead.name) + "</b> termine en tête cette semaine !" : "⚡ Égalité parfaite cette semaine !"}
+      ${bet ? "<br><br>⚔️ N'oubliez pas l'enjeu : " + betRewardLabel(bet) : ""}
+    </div>`, dismissWeeklyRecap);
+}
+
+// Tâche la plus "en retard" : jamais faite, sinon faite il y a le plus longtemps.
+function overdueTaskId() {
+  if (!S.tasks.length) return null;
+  let best = null, bestTs = Infinity;
+  for (const t of S.tasks) {
+    const last = [...S.log].reverse().find(l => l.taskName === t.name);
+    const ts = last ? last.ts : -Infinity; // jamais faite = priorité maximale
+    if (ts < bestTs) { bestTs = ts; best = t.id; }
+  }
+  return best;
+}
+
+function activeBet() {
+  const cur = weekKey(NOW());
+  return (S.bets || []).find(b => b.week === cur && !b.claimed) || null;
+}
+function betRewardLabel(b) {
+  if (b.rewardId === "__random__") return "🎲 Récompense surprise";
+  const r = S.rewards.find(x => x.id === b.rewardId);
+  return r ? esc(r.icon) + " " + esc(r.name) : "🎁 Récompense";
+}
+function rewardOptions(selectedId) {
+  return S.rewards.map(r => `<option value="${r.id}" ${selectedId === r.id ? "selected" : ""}>${esc(r.icon)} ${esc(r.name)}</option>`).join("")
+    + `<option value="__random__" ${selectedId === "__random__" ? "selected" : ""}>🎲 Surprise (tirage au sort)</option>`;
+}
+
+// Tri des quêtes : ordre habituel (création) ou priorités critiques en tête — propre à l'appareil
+function questSortMode() { return localStorage.getItem("rangement-qsort") === "prio" ? "prio" : "habituel"; }
+const PRIO_ORDER = { critique: 0, haute: 1, normale: 2, basse: 3 };
+
+function vQuetes() {
+  const bId = bonusTaskId();
+  const suggestId = suggestionsOn() ? overdueTaskId() : null;
+  const bet = activeBet();
+  const tasks = questSortMode() === "prio"
+    ? S.tasks.slice().sort((x, y) => PRIO_ORDER[x.prio] - PRIO_ORDER[y.prio])
+    : S.tasks;
+  const rows = tasks.map(t => {
+    const p = PRIOS[t.prio], isB = t.id === bId, isSuggest = t.id === suggestId && !isB;
+    const last = [...S.log].reverse().find(l => l.taskName === t.name);
+    const lastP = last && S.players.find(pl => pl.id === last.playerId);
+    return `
+    <div class="quest ${isB ? "bonus" : ""} ${isSuggest ? "suggested" : ""}" style="--pcol:${p.col}">
+      <span class="qi">${esc(t.icon)}</span>
+      <div class="qmain">
+        <div class="qname">${esc(t.name)}</div>
+        <div class="qmeta">
+          <span class="chip">${p.label} · ${p.xp} XP</span>
+          ${isB ? '<span class="chip gold">×2 aujourd’hui</span>' : ""}
+          ${isSuggest ? '<span class="chip gold">à ton tour ?</span>' : ""}
+          ${lastP ? `<span class="lastdone">dernier : ${esc(lastP.emoji)}</span>` : ""}
+        </div>
+      </div>
+      <div class="qbtns">
+        ${S.players.map(pl => `<button class="doer" style="border-color:${esc(pl.color)}" data-do="${t.id}" data-p="${pl.id}" title="Fait par ${esc(pl.name)}" aria-label="${esc(t.name)} — fait par ${esc(pl.name)}">${esc(pl.emoji)}</button>`).join("")}
+      </div>
+    </div>`;
+  }).join("");
+  return `
+  ${shouldShowEveningReminder() ? `<div class="evremind">${eveningReminderText()} <button id="evRemindOk">Plus tard</button></div>` : ""}
+  ${bet ? `<div class="betremind">⚔️ Enjeu de la semaine : <b>${betRewardLabel(bet)}</b> — voir l'onglet Duel</div>` : ""}
+  ${(() => { const ts = todayStats(); return ts.n ? `<div class="daystat">☀️ Aujourd'hui : <b>${ts.n} quête${ts.n > 1 ? "s" : ""}</b> · <b>${ts.xp} XP</b> à deux <span class="daystat-by">${ts.by.map(x => esc(x.p.emoji) + " " + x.n).join(" · ")}</span></div>` : ""; })()}
+  <section class="panel">
+    <div class="panelhead">
+      <h2 style="margin-bottom:0">Quêtes disponibles</h2>
+      <span class="headbtns">
+        <button class="linkbtn" id="retroBtn">↩️ Quête oubliée</button>
+        <button class="linkbtn" id="qSortToggle" aria-pressed="${questSortMode() === "prio"}">${questSortMode() === "prio" ? "Ordre habituel" : "Trier par priorité"}</button>
+      </span>
+    </div>
+    ${rows || '<p class="hint">Aucune quête. Ajoute des tâches dans Réglages.</p>'}
+    <p class="hint">Touche ton emoji quand c'est fait. Bonus de série : +5&nbsp;% d'XP par jour d'activité consécutif (max +50&nbsp;%). La quête dorée rapporte le double aujourd'hui${suggestId ? ", et 👉 marque la tâche la plus en attente" : ""}.</p>
+    <p class="hint">↩️ <b>Quête oubliée</b> : une tâche faite mais pas cochée se rattrape jusqu'à ${RETRO_MAX_DAYS} jours en arrière — elle recompte pour la série et peut la relancer.</p>
+  </section>
+  ${shieldPanel()}`;
+}
+
+/* ---------- Boucliers de série : le bonus qui absorbe un jour manqué ---------- */
+function shieldPanel() {
+  const rows = S.players.map(p => {
+    const st = streakState(p.id);
+    const pips = Array.from({ length: SHIELD_MAX }, (_, i) =>
+      `<span class="pip${i < st.shields ? " on" : ""}" aria-hidden="true">🛡️</span>`).join("");
+    const today = st.days.get(st.todayK);
+    let state;
+    if (st.streak === 0) {
+      state = "série à relancer";
+    } else if (today && today.status === "pending") {
+      state = st.shields > 0
+        ? `série de ${st.streak} j · rien aujourd'hui, un bouclier prendra le relais`
+        : `série de ${st.streak} j · rien aujourd'hui, elle tombe à minuit`;
+    } else {
+      const left = SHIELD_STREAK_STEP - (st.streak % SHIELD_STREAK_STEP);
+      state = `série de ${st.streak} j` + (st.shields < SHIELD_MAX
+        ? ` · encore ${left} j pour le prochain bouclier` : " · réserve pleine");
+    }
+    return `
+    <div class="shieldrow">
+      <span class="sname"><i class="dot" style="background:${esc(p.color)}"></i>${esc(p.emoji)} ${esc(p.name)}</span>
+      <span class="spips" role="img" aria-label="${st.shields} bouclier${st.shields > 1 ? "s" : ""} sur ${SHIELD_MAX} en réserve">${pips}</span>
+      <span class="hint sstate">${esc(state)}</span>
+    </div>`;
+  }).join("");
+  return `
+  <section class="panel">
+    <h2>Boucliers de série 🛡️</h2>
+    ${rows}
+    <p class="hint" style="margin-top:12px">Un bouclier <b>absorbe une journée manquée</b> : la série ne repart pas de zéro, elle est mise en pause pour ce jour-là puis reprend. Il se dépense tout seul, rien à faire.</p>
+    <p class="hint">On en gagne <b>un tous les ${SHIELD_STREAK_STEP} jours de série consécutifs</b>, ${SHIELD_MAX} en réserve au maximum. Il se mérite donc <b>avant</b> l'oubli qu'il couvrira.</p>
+    <p class="hint">Et si tu rattrapes après coup une quête sur un jour gelé, le bouclier t'est <b>rendu</b>.</p>
+  </section>`;
+}
+
+/* Rattrapage : ajouter une quête faite mais jamais cochée, à sa vraie date. */
+function retroModal() {
+  if (!S.tasks.length) { toast("Ajoute d'abord des tâches dans Réglages"); return; }
+  const days = [];
+  for (let i = 1; i <= RETRO_MAX_DAYS; i++) {
+    const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() - i);
+    const long = d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "short" });
+    days.push({ k: dayKey(d.getTime()), label: i === 1 ? `Hier — ${long}` : i === 2 ? `Avant-hier — ${long}` : long });
+  }
+  // sysModal vide #modal *avant* d'exécuter l'action du bouton : les valeurs sont
+  // mémorisées au fil des changements, pas relues dans le DOM au moment du clic.
+  const sel = { task: S.tasks[0].id, player: S.players[0].id, day: days[0].k };
+  // L'XP vit ici plutôt que dans le libellé des <option> : sur 390 px de large, un nom
+  // de tâche un peu long faisait tronquer le suffixe « — 20 XP » en plein caractère.
+  const dayState = () => {
+    const t = S.tasks.find(x => x.id === sel.task);
+    const xp = t ? PRIOS[t.prio].xp + " XP · " : "";
+    const d = streakState(sel.player).days.get(sel.day);
+    if (!d || d.status === "missed") return `${xp}❌ jour manqué — le rattraper relancera la série`;
+    if (d.status === "frozen") return `${xp}🛡️ jour gelé par un bouclier — le rattraper te le rendra`;
+    return `${xp}✅ déjà ${d.n} quête${d.n > 1 ? "s" : ""} ce jour-là — la série est intacte`;
+  };
+  sysModal(`
+    <div class="big">QUÊTE OUBLIÉE</div>
+    <div class="sub">Une tâche faite mais jamais cochée ? Ajoute-la à sa vraie date : elle compte pour l'XP et pour la série.</div>
+    <div class="retroform">
+      <label for="retroTask">Quête</label>
+      <select id="retroTask">${S.tasks.map(t => `<option value="${t.id}">${esc(t.icon)} ${esc(t.name)}</option>`).join("")}</select>
+      <label for="retroPlayer">Par qui</label>
+      <select id="retroPlayer">${S.players.map(p => `<option value="${p.id}">${esc(p.emoji)} ${esc(p.name)}</option>`).join("")}</select>
+      <label for="retroDay">Quel jour</label>
+      <select id="retroDay">${days.map(d => `<option value="${d.k}">${esc(d.label)}</option>`).join("")}</select>
+      <p class="hint retrostate" id="retroState" aria-live="polite">${esc(dayState())}</p>
+    </div>`,
+    null,
+    { label: "Ajouter ↩️", onclick: () => doTask(sel.task, sel.player, sel.day) },
+    "Annuler");
+  [["retroTask", "task"], ["retroPlayer", "player"], ["retroDay", "day"]].forEach(([id, key]) => {
+    const el = $("#" + id);
+    if (!el) return;
+    el.onchange = () => {
+      sel[key] = el.value;
+      const out = $("#retroState");
+      if (out) out.textContent = dayState();
+    };
+  });
+}
+
+/* ---------- Duel ---------- */
+function trophyData() {
+  const [a, b] = S.players;
+  const cur = weekKey(NOW());
+  const byWeek = {};
+  for (const l of S.log) {
+    const wk = weekKey(l.ts);
+    if (wk === cur) continue;
+    (byWeek[wk] ??= { a: 0, b: 0 })[l.playerId === a.id ? "a" : "b"] += l.xp;
+  }
+  let winsA = 0, winsB = 0;
+  for (const wk in byWeek) {
+    if (byWeek[wk].a > byWeek[wk].b) winsA++;
+    else if (byWeek[wk].b > byWeek[wk].a) winsB++;
+  }
+  // Série de victoires hebdo en cours : semaines écoulées consécutives (les plus
+  // récentes d'abord) remportées par le même joueur, stoppée à la première égalité/défaite.
+  let streakHolder = null, streakLen = 0;
+  for (const wk of Object.keys(byWeek).sort().reverse()) {
+    const x = byWeek[wk];
+    if (x.a === x.b) break;
+    const w = x.a > x.b ? "a" : "b";
+    if (streakHolder === null) streakHolder = w;
+    if (w !== streakHolder) break;
+    streakLen++;
+  }
+  return { byWeek, winsA, winsB, streakA: streakHolder === "a" ? streakLen : 0, streakB: streakHolder === "b" ? streakLen : 0 };
+}
+
+function trophyWall(byWeek) {
+  const [a, b] = S.players;
+  const weeks = Object.keys(byWeek).sort().reverse().slice(0, 12);
+  if (!weeks.length) return '<p class="hint">Le premier trophée sera décerné à la fin de cette semaine. Que la chasse commence ! 👑</p>';
+  return weeks.map(wk => {
+    const x = byWeek[wk];
+    const d = new Date(wk + "T12:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+    const win = x.a === x.b ? null : (x.a > x.b ? a : b);
+    return `<div class="trophyline">
+      <span class="tw">Sem. du ${d}</span>
+      <span class="grow">${win ? "👑 " + esc(win.emoji + " " + win.name) : "⚡ Égalité"}</span>
+      <span class="tscore">${x.a} – ${x.b}</span>
+    </div>`;
+  }).join("");
+}
+
+function betSection() {
+  const cur = weekKey(NOW());
+  const bets = S.bets || [];
+  const active = activeBet();
+  const pending = bets.filter(b => !b.claimed && b.week < cur);
+  const { byWeek } = trophyData();
+
+  const pendingRows = pending.map(b => {
+    const x = byWeek[b.week] || { a: 0, b: 0 };
+    const win = x.a === x.b ? null : (x.a > x.b ? S.players[0] : S.players[1]);
+    const d = new Date(b.week + "T12:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+    return win
+      ? `<div class="betline">👑 <b>${esc(win.name)}</b> a remporté l'enjeu de la sem. du ${d} : ${betRewardLabel(b)}
+         <button class="claim" data-claimbet="${b.id}">Réclamer l'enjeu</button></div>`
+      : `<div class="betline">⚡ Égalité sur la sem. du ${d} — l'enjeu ${betRewardLabel(b)} est retiré
+         <button class="undo" style="margin-top:8px" data-tiebet="${b.id}">Retirer l'enjeu</button></div>`;
+  }).join("");
+
+  const activeHtml = active
+    ? `<div class="betline hot">⚔️ Enjeu de la semaine : <b>${betRewardLabel(active)}</b><br>
+       <span class="hint">Le vainqueur du duel dimanche soir l'emporte. Bonne chasse !</span><br>
+       <button class="linkbtn" style="margin-top:6px" data-cancelbet="${active.id}">Annuler l'enjeu</button></div>`
+    : `<div class="frow" style="margin-top:4px">
+        <select id="betReward" aria-label="Récompense misée">
+          ${rewardOptions(null)}
+        </select>
+        <button class="btn" id="betAdd">Miser</button>
+      </div>
+      <p class="hint">Misez une récompense sur le duel : celui ou celle qui gagne la semaine l'emporte.</p>`;
+
+  return `<section class="panel"><h2>Pari de duel</h2>${pendingRows}${activeHtml}</section>`;
+}
+
+function weekChartData() {
+  const [a, b] = S.players;
+  const monday = new Date(); monday.setHours(0, 0, 0, 0);
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  const weeks = [];
+  for (let i = 7; i >= 0; i--) {
+    const w = new Date(monday); w.setDate(monday.getDate() - i * 7);
+    weeks.push(weekKey(w.getTime()));
+  }
+  const sum = (pid, wk) => S.log.reduce((acc, l) => acc + ((l.playerId === pid && weekKey(l.ts) === wk) ? l.xp : 0), 0);
+  const data = weeks.map((wk, i) => ({ wk, a: sum(a.id, wk), b: sum(b.id, wk), label: i === 7 ? "Cette semaine" : "Il y a " + (7 - i) + " sem." }));
+  return { a, b, weeks, data };
+}
+
+let chartView = "chart"; // "chart" ou "table" — préférence de session, pas persistée
+function weekTable(a, b, data) {
+  return `
+  <div class="tblwrap">
+    <table class="datatable">
+      <caption class="sr-only">XP gagnés par semaine, huit dernières semaines</caption>
+      <thead><tr><th scope="col">Semaine</th><th scope="col">${esc(a.emoji)} ${esc(a.name)}</th><th scope="col">${esc(b.emoji)} ${esc(b.name)}</th></tr></thead>
+      <tbody>
+        ${data.map(x => `<tr><th scope="row">${x.label}</th><td>${x.a} XP</td><td>${x.b} XP</td></tr>`).join("")}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+function weekChart() {
+  const { a, b, data } = weekChartData();
+  const c = cardColors();
+  const max = Math.max(20, ...data.map(x => Math.max(x.a, x.b)));
+  const W = 320, H = 112, base = H - 14, plot = H - 22, gw = W / 8, bw = 13;
+  const grid = [0.5, 1].map(f => {
+    const y = (base - plot * f).toFixed(1);
+    return `<line x1="0" x2="${W}" y1="${y}" y2="${y}" stroke="${c.line}" stroke-width="1"/>` +
+      `<text x="2" y="${y - 3}" font-size="8" fill="${c.inkDim}">${Math.round(max * f)}</text>`;
+  }).join("");
+  let bars = "", labels = "";
+  data.forEach((x, i) => {
+    const cx = i * gw + gw / 2;
+    const ha = Math.max(1, Math.round(plot * x.a / max)), hb = Math.max(1, Math.round(plot * x.b / max));
+    bars += `<rect x="${(cx - bw - 1).toFixed(1)}" y="${base - ha}" width="${bw}" height="${ha}" rx="2" fill="${esc(a.color)}"><title>${esc(a.name)} · ${x.a} XP</title></rect>` +
+            `<rect x="${(cx + 1).toFixed(1)}" y="${base - hb}" width="${bw}" height="${hb}" rx="2" fill="${esc(b.color)}"><title>${esc(b.name)} · ${x.b} XP</title></rect>`;
+    labels += `<text x="${cx}" y="${H - 2}" text-anchor="middle" font-size="8" fill="${c.inkDim}">${i === 7 ? "cette sem." : "S−" + (7 - i)}</text>`;
+  });
+  return `
+  <div class="legend">
+    <span><i class="dot" style="background:${esc(a.color)}"></i>${esc(a.name)}</span>
+    <span><i class="dot" style="background:${esc(b.color)}"></i>${esc(b.name)}</span>
+  </div>
+  <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="XP gagnés par semaine, huit dernières semaines" style="width:100%;height:auto;display:block">
+    <line x1="0" x2="${W}" y1="${base}" y2="${base}" stroke="${c.lineGlow}" stroke-width="1"/>
+    ${grid}${bars}${labels}
+  </svg>`;
+}
+
+function taskSplit() {
+  const [a, b] = S.players;
+  const counts = S.tasks.map(t => {
+    const countFor = pid => S.log.filter(l => l.taskName === t.name && l.playerId === pid).length;
+    const ca = countFor(a.id), cb = countFor(b.id), total = ca + cb;
+    return { t, ca, cb, total };
+  }).filter(x => x.total > 0).sort((x, y) => y.total - x.total);
+  if (!counts.length) return '<p class="hint">Accomplissez quelques quêtes pour voir la répartition apparaître ici.</p>';
+  return counts.map(({ t, ca, cb, total }) => {
+    const pa = Math.round(100 * ca / total);
+    const unfair = total >= 3 && (ca === 0 || cb === 0 || pa >= 80 || pa <= 20);
+    return `
+    <div class="splitline">
+      <span class="qi" style="font-size:18px">${esc(t.icon)}</span>
+      <span class="grow">${esc(t.name)}</span>
+      <span class="splitcounts">${ca} – ${cb}</span>
+      ${unfair ? '<span class="chip gold" title="Nettement déséquilibré">⚖️</span>' : ""}
+    </div>
+    <div class="splitbar"><i style="width:${pa}%;background:${esc(a.color)}"></i><i style="width:${100 - pa}%;background:${esc(b.color)}"></i></div>`;
+  }).join("");
+}
+
+/* --- Calendrier d'activité (8 dernières semaines, dérivé du journal, zéro stockage) --- */
+function activityDays() {
+  const WEEKS = 8;
+  const counts = {};
+  for (const l of S.log) {
+    if (isShieldEntry(l)) continue;
+    const k = dayKey(l.ts);
+    (counts[k] ??= { total: 0, byP: {}, retro: 0 });
+    counts[k].total++;
+    counts[k].byP[l.playerId] = (counts[k].byP[l.playerId] || 0) + 1;
+    if (isRetroEntry(l)) counts[k].retro++;
+  }
+  // Journées gelées par un bouclier : marquées dans le calendrier pour qu'un trou
+  // « couvert » ne se lise pas comme un trou tout court.
+  const frozen = {};
+  S.players.forEach(p => frozenDayKeys(p.id).forEach(k => (frozen[k] ??= []).push(p.emoji)));
+  const monday = new Date(); monday.setHours(0, 0, 0, 0);
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7)); // lundi de la semaine en cours
+  const todayK = dayKey(NOW());
+  const days = [];
+  for (let w = WEEKS - 1; w >= 0; w--) {
+    const start = new Date(monday); start.setDate(start.getDate() - w * 7);
+    for (let d = 0; d < 7; d++) {
+      const day = new Date(start); day.setDate(start.getDate() + d);
+      const k = dayKey(day.getTime());
+      const c = counts[k];
+      const n = c ? c.total : 0;
+      const lvl = day.getTime() > NOW() ? -1 : n === 0 ? 0 : n === 1 ? 1 : n <= 3 ? 2 : 3;
+      const label = day.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+      const det = c ? S.players.map(p => c.byP[p.id] ? `${p.emoji} ${c.byP[p.id]}` : "").filter(Boolean).join(" · ") : "";
+      days.push({ weekStart: start, lvl, n, label, det, today: k === todayK,
+        frozen: frozen[k] || null, retro: c ? c.retro : 0 });
+    }
+  }
+  return { WEEKS, days };
+}
+
+let calView = "cal"; // "cal" ou "table" — préférence de session, pas persistée
+function activityCalendar({ WEEKS, days }) {
+  const rows = [];
+  for (let i = 0; i < days.length; i += 7) {
+    const week = days.slice(i, i + 7);
+    const cells = week.map(day => {
+      const extra = (day.frozen ? ` — 🛡️ gelé par un bouclier (${day.frozen.join(" ")})` : "")
+        + (day.retro ? ` — ↩️ ${day.retro} rattrapage${day.retro > 1 ? "s" : ""}` : "");
+      // La hachure ne remplace la couleur d'activité que sur une journée réellement
+      // vide : si l'autre chasseur a joué ce jour-là, son niveau doré reste le signal
+      // le plus utile — le gel n'est plus rappelé que dans l'infobulle.
+      const frozenLook = day.frozen && !day.n ? " frozen" : "";
+      return `<span class="cal-cell${day.today ? " today" : ""}${frozenLook}" data-lvl="${day.lvl}" title="${esc(day.label)} — ${day.n} quête${day.n > 1 ? "s" : ""}${day.det ? ` (${day.det})` : ""}${esc(extra)}"></span>`;
+    }).join("");
+    rows.push(`<div class="cal-row"><span class="cal-wk">${week[0].weekStart.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span>${cells}</div>`);
+  }
+  return `
+  <div class="cal" role="img" aria-label="Calendrier d'activité des ${WEEKS} dernières semaines : plus la case est dorée, plus il y a eu de quêtes ce jour-là">
+    <div class="cal-row"><span class="cal-wk"></span>${["L", "M", "M", "J", "V", "S", "D"].map(d => `<span class="cal-d">${d}</span>`).join("")}</div>
+    ${rows.join("")}
+  </div>
+  <div class="cal-legend"><span class="hint">moins</span><span class="cal-cell" data-lvl="0"></span><span class="cal-cell" data-lvl="1"></span><span class="cal-cell" data-lvl="2"></span><span class="cal-cell" data-lvl="3"></span><span class="hint">plus</span></div>`;
+}
+
+function activityTable({ days }) {
+  // Les journées gelées apparaissent aussi : sans elles, un trou couvert par un
+  // bouclier serait invisible dans l'équivalent textuel du calendrier.
+  const rows = days.filter(d => d.n > 0 || d.frozen).slice().reverse();
+  if (!rows.length) return '<p class="hint">Aucune quête accomplie sur les 8 dernières semaines.</p>';
+  return `
+  <div class="tblwrap">
+    <table class="datatable">
+      <caption class="sr-only">Jours avec au moins une quête accomplie ou gelés par un bouclier, 8 dernières semaines</caption>
+      <thead><tr><th scope="col">Jour</th><th scope="col">Quêtes</th><th scope="col">Détail</th></tr></thead>
+      <tbody>
+        ${rows.map(d => {
+          const det = [d.det, d.frozen ? `🛡️ gelé (${d.frozen.join(" ")})` : "", d.retro ? `↩️ ${d.retro} rattrapage${d.retro > 1 ? "s" : ""}` : ""]
+            .filter(Boolean).join(" · ");
+          return `<tr><th scope="row">${esc(d.label)}</th><td>${d.n}</td><td>${esc(det || "—")}</td></tr>`;
+        }).join("")}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+function featSection() {
+  return S.players.map(p => {
+    const st = fullFeatStats(p.id);
+    const n = FEATS.filter(f => f.test(st)).length;
+    return `
+    <div class="feathead"><i class="dot" style="background:${esc(p.color)}"></i>${esc(p.emoji)} ${esc(p.name)} — ${n}/${FEATS.length}</div>
+    <div class="featgrid">
+      ${FEATS.map(f => `<span class="feat ${f.test(st) ? "on" : ""}"><span class="fi">${f.icon}</span><small>${esc(f.name)}</small></span>`).join("")}
+    </div>`;
+  }).join("");
+}
+
+function vDuel() {
+  const [a, b] = S.players;
+  const trophies = trophyData();
+  const rows = [
+    ["Cette semaine", weekXp(a.id), weekXp(b.id), " XP"],
+    ["Ce mois-ci", monthXp(a.id), monthXp(b.id), " XP"],
+    ["XP total", totalXp(a.id), totalXp(b.id), " XP"],
+    ["Quêtes accomplies", taskCount(a.id, l => !isShieldEntry(l)), taskCount(b.id, l => !isShieldEntry(l)), ""],
+    ["Série en cours", streakOf(a.id), streakOf(b.id), " j"],
+    ["Meilleure série 🏆", bestStreakOf(a.id), bestStreakOf(b.id), " j"],
+    ["Boucliers 🛡️ disponibles", availableShields(a.id), availableShields(b.id), ""],
+    ["Trophées 👑", trophies.winsA, trophies.winsB, ""],
+    ["Série de victoires 🔥", trophies.streakA, trophies.streakB, " sem."],
+  ];
+  const wa = weekXp(a.id), wb = weekXp(b.id), tot = wa + wb;
+  const pa = tot ? Math.round(100 * wa / tot) : 50;
+  const lead = wa === wb ? null : (wa > wb ? a : b);
+  return `
+  <section class="panel">
+    <div class="panelhead">
+      <h2 style="margin-bottom:0">Duel de la semaine</h2>
+      <button class="linkbtn" id="shareDuelBtn">📤 Partager</button>
+    </div>
+    <div class="vsrow">
+      <div class="vsname">${esc(a.emoji)} ${esc(a.name)}</div>
+      <div class="vs" style="flex:1;text-align:center">VS</div>
+      <div class="vsname r">${esc(b.name)} ${esc(b.emoji)}</div>
+    </div>
+    <div class="duelbar"><span class="a" style="width:${pa}%;background:${esc(a.color)}"></span><span class="b" style="width:${100 - pa}%;background:${esc(b.color)}"></span></div>
+    <div class="xpnums"><span>${wa} XP</span><span>${wb} XP</span></div>
+    <div class="winbadge">${lead ? "👑 " + esc(lead.name) + " domine le donjon cette semaine" : "⚡ Égalité — tout se joue maintenant"}</div>
+  </section>
+  ${betSection()}
+  <section class="panel">
+    <div class="panelhead">
+      <h2 style="margin-bottom:0">XP par semaine</h2>
+      <button class="linkbtn" id="chartViewToggle" aria-pressed="${chartView === "table"}">${chartView === "chart" ? "Voir en tableau" : "Voir en graphique"}</button>
+    </div>
+    ${chartView === "chart" ? weekChart() : weekTable(a, b, weekChartData().data)}
+  </section>
+  <section class="panel">
+    <div class="panelhead">
+      <h2 style="margin-bottom:0">Calendrier d'activité <small>— 8 dernières semaines, à deux</small></h2>
+      <button class="linkbtn" id="calViewToggle" aria-pressed="${calView === "table"}">${calView === "cal" ? "Voir en tableau" : "Voir en calendrier"}</button>
+    </div>
+    ${calView === "cal" ? activityCalendar(activityDays()) : activityTable(activityDays())}
+  </section>
+  <section class="panel">
+    <h2>Statistiques</h2>
+    <div class="statgrid">
+      ${rows.map(([l, va, vb, u]) => `<span class="l">${va}${u}</span><span class="c">${l}</span><span class="r2">${vb}${u}</span>`).join("")}
+    </div>
+    <p class="hint" style="margin-top:8px">🛡️ Un bouclier s'active seul tous les 7 jours de série et comble automatiquement un jour manqué le lendemain matin — la série continue.</p>
+  </section>
+  <section class="panel">
+    <div class="panelhead">
+      <h2 style="margin-bottom:0">Mur des trophées</h2>
+      <button class="linkbtn" id="shareTrophyBtn">📤 Partager</button>
+    </div>
+    ${trophyWall(trophies.byWeek)}
+  </section>
+  <section class="panel">
+    <h2>Répartition des tâches</h2>
+    ${taskSplit()}
+  </section>
+  <section class="panel">
+    <h2>Hauts faits</h2>
+    ${featSection()}
+  </section>`;
+}
+
+/* ---------- Héros ---------- */
+let herosView = "p1"; // dont on parcourt la collection (session seulement)
+let herosUniverse = "all"; // filtre d'univers de la collection (session seulement)
+
+function vHeros() {
+  const p = S.players.find(x => x.id === herosView) || S.players[0];
+  const st = charStats(p.id);
+  const unlocked = new Set(unlockedCharIds(p.id));
+  const cur = charOf(p);
+  const nxt = nextHeroFor(p.id, herosUniverse !== "all" ? herosUniverse : null);
+
+  const switcher = `
+  <div class="filterrow" style="margin-bottom:12px">
+    ${S.players.map(pl => `<button class="filterbtn ${herosView === pl.id ? "on" : ""}" aria-pressed="${herosView === pl.id}" data-hv="${pl.id}">${esc(pl.emoji)} ${esc(pl.name)}</button>`).join("")}
+  </div>`;
+
+  let curHtml;
+  if (cur) {
+    const tier = gearTier(cur, st);
+    const conds = gearConds(cur);
+    const next = tier < 3 ? conds[tier] : null;
+    curHtml = `
+    <div class="curchar" style="--rcol:${RARITIES[cur.rarity].col}">
+      <span class="curchar-emoji">${cur.emoji}</span>
+      <div class="grow">
+        <div class="curchar-name">${esc(cur.name)} <span class="rarity" style="--rcol:${RARITIES[cur.rarity].col}">${cur.rarity}</span></div>
+        <div class="hint">${esc(cur.univers)}</div>
+        <div class="gearline">
+          ${cur.gear.map((g, i) => `<span class="gearstep ${i < tier ? "on" : ""}">${i < tier ? "⭐" : "☆"} ${esc(g)}</span>`).join("")}
+        </div>
+        ${next ? `<div class="hint">Prochain palier : ${condText(next)}</div>` : `<div class="hint" style="color:var(--gold)">Équipement complet ! 🏅</div>`}
+      </div>
+    </div>`;
+  } else {
+    curHtml = `<p class="hint">${esc(p.name)} n'incarne encore aucun héros — débloquez-en un ci-dessous et touchez « Incarner ».</p>`;
+  }
+
+  const groups = UNIVERSES.filter(u => herosUniverse === "all" || u === herosUniverse).map(u => {
+    const all = CHARACTERS.filter(c => c.univers === u);
+    const nOk = all.filter(c => unlocked.has(c.id)).length;
+    const cards = all.map(c => {
+      const isUnlocked = unlocked.has(c.id);
+      const isCur = cur && cur.id === c.id;
+      const tier = isUnlocked ? gearTier(c, st) : 0;
+      return `
+      <div class="charcard ${isUnlocked ? "" : "locked"} ${isCur ? "current" : ""}" style="--rcol:${RARITIES[c.rarity].col}">
+        <div class="charcard-top">
+          <span class="charcard-emoji">${c.emoji}</span>
+          <span class="rarity" style="--rcol:${RARITIES[c.rarity].col}">${c.rarity}</span>
+        </div>
+        <div class="charcard-name">${esc(c.name)}</div>
+        ${isUnlocked
+          ? `<div class="hint">${"⭐".repeat(tier)}${"☆".repeat(3 - tier)}</div>
+             ${isCur ? '<div class="charcard-cur">Incarné ✓</div>' : `<button class="btn charcard-btn" data-equip="${c.id}" aria-label="Incarner ${esc(c.name)}">Incarner</button>`}`
+          : `<div class="charcard-cond">🔒 ${condProgress(c.cond, st)}</div>`}
+      </div>`;
+    }).join("");
+    return `<div class="day-h">${esc(u)} <span class="uvcount">${nOk}/${all.length}</span></div><div class="chargrid">${cards}</div>`;
+  }).join("");
+
+  const universeFilter = `
+  <div class="filterrow" style="margin:8px 0 10px">
+    <button class="filterbtn ${herosUniverse === "all" ? "on" : ""}" aria-pressed="${herosUniverse === "all"}" data-hu="all">Tous</button>
+    ${UNIVERSES.map(u => `<button class="filterbtn ${herosUniverse === u ? "on" : ""}" aria-pressed="${herosUniverse === u}" data-hu="${esc(u)}">${esc(u)}</button>`).join("")}
+  </div>`;
+
+  return `
+  ${switcher}
+  <section class="panel">
+    <div class="panelhead">
+      <h2 style="margin-bottom:0">Héros incarné <small>— ${esc(p.name)}</small></h2>
+      ${cur ? '<button class="linkbtn" id="shareHeroBtn">📤 Partager</button>' : ""}
+    </div>
+    ${curHtml}
+    ${cur ? `<button class="undo" style="margin-top:10px" id="unequipBtn">Reprendre son emoji personnel</button>` : ""}
+  </section>
+  ${nxt ? `
+  <section class="panel">
+    <h2>Prochaine recrue</h2>
+    <div class="curchar" style="--rcol:${RARITIES[nxt.rarity].col}">
+      <span class="curchar-emoji">${nxt.emoji}</span>
+      <div class="grow">
+        <div class="curchar-name">${esc(nxt.name)} <span class="rarity" style="--rcol:${RARITIES[nxt.rarity].col}">${nxt.rarity}</span></div>
+        <div class="hint">${esc(nxt.univers)}</div>
+        <div class="charcard-cond" style="margin-top:4px">${condProgress(nxt.cond, st)}</div>
+      </div>
+    </div>
+  </section>` : ""}
+  <section class="panel">
+    <h2>Collection <small>— ${unlocked.size}/${CHARACTERS.length} débloqués</small></h2>
+    <p class="hint">Plus un héros est légendaire, plus il se mérite : niveaux, quêtes, séries et trophées. Son équipement progresse ensuite avec vous. Chaque héros est représenté par son emblème.</p>
+    ${universeFilter}
+    ${groups}
+  </section>`;
+}
+
+/* ---------- Objectifs ---------- */
+function vObjectifs() {
+  const active = S.objectives.filter(o => !o.claimed);
+  const objRows = active.map(o => {
+    const prog = objProgress(o), pct = Math.min(100, Math.round(100 * prog / o.target));
+    const rw = o.rewardId === "__random__"
+      ? { icon: "🎲", name: "Récompense surprise (tirage au sort)" }
+      : S.rewards.find(r => r.id === o.rewardId);
+    const done = prog >= o.target;
+    return `
+    <div class="obj ${done ? "done" : ""}">
+      ${done
+        ? `<div class="oname">✅ ${esc(o.name)}</div>`
+        : `<div class="frow" style="margin-bottom:6px">
+             <input type="text" data-oname="${o.id}" value="${esc(o.name)}" maxlength="60" class="grow" style="min-width:0" aria-label="Nom du défi">
+             <input type="number" data-otarget="${o.id}" value="${o.target}" min="1" inputmode="numeric" style="flex:0 0 78px" aria-label="Cible">
+           </div>
+           <div class="frow" style="margin-bottom:6px">
+             <select data-otype="${o.id}" class="grow" aria-label="Type du défi">
+               <option value="xp" ${o.type === "xp" ? "selected" : ""}>XP cumulés à deux</option>
+               <option value="count" ${o.type === "count" ? "selected" : ""}>Nombre de quêtes à deux</option>
+             </select>
+           </div>
+           <div class="frow" style="margin-bottom:6px">
+             <select data-oreward="${o.id}" class="grow" aria-label="Récompense du défi">
+               ${rewardOptions(o.rewardId)}
+             </select>
+           </div>`}
+      ${done ? `<div class="oreward">🎁 ${rw ? esc(rw.icon + " " + rw.name) : "Récompense au choix"}</div>` : ""}
+      <div class="obar"><i style="width:${pct}%"></i></div>
+      <div class="onums">
+        <span>${prog} / ${o.target} ${o.type === "xp" ? "XP (à deux)" : "quêtes (à deux)"}</span>
+        <span>${pct}%</span>
+      </div>
+      ${done
+        ? `<button class="claim" data-claim="${o.id}" aria-label="Réclamer la récompense de ${esc(o.name)}">Réclamer la récompense</button>`
+        : `<button class="undo" style="margin-top:9px" data-delobj="${o.id}" aria-label="Abandonner ${esc(o.name)}">Abandonner</button>`}
+    </div>`;
+  }).join("");
+
+  const WON_SHOWN = 20;
+  const wonSorted = S.won.slice().reverse();
+  const wonRows = wonSorted.slice(0, WON_SHOWN).map(w =>
+    `<div class="wonline"><span>${esc(w.icon)} ${esc(w.name)}</span><span class="d">${new Date(w.ts).toLocaleDateString("fr-FR")} <button class="notebtn" data-delwon="${w.id}" aria-label="Retirer ${esc(w.name)} de l'historique">✕</button></span></div>`
+  ).join("") + (wonSorted.length > WON_SHOWN ? `<p class="hint" style="margin-top:6px">+ ${wonSorted.length - WON_SHOWN} de plus, pas affichées.</p>` : "");
+
+  return `
+  <section class="panel">
+    <h2>Objectifs communs</h2>
+    ${objRows || '<p class="hint">Aucun objectif actif. Lancez-vous un défi ci-dessous !</p>'}
+  </section>
+  <section class="panel">
+    <h2>Nouveau défi</h2>
+    <div class="filterrow" style="margin-bottom:8px">
+      <button class="filterbtn" data-objpreset="sprint">⚡ Sprint 300 XP</button>
+      <button class="filterbtn" data-objpreset="quetes20">🗡️ 20 quêtes</button>
+      <button class="filterbtn" data-objpreset="grand">🏰 Grand ménage</button>
+    </div>
+    <div class="frow"><input type="text" id="objName" placeholder="Nom du défi (ex : Opération appart nickel)" maxlength="60" aria-label="Nom du défi"></div>
+    <div class="frow">
+      <select id="objType" aria-label="Type d'objectif">
+        <option value="xp">XP cumulés à deux</option>
+        <option value="count">Nombre de quêtes à deux</option>
+      </select>
+      <input type="number" id="objTarget" placeholder="Cible (ex : 300)" min="1" inputmode="numeric" aria-label="Cible du défi">
+    </div>
+    <div class="frow">
+      <select id="objReward" aria-label="Récompense">
+        ${rewardOptions(null)}
+      </select>
+      <button class="btn" id="objAdd">Lancer le défi</button>
+    </div>
+    <p class="hint">Le compteur démarre à la création du défi : chaque quête accomplie par l'un de vous deux le fait avancer.${duoWeeklyPace() ? ` Votre rythme actuel : <b>~${duoWeeklyPace()} XP par semaine</b> à deux — de quoi calibrer la cible.` : ""}</p>
+  </section>
+  <section class="panel">
+    <h2>Idées de récompenses</h2>
+    ${S.rewards.map(r => `<div class="mgline">
+      <input type="text" data-rwicon="${r.id}" value="${esc(r.icon)}" maxlength="4" style="flex:0 0 44px" aria-label="Icône de la récompense">
+      <input type="text" data-rwname="${r.id}" value="${esc(r.name)}" maxlength="50" class="grow" style="min-width:0" aria-label="Nom de la récompense">
+      <button class="x" data-delrw="${r.id}" aria-label="Supprimer ${esc(r.name)}">✕</button>
+    </div>`).join("")}
+    <div class="frow" style="margin-top:10px">
+      <input type="text" id="rwIcon" placeholder="🎁" maxlength="4" style="flex:0 0 64px" aria-label="Icône de la récompense">
+      <input type="text" id="rwName" placeholder="Nouvelle récompense (ex : Week-end surprise)" maxlength="50" aria-label="Nom de la récompense">
+      <button class="btn" id="rwAdd" style="flex:0 0 auto">+</button>
+    </div>
+  </section>
+  ${wonRows ? `<section class="panel"><h2>Récompenses gagnées 🏅</h2>${wonRows}</section>` : ""}`;
+}
+
+/* ---------- Journal ---------- */
+let journalFilter = { q: "", player: "all" }; // session seulement, pas persisté
+let journalEditing = null; // id de l'entrée dont la note est en cours d'édition, session seulement
+
+function vJournal() {
+  if (!S.log.length) return `<section class="panel"><h2>Journal de chasse</h2><p class="hint">Rien pour l'instant — la première quête vous attend.</p></section>`;
+
+  const q = journalFilter.q.trim().toLowerCase();
+  const filtered = S.log.filter(l => {
+    if (journalFilter.player !== "all" && l.playerId !== journalFilter.player) return false;
+    if (q && !l.taskName.toLowerCase().includes(q) && !(l.note || "").toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  const filterBar = `
+  <div class="frow" style="margin-bottom:9px;position:relative">
+    <input type="text" id="journalSearch" placeholder="Rechercher une tâche…" value="${esc(journalFilter.q)}" aria-label="Rechercher dans le journal" style="${journalFilter.q ? "padding-right:34px" : ""}">
+    ${journalFilter.q ? `<button class="x" id="journalSearchClear" aria-label="Effacer la recherche" style="position:absolute;right:6px;top:50%;transform:translateY(-50%)">✕</button>` : ""}
+  </div>
+  <div class="filterrow">
+    <button class="filterbtn ${journalFilter.player === "all" ? "on" : ""}" aria-pressed="${journalFilter.player === "all"}" data-jf="all">Tous</button>
+    ${S.players.map(p => `<button class="filterbtn ${journalFilter.player === p.id ? "on" : ""}" aria-pressed="${journalFilter.player === p.id}" data-jf="${p.id}">${esc(p.emoji)} ${esc(p.name)}</button>`).join("")}
+  </div>`;
+
+  if (!filtered.length) {
+    return `<section class="panel"><h2>Journal de chasse</h2>${filterBar}<p class="hint" style="margin-top:10px">Aucune entrée ne correspond à ce filtre.</p></section>`;
+  }
+
+  const byDay = {};
+  for (const l of filtered.slice().reverse()) (byDay[dayKey(l.ts)] ??= []).push(l);
+  const days = Object.keys(byDay).map(k => {
+    const label = new Date(k + "T12:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+    return `<div class="day-h">${label}</div>` + byDay[k].map(l => {
+      const p = S.players.find(x => x.id === l.playerId);
+      const editable = !isShieldEntry(l);
+      const noteZone = journalEditing === l.id
+        ? `<input type="text" class="jnote-edit" data-noteedit="${l.id}" value="${esc(l.note)}" maxlength="40" placeholder="Note…" aria-label="Note sur cette entrée">`
+        : `${l.note && editable ? ` <span class="chip gold">${esc(l.note)}</span>` : ""}${editable ? `<button class="notebtn" data-noteeditopen="${l.id}" aria-label="Ajouter ou modifier une note sur ${esc(l.taskName)}">✏️</button>` : ""}`;
+      return `<div class="logline">
+        <span>${esc(l.icon || "✅")}</span>
+        <span class="lname">${p ? esc(p.emoji + " ") : ""}${esc(l.taskName)}</span>
+        ${noteZone}
+        <span class="lxp">+${l.xp} XP</span>
+        <button class="undo" data-undo="${l.id}" aria-label="Annuler ${esc(l.taskName)}">Annuler</button>
+      </div>`;
+    }).join("");
+  }).join("");
+  return `<section class="panel"><h2>Journal de chasse</h2>${filterBar}${days}</section>`;
+}
+
+/* ---------- Réglages ---------- */
+function vReglages() {
+  return `
+  ${!isStandaloneApp() ? `
+  <section class="panel">
+    <h2>Installer l'application</h2>
+    ${deferredInstallPrompt
+      ? `<button class="btn" id="installBtn">📲 Installer sur cet appareil</button>
+         <p class="hint">Un raccourci sur l'écran d'accueil, en plein écran, comme une vraie appli.</p>`
+      : isIOSDevice()
+        ? `<p class="hint">Sur iPhone/iPad : touche <b>Partager</b> ⬆️ dans Safari, puis <b>Sur l'écran d'accueil</b>.</p>`
+        : `<p class="hint">Installable depuis le menu de ton navigateur (souvent ⋮ → « Installer l'application » ou « Ajouter à l'écran d'accueil »).</p>`}
+  </section>` : ""}
+  <section class="panel">
+    <h2>Chasseurs</h2>
+    ${S.players.map(p => `
+    <div class="frow">
+      <input type="text" data-pemoji="${p.id}" value="${esc(p.emoji)}" maxlength="4" style="flex:0 0 64px" aria-label="Emoji"${p.characterId ? ' disabled title="Retire ton héros dans l\'onglet Héros pour changer ton emoji"' : ""}>
+      <input type="text" data-pname="${p.id}" value="${esc(p.name)}" maxlength="20" aria-label="Nom">
+      <input type="color" data-pcolor="${p.id}" value="${esc(p.color || "#4DC3FF")}" style="flex:0 0 52px;height:44px;padding:2px;background:var(--field);border:1px solid var(--line);border-radius:3px" aria-label="Couleur">
+    </div>`).join("")}
+    <p class="hint" style="margin-top:6px">Enregistré automatiquement à chaque changement. La couleur personnalise ta carte, tes boutons de quête et la barre de duel — elle se synchronise sur les deux téléphones.</p>
+    ${S.players.some(p => p.characterId) ? `<p class="hint">🎴 Emoji verrouillé pendant qu'un héros est incarné — retire-le dans l'onglet Héros pour reprendre ton emoji personnel.</p>` : ""}
+    ${samePlayerColor() ? `<p class="hint warn" id="colorClashHint">⚠️ Les deux chasseurs ont la même couleur — le duel devient difficile à lire. Change l'une des deux.</p>` : ""}
+    ${sameEmoji() ? `<p class="hint warn" id="emojiClashHint">⚠️ Les deux chasseurs ont le même emoji — les boutons de quête ⚔️/🏹 deviennent difficiles à distinguer. Change l'un des deux.</p>` : ""}
+    ${sameName() ? `<p class="hint warn" id="nameClashHint">⚠️ Les deux chasseurs ont le même nom — toasts, Journal et cartes deviennent ambigus. Change l'un des deux.</p>` : ""}
+  </section>
+  <section class="panel">
+    <h2>Tâches ménagères</h2>
+    ${S.tasks.map(t => `
+    <div class="mgline">
+      <input type="text" data-ticon="${t.id}" value="${esc(t.icon)}" maxlength="4" style="flex:0 0 44px" aria-label="Icône">
+      <input type="text" data-tname="${t.id}" value="${esc(t.name)}" maxlength="50" class="grow" style="min-width:0" aria-label="Nom de la tâche">
+      <select data-tprio="${t.id}" style="flex:0 0 auto" aria-label="Priorité">
+        ${Object.entries(PRIOS).map(([k, v]) => `<option value="${k}" ${t.prio === k ? "selected" : ""}>${v.label}</option>`).join("")}
+      </select>
+      <button class="x" data-deltask="${t.id}" aria-label="Supprimer ${esc(t.name)}">✕</button>
+    </div>`).join("")}
+    <div class="frow" style="margin-top:10px">
+      <input type="text" id="tIcon" placeholder="🧼" maxlength="4" style="flex:0 0 64px" aria-label="Icône de la quête">
+      <input type="text" id="tName" placeholder="Nouvelle tâche" maxlength="50" aria-label="Nom de la quête">
+    </div>
+    <div class="frow">
+      <select id="tPrio" aria-label="Priorité">${Object.entries(PRIOS).map(([k, v]) => `<option value="${k}">${v.label} · ${v.xp} XP</option>`).join("")}</select>
+      <button class="btn" id="tAdd">Ajouter</button>
+    </div>
+  </section>
+  <section class="panel">
+    <h2>Apparence</h2>
+    <div class="themerow">
+      ${Object.entries(THEMES).map(([id, t]) => `
+      <button class="themebtn ${curTheme() === id ? "on" : ""}" aria-pressed="${curTheme() === id}" data-theme="${id}">
+        <i style="background:${t.sys}"></i>${t.label}
+      </button>`).join("")}
+    </div>
+    <p class="hint">Le thème est propre à ce téléphone — chacun le sien.</p>
+    <div class="togglerow">
+      <label class="switch"><input type="checkbox" id="soundToggle" aria-label="Sons (montée de niveau, hauts faits)" ${soundsOn() ? "checked" : ""}><span></span></label>
+      <span>Sons (montée de niveau, hauts faits)</span>
+    </div>
+    <div class="togglerow">
+      <label class="switch"><input type="checkbox" id="suggestToggle" aria-label="Suggestion de quête équitable" ${suggestionsOn() ? "checked" : ""}><span></span></label>
+      <span>Suggestion de quête équitable</span>
+    </div>
+    <p class="hint">Ces deux réglages sont aussi propres à ce téléphone.</p>
+  </section>
+  <section class="panel">
+    <h2>Rappel du soir</h2>
+    <div class="togglerow">
+      <label class="switch"><input type="checkbox" id="eveningToggle" aria-label="Rappel si personne n'a joué aujourd'hui" ${eveningReminderOn() ? "checked" : ""}><span></span></label>
+      <span>Rappel si personne n'a joué aujourd'hui</span>
+    </div>
+    <div class="frow" style="margin-top:10px;align-items:center">
+      <span class="hint" style="flex:0 0 auto">À partir de</span>
+      <input type="number" id="eveningHour" min="0" max="23" value="${eveningReminderHour()}" style="flex:0 0 70px" aria-label="Heure du rappel du soir">
+      <span class="hint" style="flex:0 0 auto">h, heure de ce téléphone</span>
+    </div>
+    <div class="frow" style="align-items:center">
+      <span class="hint" style="flex:0 0 auto">Rappel de série 🔥 dès</span>
+      <input type="number" id="streakHour" min="0" max="23" value="${streakReminderHour()}" style="flex:0 0 70px" aria-label="Heure du rappel de série">
+      <span class="hint" style="flex:0 0 auto">h</span>
+    </div>
+    <p class="hint">Quand une série 🔥 est en jeu, le rappel peut sonner plus tôt que le rappel générique${localStorage.getItem("rangement-streak-hour") === null ? " (pour l'instant : même heure que ci-dessus)" : ""} — vider le champ le réaligne sur l'heure ci-dessus.</p>
+    <div class="togglerow">
+      <label class="switch"><input type="checkbox" id="notifToggle" aria-label="Notification du navigateur" ${(notifsSupported() && notifsOn()) ? "checked" : ""} ${notifsSupported() ? "" : "disabled"}><span></span></label>
+      <span>Notification du navigateur${notifsSupported() ? "" : " (non disponible sur cet appareil)"}</span>
+    </div>
+    <p class="hint">En plus du rappel dans l'appli : une vraie notification système, une fois par jour, si votre navigateur le permet. Sur iPhone, Safari ne le supporte pas hors app installée avec un service de notifications push — le rappel dans l'appli reste le plus fiable partout.</p>
+    ${notifsOn() ? `<button class="btn ghost" id="testNotifBtn" style="margin-bottom:10px">🧪 Tester la notification</button>` : ""}
+    ${notifsOn() ? `
+    <div class="notifhist">
+      ${notifHistory().length
+        ? notifHistory().slice().reverse().map(n => `<div class="notifhistline">🔔 ${new Date(n.ts).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" })}<span class="grow"></span><span class="hint">${esc(n.body)}</span></div>`).join("")
+        : '<p class="hint">Aucune notification envoyée pour l\'instant.</p>'}
+      ${notifHistory().length ? '<button class="undo" id="clearNotifHist" style="margin-top:6px">Effacer l\'historique</button>' : ""}
+    </div>` : ""}
+    <div class="togglerow">
+      <label class="switch"><input type="checkbox" id="recapToggle" aria-label="Récap du dimanche soir (dès 18 h)" ${weeklyRecapOn() ? "checked" : ""}><span></span></label>
+      <span>Récap du dimanche soir (dès 18 h)</span>
+    </div>
+  </section>
+  <section class="panel">
+    <h2>Données</h2>
+    <div class="frow">
+      <button class="btn ghost" id="exportBtn">Exporter (sauvegarde)</button>
+      <button class="btn ghost" id="importBtn">Importer</button>
+      <input type="file" id="importFile" accept="application/json" hidden>
+    </div>
+    <div class="frow"><button class="btn danger" id="resetBtn">Remettre l'aventure à zéro</button></div>
+    <p class="hint">Les scores sont synchronisés en temps réel entre vos téléphones. Hors ligne, vos actions sont gardées en attente et envoyées à la reconnexion. L'export sert de sauvegarde de secours.</p>
+  </section>`;
+}
+
+/* ================= Actions ================= */
+function toast(msg, actionLabel, actionFn, ms) {
+  const t = document.createElement("div");
+  t.className = "toast";
+  t.textContent = msg;
+  if (actionLabel && actionFn) {
+    const b = document.createElement("button");
+    b.className = "toast-action";
+    b.textContent = actionLabel;
+    b.onclick = () => { t.remove(); actionFn(); };
+    t.appendChild(b);
+  }
+  $("#toastZone").appendChild(t);
+  setTimeout(() => t.remove(), ms || (actionLabel ? 5000 : 2200));
+}
+
+// Une récompense encore promise par un défi ou un enjeu actif (non réclamé) ne doit pas
+// pouvoir disparaître silencieusement : le défi/pari continuerait de tourner sur un
+// rewardId fantôme, retombant sur un générique « Récompense au choix » à la réclamation,
+// sans que personne ne s'en aperçoive avant ce moment-là.
+function rewardInUse(id) {
+  const o = S.objectives.find(x => !x.claimed && x.rewardId === id);
+  if (o) return `le défi « ${o.name} »`;
+  const b = S.bets.find(x => !x.claimed && x.rewardId === id);
+  if (b) return "l'enjeu de la semaine en cours";
+  return null;
+}
+
+// Le journal relie les quêtes par nom (taskName), pas par id : deux tâches
+// homonymes se partageraient silencieusement le même historique (badge
+// « dernier », suggestion équitable, répartition). Bloque la création/le
+// renommage vers un nom déjà pris par une autre tâche.
+function nameTaken(list, name, excludeId) {
+  const n = name.trim().toLowerCase();
+  return list.some(x => x.id !== excludeId && x.name.trim().toLowerCase() === n);
+}
+
+// Supprime un élément d'une collection (tâche, récompense, défi) avec un filet de
+// rattrapage : un mistap n'oblige plus à tout retaper, comme pour le journal.
+function deleteWithUndo(table, id, msg) {
+  const idx = S[table].findIndex(x => x.id === id);
+  if (idx < 0) return;
+  const item = S[table][idx];
+  S[table].splice(idx, 1);
+  save(); queueOp({ table, type: "delete", id });
+  render();
+  toast(msg, "Annuler", () => {
+    if (table === "tasks" && nameTaken(S.tasks, item.name, item.id)) {
+      toast(`Impossible de restaurer : une quête « ${item.name} » existe déjà`);
+      return;
+    }
+    // Un nouvel élément a pu être recréé avec le même id déterministe entre-temps (ex. un
+    // nouveau pari sur la même semaine) : ne pas dupliquer, la version actuelle prime.
+    if (S[table].some(x => x.id === item.id)) return;
+    S[table].splice(Math.min(idx, S[table].length), 0, item);
+    save(); queueOp({ table, type: "upsert", row: toRow[table](item) });
+    render();
+  });
+}
+
+// Bannière quand une nouvelle version de l'appli est prête (service worker mis à jour)
+function notifyUpdateAvailable() {
+  toast("⬆️ Nouvelle version de l'appli disponible", "Recharger", () => location.reload(), 30000);
+}
+
+/* ---------- Confettis (canvas, sobre, respecte le mouvement réduit) ---------- */
+const REDUCE_MOTION = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+function confettiBurst() {
+  if (REDUCE_MOTION) return;
+  const canvas = document.createElement("canvas");
+  canvas.id = "confetti";
+  canvas.style.cssText = "position:fixed;inset:0;z-index:70;pointer-events:none;width:100%;height:100%";
+  document.body.appendChild(canvas);
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const W = canvas.width = innerWidth * dpr, H = canvas.height = innerHeight * dpr;
+  const ctx = canvas.getContext("2d");
+  const colors = ["#F0C550", "#4DC3FF", "#8B7BFF", "#5CE0A5", "#FF9D5C"];
+  const N = 90;
+  const parts = Array.from({ length: N }, () => ({
+    x: W / 2 + (Math.random() - 0.5) * W * 0.3,
+    y: H * 0.28,
+    vx: (Math.random() - 0.5) * 9 * dpr,
+    vy: (-Math.random() * 7 - 3) * dpr,
+    g: 0.22 * dpr,
+    size: (Math.random() * 5 + 3) * dpr,
+    rot: Math.random() * Math.PI,
+    vr: (Math.random() - 0.5) * 0.3,
+    color: colors[Math.floor(Math.random() * colors.length)],
+  }));
+  const t0 = performance.now();
+  function frame(t) {
+    const dt = Math.min((t - t0) / 1000, 1.6);
+    ctx.clearRect(0, 0, W, H);
+    let alive = false;
+    for (const p of parts) {
+      p.x += p.vx; p.y += p.vy; p.vy += p.g; p.rot += p.vr;
+      const fade = Math.max(0, 1 - dt / 1.6);
+      if (fade <= 0 || p.y > H + 40) continue;
+      alive = true;
+      ctx.save();
+      ctx.globalAlpha = fade;
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.size / 2, -p.size / 3, p.size, p.size * 0.66);
+      ctx.restore();
+    }
+    if (alive) requestAnimationFrame(frame);
+    else canvas.remove();
+  }
+  requestAnimationFrame(frame);
+}
+
+/* ---------- Carte partageable (canvas, aux couleurs du thème actif) ---------- */
+function cardColors() {
+  const cs = getComputedStyle(document.documentElement);
+  const col = (name, fallback) => (cs.getPropertyValue(name).trim() || fallback);
+  return {
+    abyss: col("--abyss", "#060A13"), panel: col("--panel", "#0C1526"), panel2: col("--panel-2", "#101D33"), line: col("--line", "#1C3252"),
+    lineGlow: col("--line-glow", "#2B5A8F"),
+    sys: col("--sys", "#4DC3FF"), gold: col("--gold", "#F0C550"), ink: col("--ink", "#D9E7F7"), inkDim: col("--ink-dim", "#8AA3C2"),
+    mana: col("--mana", "#8B7BFF"), crit: col("--crit", "#FF5C6E"),
+  };
+}
+// RARITIES.*.col est une référence CSS ("var(--x)") pour suivre les 5 thèmes à l'écran ;
+// le canvas ne résout pas les variables CSS, il faut sa couleur déjà calculée.
+function rarityCardColor(rarity, c) {
+  const byRarity = { B: c.inkDim, A: c.sys, S: c.mana, SS: c.gold, GOD: c.crit };
+  return byRarity[rarity] || c.inkDim;
+}
+function cardCanvas(W, H, c) {
+  const canvas = document.createElement("canvas");
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  const bg = ctx.createRadialGradient(W / 2, 160, 60, W / 2, 160, 900);
+  bg.addColorStop(0, c.panel2); bg.addColorStop(1, c.abyss);
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = "center";
+  return { canvas, ctx };
+}
+function cardHeader(ctx, W, c, subtitle) {
+  ctx.fillStyle = c.sys;
+  ctx.font = "700 28px system-ui, sans-serif";
+  ctx.fillText("S Y S T È M E", W / 2, 130);
+  ctx.fillStyle = c.ink;
+  ctx.font = "900 64px system-ui, sans-serif";
+  ctx.fillText("RANGEMENT", W / 2, 210);
+  ctx.fillStyle = c.inkDim;
+  ctx.font = "500 24px system-ui, sans-serif";
+  ctx.fillText(subtitle, W / 2, 255);
+}
+function cardFooter(ctx, W, c, y) {
+  ctx.fillStyle = c.inkDim;
+  ctx.font = "500 22px system-ui, sans-serif";
+  ctx.fillText(new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }), W / 2, y);
+  ctx.fillStyle = c.sys;
+  ctx.font = "700 24px system-ui, sans-serif";
+  ctx.fillText("⚔️ rangement — ménage gamifié ⚔️", W / 2, y + 50);
+}
+
+function buildTrophyCard() {
+  const [a, b] = S.players;
+  const trophies = trophyData();
+  const la = levelInfo(totalXp(a.id)), lb = levelInfo(totalXp(b.id));
+  const ra = rankOf(la.lvl), rb = rankOf(lb.lvl);
+  const c = cardColors();
+  const { panel, line, sys, gold, ink, inkDim } = c;
+
+  const W = 1080, H = 1350;
+  const { canvas, ctx } = cardCanvas(W, H, c);
+  cardHeader(ctx, W, c, "Mur des trophées");
+
+  function playerBlock(cx, p, lvl, rank, trophyCount) {
+    ctx.fillStyle = panel;
+    ctx.strokeStyle = rank.s ? gold : line;
+    ctx.lineWidth = 3;
+    const bx = cx - 220, by = 320, bw = 440, bh = 560, r = 20;
+    ctx.beginPath();
+    ctx.roundRect(bx, by, bw, bh, r);
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = p.color || sys;
+    ctx.font = "900 120px system-ui, sans-serif";
+    ctx.fillText(p.emoji || "⚔️", cx, by + 150);
+    ctx.fillStyle = ink;
+    ctx.font = "700 42px system-ui, sans-serif";
+    ctx.fillText(p.name, cx, by + 220);
+    ctx.fillStyle = rank.s ? gold : (p.color || sys);
+    ctx.font = "900 56px system-ui, sans-serif";
+    ctx.fillText(rank.r, cx, by + 300);
+    ctx.fillStyle = inkDim;
+    ctx.font = "500 26px system-ui, sans-serif";
+    ctx.fillText("Niveau " + lvl, cx, by + 345);
+    ctx.fillStyle = gold;
+    ctx.font = "700 34px system-ui, sans-serif";
+    ctx.fillText("👑 " + trophyCount + " trophée" + (trophyCount > 1 ? "s" : ""), cx, by + 420);
+    ctx.fillStyle = inkDim;
+    ctx.font = "500 24px system-ui, sans-serif";
+    ctx.fillText(totalXp(p.id) + " XP au total", cx, by + 465);
+  }
+  playerBlock(W / 2 - 250, a, la.lvl, ra, trophies.winsA);
+  playerBlock(W / 2 + 250, b, lb.lvl, rb, trophies.winsB);
+
+  cardFooter(ctx, W, c, 950);
+  return canvas;
+}
+
+function buildDuelCard() {
+  const [a, b] = S.players;
+  const wa = weekXp(a.id), wb = weekXp(b.id), tot = wa + wb;
+  const pa = tot ? Math.round(100 * wa / tot) : 50;
+  const lead = wa === wb ? null : (wa > wb ? a : b);
+  const c = cardColors();
+  const { panel, line, sys, gold, ink, inkDim } = c;
+
+  const W = 1080, H = 1150;
+  const { canvas, ctx } = cardCanvas(W, H, c);
+  cardHeader(ctx, W, c, "Duel de la semaine");
+
+  function playerBlock(cx, p, xp) {
+    ctx.fillStyle = panel;
+    ctx.strokeStyle = (lead && lead.id === p.id) ? gold : line;
+    ctx.lineWidth = 3;
+    const bx = cx - 220, by = 320, bw = 440, bh = 330, r = 20;
+    ctx.beginPath();
+    ctx.roundRect(bx, by, bw, bh, r);
+    ctx.fill(); ctx.stroke();
+    if (lead && lead.id === p.id) {
+      ctx.font = "56px system-ui, sans-serif";
+      ctx.fillText("👑", cx, by - 20);
+    }
+    ctx.fillStyle = p.color || sys;
+    ctx.font = "900 110px system-ui, sans-serif";
+    ctx.fillText(p.emoji || "⚔️", cx, by + 140);
+    ctx.fillStyle = ink;
+    ctx.font = "700 40px system-ui, sans-serif";
+    ctx.fillText(p.name, cx, by + 205);
+    ctx.fillStyle = c.sys;
+    ctx.font = "900 46px system-ui, sans-serif";
+    ctx.fillText(xp + " XP", cx, by + 270);
+    ctx.fillStyle = inkDim;
+    ctx.font = "500 24px system-ui, sans-serif";
+    ctx.fillText("cette semaine", cx, by + 305);
+  }
+  playerBlock(W / 2 - 250, a, wa);
+  playerBlock(W / 2 + 250, b, wb);
+
+  const barY = 730, barW = 700, barH = 26, barX = W / 2 - barW / 2;
+  ctx.fillStyle = line;
+  ctx.beginPath(); ctx.roundRect(barX, barY, barW, barH, barH / 2); ctx.fill();
+  ctx.fillStyle = a.color || sys;
+  ctx.beginPath(); ctx.roundRect(barX, barY, barW * pa / 100, barH, barH / 2); ctx.fill();
+  ctx.fillStyle = b.color || sys;
+  ctx.save(); ctx.beginPath(); ctx.roundRect(barX, barY, barW, barH, barH / 2); ctx.clip();
+  ctx.fillRect(barX + barW * pa / 100, barY, barW * (100 - pa) / 100, barH);
+  ctx.restore();
+
+  ctx.fillStyle = gold;
+  ctx.font = "700 34px system-ui, sans-serif";
+  ctx.fillText(lead ? "👑 " + lead.name + " mène le duel" : "⚡ Égalité parfaite", W / 2, 810);
+
+  cardFooter(ctx, W, c, 950);
+  return canvas;
+}
+
+function buildHeroCard(p) {
+  const ch = charOf(p);
+  const c = cardColors();
+  const { panel, gold, ink, inkDim } = c;
+  const rcol = rarityCardColor(ch.rarity, c);
+  const st = charStats(p.id);
+  const tier = gearTier(ch, st);
+  const li = levelInfo(totalXp(p.id));
+  const rk = rankOf(li.lvl);
+
+  const W = 1080, H = 1350;
+  const { canvas, ctx } = cardCanvas(W, H, c);
+  cardHeader(ctx, W, c, "Carte de héros");
+
+  ctx.fillStyle = panel;
+  ctx.strokeStyle = rcol;
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.roundRect(W / 2 - 350, 320, 700, 660, 24);
+  ctx.fill(); ctx.stroke();
+
+  ctx.font = "900 170px system-ui, sans-serif";
+  ctx.fillStyle = ink;
+  ctx.fillText(ch.emoji, W / 2, 530);
+  ctx.fillStyle = rcol;
+  ctx.font = "900 64px system-ui, sans-serif";
+  ctx.fillText(ch.name, W / 2, 640);
+  ctx.font = "700 34px system-ui, sans-serif";
+  ctx.fillText("Rareté " + ch.rarity, W / 2, 695);
+  ctx.fillStyle = inkDim;
+  ctx.font = "500 30px system-ui, sans-serif";
+  ctx.fillText(ch.univers, W / 2, 740);
+
+  ctx.fillStyle = gold;
+  ctx.font = "700 44px system-ui, sans-serif";
+  ctx.fillText("⭐".repeat(tier) + "☆".repeat(3 - tier), W / 2, 815);
+  ctx.fillStyle = tier ? ink : inkDim;
+  ctx.font = "500 30px system-ui, sans-serif";
+  ctx.fillText(tier ? ch.gear[tier - 1] : "Équipement à forger", W / 2, 862);
+
+  ctx.fillStyle = inkDim;
+  ctx.font = "500 28px system-ui, sans-serif";
+  ctx.fillText("incarné par", W / 2, 915);
+  ctx.fillStyle = p.color || c.sys;
+  ctx.font = "700 40px system-ui, sans-serif";
+  ctx.fillText(p.name + " — " + rk.r + " · niv. " + li.lvl, W / 2, 960);
+
+  cardFooter(ctx, W, c, 1090);
+  return canvas;
+}
+
+function shareCanvasCard(canvas, filenamePrefix, shareTitle, shareText) {
+  canvas.toBlob(async blob => {
+    if (!blob) { toast("Export impossible"); return; }
+    const filename = filenamePrefix + "-" + dayKey(NOW()) + ".png";
+    const file = (typeof File !== "undefined") ? new File([blob], filename, { type: "image/png" }) : null;
+    if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: shareTitle, text: shareText });
+        return;
+      } catch (e) {
+        if (e && e.name === "AbortError") return; // partage annulé par l'utilisateur -> pas de repli
+        /* partage indisponible -> repli téléchargement */
+      }
+    }
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url; link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }, "image/png");
+}
+function shareTrophyCard() {
+  shareCanvasCard(buildTrophyCard(), "rangement-trophees", "Rangement — Mur des trophées", "Notre chasse au ménage 👑⚔️");
+}
+function shareDuelCard() {
+  shareCanvasCard(buildDuelCard(), "rangement-duel", "Rangement — Duel de la semaine", "Qui va gagner cette semaine ? ⚔️🔥");
+}
+function shareHeroCard(p) {
+  const ch = charOf(p);
+  if (!ch) return;
+  shareCanvasCard(buildHeroCard(p), "rangement-heros", "Rangement — Carte de héros", `${p.name} incarne ${ch.name} ! 🎴`);
+}
+
+// Piège le focus clavier dans la modale système affichée (Tab/Shift+Tab restent dans
+// .sysbox), pose le focus initial sur le premier élément et mappe Échap sur l'action
+// « Continuer » (jamais sur « Annuler » : Échap ne doit pas pouvoir annuler une quête).
+function trapModal() {
+  const box = $(".sysbox");
+  if (!box) return;
+  const focusable = () => Array.from(box.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'))
+    .filter(el => !el.disabled && el.offsetParent !== null);
+  const list = focusable();
+  // Le focus initial doit toujours retomber sur l'action sûre (« Continuer »/« Garder nos
+  // données »), jamais sur un bouton extra potentiellement destructeur (« Annuler », « Tout
+  // effacer ») même s'il apparaît avant #veilOk dans le DOM — sans quoi un Entrée réflexe à
+  // l'ouverture d'une modale pourrait valider l'action dangereuse.
+  const safe = $("#veilOk") || $("#obNext");
+  if (safe && list.includes(safe)) safe.focus();
+  else if (list.length) list[0].focus();
+  box.onkeydown = e => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      const safe = $("#veilOk") || $("#obNext");
+      if (safe) safe.click();
+      return;
+    }
+    if (e.key !== "Tab") return;
+    const items = focusable();
+    if (!items.length) return;
+    const first = items[0], last = items[items.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  };
+}
+
+// Le focus clavier était piégé pendant l'ouverture (it. 25) mais jamais rendu à la
+// fermeture : après une chaîne de modales, un utilisateur clavier retombait sur <body>
+// et devait re-tabuler depuis le haut de la page. On mémorise l'élément d'origine une
+// seule fois par chaîne (comme l'entrée d'historique juste en dessous), et on ne le
+// restaure qu'une fois la chaîne réellement terminée (aucune nouvelle modale ouverte).
+let PRE_MODAL_FOCUS = null;
+function restoreModalFocus() {
+  if (PRE_MODAL_FOCUS && document.body.contains(PRE_MODAL_FOCUS) && !document.querySelector(".veil")) {
+    PRE_MODAL_FOCUS.focus();
+  }
+  if (!document.querySelector(".veil")) PRE_MODAL_FOCUS = null;
+}
+function sysModal(html, onClose, extra, okLabel) {
+  // Le bouton retour (Android) doit fermer la modale, pas quitter l'appli :
+  // une entrée d'historique est poussée à l'ouverture (une seule par chaîne de modales).
+  if (!document.querySelector(".veil")) {
+    try { history.pushState({ modal: true }, "", location.href); } catch (e) {}
+    PRE_MODAL_FOCUS = document.activeElement;
+  }
+  // extra accepte un objet unique (compat historique) ou un tableau — un second bouton
+  // additionnel au besoin (ex. « Incarner » + « Annuler » sur HÉROS DÉBLOQUÉ). Le premier
+  // garde l'id historique #veilExtra (référencé par de nombreux tests existants).
+  const extras = extra ? (Array.isArray(extra) ? extra : [extra]) : [];
+  const extraId = i => "veilExtra" + (i === 0 ? "" : i);
+  $("#modal").innerHTML = `
+  <div class="veil" id="veil">
+    <div class="sysbox" role="alertdialog" aria-modal="true">
+      <div class="bang">Notification</div>
+      ${html}
+      <div class="frow" style="justify-content:center">
+        ${extras.map((ex, i) => `<button class="btn ${ex.danger ? "danger" : ""}" id="${extraId(i)}">${ex.label}</button>`).join("")}
+        <button class="btn ${extras.length ? "ghost" : ""}" id="veilOk">${okLabel || "Continuer"}</button>
+      </div>
+    </div>
+  </div>`;
+  $("#veilOk").onclick = () => { $("#modal").innerHTML = ""; if (onClose) onClose(); restoreModalFocus(); };
+  extras.forEach((ex, i) => {
+    $("#" + extraId(i)).onclick = () => { $("#modal").innerHTML = ""; ex.onclick(); restoreModalFocus(); };
+  });
+  labelModalBox();
+  trapModal();
+}
+
+// Un lecteur d'écran qui n'annonce pas tout le contenu à l'ouverture d'un rôle
+// alertdialog/dialog (comportement variable selon NVDA/VoiceOver) doit au moins
+// pouvoir lire le titre et le texte de la modale via aria-labelledby/describedby —
+// posés dynamiquement sur .big/.sub car leur contenu varie à chaque appel de sysModal.
+function labelModalBox() {
+  const box = $(".sysbox");
+  if (!box) return;
+  const big = box.querySelector(".big"), sub = box.querySelector(".sub");
+  if (big) { if (!big.id) big.id = "sysModalTitle"; box.setAttribute("aria-labelledby", big.id); }
+  if (sub) { if (!sub.id) sub.id = "sysModalDesc"; box.setAttribute("aria-describedby", sub.id); }
+}
+
+// Enchaîne plusieurs modales système à la suite (ex. niveau + objectif atteint sur la même
+// quête) : chaque « Continuer » affiche la suivante. Un bouton « Annuler » interrompt la
+// chaîne (la quête est annulée, les jalons suivants n'ont plus lieu d'être montrés).
+function playMilestones(queue, i) {
+  i = i || 0;
+  if (i >= queue.length) return;
+  const m = queue[i];
+  chime(m.chime);
+  const extras = m.extra ? (Array.isArray(m.extra) ? m.extra : [m.extra]) : null;
+  sysModal(m.html, () => playMilestones(queue, i + 1),
+    extras ? extras.map(ex => ({ label: ex.label, danger: ex.danger, onclick: () => {
+      ex.onclick();
+      if (!ex.stop) playMilestones(queue, i + 1);
+    } })) : null);
+}
+
+// retroDay (optionnel) : clé de jour passée (AAAA-MM-JJ) pour une quête faite mais
+// oubliée. L'entrée est datée de ce jour-là, ce qui suffit à relancer la série —
+// streakState() rejoue le journal et voit le trou comblé.
+function doTask(taskId, playerId, retroDay) {
+  const t = S.tasks.find(x => x.id === taskId);
+  const p = S.players.find(x => x.id === playerId);
+  if (!t || !p) return;
+  const retro = retroDay && retroDay !== dayKey(NOW()) ? retroDay : null;
+  const streakBefore = streakOf(playerId), shieldsBefore = availableShields(playerId);
+  const before = levelInfo(totalXp(playerId)).lvl;
+  const objsBeforeIds = new Set(S.objectives.filter(o => !o.claimed && objProgress(o) >= o.target).map(o => o.id));
+  const featsBefore = new Set(unlockedFeats(playerId).map(f => f.id));
+  const charsBefore = new Set(unlockedCharIds(playerId));
+
+  let xp = PRIOS[t.prio].xp;
+  const notes = [];
+  // La quête dorée vaut double *aujourd'hui* : un rattrapage ne rejoue pas le tirage du jour.
+  if (!retro && t.id === bonusTaskId()) { xp *= 2; notes.push("×2"); }
+  const mult = retro ? streakMultAt(playerId, retro) : streakMult(playerId);
+  if (mult > 1) { xp = Math.round(xp * mult); notes.push("🔥+" + Math.round((mult - 1) * 100) + "%"); }
+  if (retro) notes.unshift("↩️");
+
+  const entry = {
+    id: (retro ? "retro-" : "") + uid(),
+    ts: retro ? new Date(retro + "T12:00:00").getTime() : NOW(),
+    playerId, taskName: t.name, icon: t.icon, xp, note: notes.join(" "),
+  };
+  S.log.push(entry);
+  save();
+  queueOp({ table: "log", type: "upsert", row: toRow.log(entry) });
+  try { if (navigator.vibrate) navigator.vibrate(35); } catch (e) {}
+
+  const after = levelInfo(totalXp(playerId)).lvl;
+  const newObjs = S.objectives.filter(o => !o.claimed && objProgress(o) >= o.target && !objsBeforeIds.has(o.id));
+  const newFeat = unlockedFeats(playerId).find(f => !featsBefore.has(f.id));
+  const newChar = CHARACTERS.find(c => !charsBefore.has(c.id) && unlockedCharIds(playerId).includes(c.id));
+
+  // Le focus clavier se perdait dans la chaîne de jalons : render() reconstruit le DOM et
+  // détruit le bouton cliqué avant même l'ouverture de la première modale (sysModal capture
+  // document.activeElement à ce moment-là, déjà retombé sur <body>). On retrouve le bouton
+  // équivalent après le nouveau rendu via ses attributs data-do/data-p (pas par référence DOM,
+  // l'ancien élément n'existe plus) et on le refocalise juste avant l'ouverture éventuelle
+  // d'une modale, pour que sysModal capture le bon point de départ.
+  const wasKeyboardFocused = document.activeElement && document.activeElement.matches &&
+    document.activeElement.matches(`[data-do="${taskId}"][data-p="${playerId}"]`);
+  render();
+  if (wasKeyboardFocused) {
+    const btn = $(`[data-do="${taskId}"][data-p="${playerId}"]`);
+    if (btn) btn.focus();
+  }
+
+  // Annule la quête même après une modale spéciale (mistap sur le mauvais chasseur, etc.)
+  // Si la quête a débloqué un héros et que "Incarner" a été cliqué avant d'annuler, le
+  // joueur reste sinon incarné dans un héros dont il ne remplit plus les conditions.
+  const undoTask = () => {
+    S.log = S.log.filter(l => l.id !== entry.id);
+    save(); queueOp({ table: "log", type: "delete", id: entry.id });
+    if (newChar && p.characterId === newChar.id) {
+      unequipChar(p);
+      queueOp({ table: "players", type: "upsert", row: toRow.players(p) });
+    }
+    render(); toast("Action annulée");
+  };
+
+  // Plusieurs jalons peuvent tomber sur la même quête (ex. niveau + objectif atteint) :
+  // ils s'enchaînent tous à la suite au lieu que les suivants soient silencieusement perdus.
+  const queue = [];
+  if (newChar) queue.push({
+    chime: "level",
+    html: `<div class="big gold">HÉROS DÉBLOQUÉ</div>
+      <div class="sub"><span style="font-size:40px">${newChar.emoji}</span><br><b>${esc(newChar.name)}</b> (${esc(newChar.univers)}) rejoint la collection de <b>${esc(p.name)}</b> !</div>`,
+    extra: [
+      { label: "Incarner 🎴", onclick: () => equipChar(p, newChar) },
+      { label: "Annuler", onclick: undoTask, stop: true },
+    ],
+  });
+  if (after > before) {
+    const rk = rankOf(after);
+    queue.push({
+      chime: "level",
+      html: `<div class="big">NIVEAU ${after}</div>
+        <div class="sub">${esc(p.emoji)} <b>${esc(p.name)}</b> monte en puissance !<br>Rang actuel : <b class="${rk.s ? "gold" : ""}">${rk.r}</b></div>`,
+      extra: { label: "Annuler", onclick: undoTask, stop: true },
+    });
+  }
+  newObjs.forEach(o => queue.push({
+    chime: "level",
+    html: `<div class="big gold">OBJECTIF ATTEINT</div>
+      <div class="sub">Le défi <b>${esc(o.name)}</b> est terminé.<br>Allez le réclamer dans l'onglet <b>Objectifs</b> 🎁</div>`,
+    extra: { label: "Annuler", onclick: undoTask, stop: true },
+  }));
+  if (newFeat) queue.push({
+    chime: "feat",
+    html: `<div class="big gold">HAUT FAIT</div>
+      <div class="sub">${esc(p.emoji)} <b>${esc(p.name)}</b> débloque :<br><span style="font-size:26px">${newFeat.icon}</span><br><b>${esc(newFeat.name)}</b></div>`,
+    extra: { label: "Annuler", onclick: undoTask, stop: true },
+  });
+
+  if (queue.length) playMilestones(queue);
+  else if (!retro) toast(`${p.emoji} ${p.name} +${xp} XP`, "Annuler", undoTask);
+
+  // Un rattrapage mérite son propre retour : c'est justement son effet sur la
+  // série (et sur les boucliers rendus) qui motive de le saisir.
+  if (retro) {
+    const streakAfter = streakOf(playerId), shieldsAfter = availableShields(playerId);
+    const bits = [`${p.emoji} ${p.name} +${xp} XP`];
+    if (streakAfter > streakBefore) bits.push(`🔥 série relancée : ${streakAfter} j`);
+    if (shieldsAfter > shieldsBefore) bits.push(`🛡️ +${shieldsAfter - shieldsBefore} bouclier rendu`);
+    toast("↩️ " + bits.join(" · "), "Annuler", undoTask, 6000);
+  }
+}
+
+function bindView() {
+  // Quêtes
+  document.querySelectorAll("[data-do]").forEach(b =>
+    b.onclick = () => doTask(b.dataset.do, b.dataset.p));
+
+  const evRemindOk = $("#evRemindOk");
+  if (evRemindOk) evRemindOk.onclick = () => { dismissEveningReminder(); render(); };
+
+  const qSort = $("#qSortToggle");
+  if (qSort) qSort.onclick = () => {
+    localStorage.setItem("rangement-qsort", questSortMode() === "prio" ? "habituel" : "prio");
+    render();
+  };
+
+  const retroBtn = $("#retroBtn");
+  if (retroBtn) retroBtn.onclick = retroModal;
+
+  // Héros : sélecteur de joueur, incarnation, retrait
+  document.querySelectorAll("[data-hv]").forEach(b =>
+    b.onclick = () => { herosView = b.dataset.hv; render(); });
+  document.querySelectorAll("[data-hu]").forEach(b =>
+    b.onclick = () => { herosUniverse = b.dataset.hu; render(); });
+  document.querySelectorAll("[data-equip]").forEach(b =>
+    b.onclick = () => {
+      const p = S.players.find(x => x.id === herosView);
+      const c = CHARACTERS.find(x => x.id === b.dataset.equip);
+      if (!p || !c) return;
+      if (!unlockedCharIds(p.id).includes(c.id)) { toast("Héros pas encore débloqué"); return; }
+      equipChar(p, c);
+    });
+  const shareHeroBtn = $("#shareHeroBtn");
+  if (shareHeroBtn) shareHeroBtn.onclick = () => {
+    const p = S.players.find(x => x.id === herosView);
+    if (p && charOf(p)) shareHeroCard(p);
+  };
+  const unequipBtn = $("#unequipBtn");
+  if (unequipBtn) unequipBtn.onclick = () => {
+    const p = S.players.find(x => x.id === herosView);
+    if (!p) return;
+    const restored = unequipChar(p);
+    save(); queueOp({ table: "players", type: "upsert", row: toRow.players(p) });
+    render(); toast(restored ? "Héros retiré — emoji personnel restauré" : "Héros retiré");
+  };
+
+  // Duel : bascule graphique / tableau
+  const cvt = $("#chartViewToggle");
+  if (cvt) cvt.onclick = () => { chartView = chartView === "chart" ? "table" : "chart"; render(); };
+  const calvt = $("#calViewToggle");
+  if (calvt) calvt.onclick = () => { calView = calView === "cal" ? "table" : "cal"; render(); };
+  const shareBtn = $("#shareTrophyBtn");
+  if (shareBtn) shareBtn.onclick = shareTrophyCard;
+  const shareDuelBtn = $("#shareDuelBtn");
+  if (shareDuelBtn) shareDuelBtn.onclick = shareDuelCard;
+
+  // Journal : recherche + filtre par joueur
+  const journalSearch = $("#journalSearch");
+  if (journalSearch) journalSearch.oninput = () => {
+    const pos = journalSearch.selectionStart;
+    journalFilter.q = journalSearch.value;
+    render();
+    const el = $("#journalSearch");
+    if (el) { el.focus(); el.setSelectionRange(pos, pos); }
+  };
+  const journalSearchClear = $("#journalSearchClear");
+  if (journalSearchClear) journalSearchClear.onclick = () => {
+    journalFilter.q = "";
+    render();
+    const el = $("#journalSearch");
+    if (el) el.focus();
+  };
+  document.querySelectorAll("[data-jf]").forEach(b =>
+    b.onclick = () => { journalFilter.player = b.dataset.jf; render(); });
+
+  document.querySelectorAll("[data-undo]").forEach(b =>
+    b.onclick = () => deleteWithUndo("log", b.dataset.undo, "Entrée supprimée"));
+
+  document.querySelectorAll("[data-noteeditopen]").forEach(b =>
+    b.onclick = () => {
+      journalEditing = b.dataset.noteeditopen;
+      render();
+      const el = document.querySelector("[data-noteedit]");
+      if (el) { el.focus(); el.select(); }
+    });
+  const noteInput = document.querySelector("[data-noteedit]");
+  if (noteInput) {
+    const commit = () => {
+      const l = S.log.find(x => x.id === noteInput.dataset.noteedit);
+      journalEditing = null;
+      if (l) {
+        l.note = noteInput.value.trim().slice(0, 40);
+        save(); queueOp({ table: "log", type: "upsert", row: toRow.log(l) });
+      }
+      render(); if (l) toast("Note enregistrée");
+    };
+    noteInput.onblur = commit;
+    noteInput.onkeydown = e => {
+      if (e.key === "Enter") noteInput.blur();
+      else if (e.key === "Escape") { noteInput.onblur = null; journalEditing = null; render(); }
+    };
+  }
+
+  // Objectifs
+  document.querySelectorAll("[data-objpreset]").forEach(b =>
+    b.onclick = () => {
+      const presets = {
+        sprint:   { name: "Sprint de la semaine", type: "xp",    target: 300 },
+        quetes20: { name: "20 quêtes à deux",     type: "count", target: 20 },
+        grand:    { name: "Grand ménage",         type: "xp",    target: 1000 },
+      };
+      const pr = presets[b.dataset.objpreset];
+      if (!pr) return;
+      $("#objName").value = pr.name;
+      $("#objType").value = pr.type;
+      $("#objTarget").value = pr.target;
+    });
+  const objAdd = $("#objAdd");
+  if (objAdd) objAdd.onclick = () => {
+    const name = $("#objName").value.trim();
+    const target = parseInt($("#objTarget").value, 10);
+    if (!name || !target || target < 1) { toast("Nom et cible requis"); return; }
+    const o = { id: uid(), name, type: $("#objType").value, target, rewardId: $("#objReward").value, createdAt: NOW(), claimed: false };
+    S.objectives.push(o);
+    save(); queueOp({ table: "objectives", type: "upsert", row: toRow.objectives(o) });
+    render(); toast("Défi lancé ⚔️");
+  };
+  bindEnter(["#objName", "#objTarget"], objAdd);
+  document.querySelectorAll("[data-oname]").forEach(inp =>
+    inp.onchange = () => {
+      const o = S.objectives.find(x => x.id === inp.dataset.oname);
+      if (!o) return;
+      const v = inp.value.trim();
+      if (!v) { inp.value = o.name; return; }
+      o.name = v;
+      save(); queueOp({ table: "objectives", type: "upsert", row: toRow.objectives(o) });
+      render(); toast("Défis mis à jour");
+    });
+  document.querySelectorAll("[data-otarget]").forEach(inp =>
+    inp.onchange = () => {
+      const o = S.objectives.find(x => x.id === inp.dataset.otarget);
+      if (!o) return;
+      const v = parseInt(inp.value, 10);
+      if (!v || v < 1) { inp.value = o.target; return; }
+      o.target = v;
+      save(); queueOp({ table: "objectives", type: "upsert", row: toRow.objectives(o) });
+      render(); toast("Défis mis à jour");
+    });
+  document.querySelectorAll("[data-otype]").forEach(sel =>
+    sel.onchange = () => {
+      const o = S.objectives.find(x => x.id === sel.dataset.otype);
+      if (!o) return;
+      o.type = sel.value;
+      save(); queueOp({ table: "objectives", type: "upsert", row: toRow.objectives(o) });
+      render(); toast("Défis mis à jour");
+    });
+  document.querySelectorAll("[data-oreward]").forEach(sel =>
+    sel.onchange = () => {
+      const o = S.objectives.find(x => x.id === sel.dataset.oreward);
+      if (!o) return;
+      o.rewardId = sel.value;
+      save(); queueOp({ table: "objectives", type: "upsert", row: toRow.objectives(o) });
+      render(); toast("Défis mis à jour");
+    });
+  document.querySelectorAll("[data-claim]").forEach(b =>
+    b.onclick = () => {
+      const o = S.objectives.find(x => x.id === b.dataset.claim);
+      if (!o) return;
+      const surprise = o.rewardId === "__random__";
+      const rw = (surprise
+        ? S.rewards[Math.floor(Math.random() * S.rewards.length)]
+        : S.rewards.find(r => r.id === o.rewardId)) || { name: "Récompense au choix", icon: "🎁" };
+      o.claimed = true;
+      const w = { id: uid(), name: rw.name, icon: rw.icon, ts: NOW() };
+      S.won.push(w);
+      save();
+      queueOp({ table: "objectives", type: "upsert", row: toRow.objectives(o) });
+      queueOp({ table: "won", type: "upsert", row: toRow.won(w) });
+      render();
+      confettiBurst();
+      chime("level");
+      // Un mistap sur « Réclamer » reste rattrapable, comme le reste de l'appli : Annuler
+      // défait la récompense gagnée et redonne le défi à réclamer.
+      const undoClaim = () => {
+        o.claimed = false;
+        S.won = S.won.filter(x => x.id !== w.id);
+        save();
+        queueOp({ table: "objectives", type: "upsert", row: toRow.objectives(o) });
+        queueOp({ table: "won", type: "delete", id: w.id });
+        render(); toast("Réclamation annulée");
+      };
+      sysModal(`
+        <div class="big gold">RÉCOMPENSE</div>
+        <div class="sub">${surprise ? "🎲 Le sort a désigné :" : "Vous avez gagné :"}<br><b>${esc(rw.icon)} ${esc(rw.name)}</b><br>Profitez-en bien, vous l'avez mérité 💙</div>`,
+        null, { label: "Annuler", onclick: undoClaim });
+    });
+  document.querySelectorAll("[data-delobj]").forEach(b =>
+    b.onclick = () => deleteWithUndo("objectives", b.dataset.delobj, "Défi abandonné"));
+  document.querySelectorAll("[data-delwon]").forEach(b =>
+    b.onclick = () => deleteWithUndo("won", b.dataset.delwon, "Récompense retirée de l'historique"));
+
+  // Pari de duel
+  const betAdd = $("#betAdd");
+  if (betAdd) betAdd.onclick = () => {
+    // Id déterministe par semaine : si les deux téléphones misent hors ligne sur la même
+    // semaine, l'upsert Supabase fusionne en un seul pari au lieu de créer deux lignes
+    // réclamables séparément. (Le bouclier de série suivait ce motif jusqu'à l'it. 48 ;
+    // il ne stocke plus rien du tout, il est entièrement recalculé — voir streakState.)
+    const b = { id: "bet-" + weekKey(NOW()), week: weekKey(NOW()), rewardId: $("#betReward").value, createdAt: NOW(), claimed: false };
+    (S.bets ??= []).push(b);
+    save(); queueOp({ table: "bets", type: "upsert", row: toRow.bets(b) });
+    render(); toast("Enjeu misé ⚔️");
+  };
+  document.querySelectorAll("[data-claimbet]").forEach(btn =>
+    btn.onclick = () => {
+      const b = S.bets.find(x => x.id === btn.dataset.claimbet);
+      if (!b) return;
+      const { byWeek } = trophyData();
+      const x = byWeek[b.week] || { a: 0, b: 0 };
+      const win = x.a === x.b ? null : (x.a > x.b ? S.players[0] : S.players[1]);
+      const surprise = b.rewardId === "__random__";
+      const rw = (surprise
+        ? S.rewards[Math.floor(Math.random() * S.rewards.length)]
+        : S.rewards.find(r => r.id === b.rewardId)) || { icon: "🎁", name: "Récompense" };
+      b.claimed = true;
+      const w = { id: uid(), name: rw.name, icon: rw.icon, ts: NOW() };
+      S.won.push(w);
+      save();
+      queueOp({ table: "bets", type: "upsert", row: toRow.bets(b) });
+      queueOp({ table: "won", type: "upsert", row: toRow.won(w) });
+      render();
+      confettiBurst();
+      chime("level");
+      const undoClaimBet = () => {
+        b.claimed = false;
+        S.won = S.won.filter(x => x.id !== w.id);
+        save();
+        queueOp({ table: "bets", type: "upsert", row: toRow.bets(b) });
+        queueOp({ table: "won", type: "delete", id: w.id });
+        render(); toast("Réclamation annulée");
+      };
+      sysModal(`
+        <div class="big gold">PARI REMPORTÉ</div>
+        <div class="sub">👑 <b>${esc(win ? win.name : "?")}</b> gagne l'enjeu :<br><b>${esc(rw.icon)} ${esc(rw.name)}</b>${surprise ? "<br>🎲 désigné par le sort" : ""}</div>`,
+        null, { label: "Annuler", onclick: undoClaimBet });
+    });
+  document.querySelectorAll("[data-tiebet]").forEach(btn =>
+    btn.onclick = () => {
+      const b = S.bets.find(x => x.id === btn.dataset.tiebet);
+      if (!b) return;
+      b.claimed = true;
+      save(); queueOp({ table: "bets", type: "upsert", row: toRow.bets(b) });
+      render();
+      toast("Enjeu retiré (égalité)", "Annuler", () => {
+        b.claimed = false;
+        save(); queueOp({ table: "bets", type: "upsert", row: toRow.bets(b) });
+        render(); toast("Retrait annulé");
+      });
+    });
+  const cancelBetBtn = $("[data-cancelbet]");
+  if (cancelBetBtn) cancelBetBtn.onclick = () =>
+    deleteWithUndo("bets", cancelBetBtn.dataset.cancelbet, "Enjeu annulé");
+
+  // Récompenses
+  const rwAdd = $("#rwAdd");
+  if (rwAdd) rwAdd.onclick = () => {
+    const name = $("#rwName").value.trim();
+    if (!name) { toast("Nom requis"); return; }
+    const r = { id: uid(), name, icon: $("#rwIcon").value.trim() || "🎁" };
+    S.rewards.push(r);
+    save(); queueOp({ table: "rewards", type: "upsert", row: toRow.rewards(r) });
+    render(); toast("Récompense ajoutée");
+  };
+  bindEnter(["#rwName", "#rwIcon"], rwAdd);
+  document.querySelectorAll("[data-delrw]").forEach(b =>
+    b.onclick = () => {
+      const used = rewardInUse(b.dataset.delrw);
+      if (used) { toast(`Impossible de supprimer : promise par ${used}`, null, null, 4000); return; }
+      deleteWithUndo("rewards", b.dataset.delrw, "Récompense supprimée");
+    });
+  document.querySelectorAll("[data-rwname], [data-rwicon]").forEach(inp =>
+    inp.onchange = () => {
+      const id = inp.dataset.rwname || inp.dataset.rwicon;
+      const isName = !!inp.dataset.rwname;
+      const r = S.rewards.find(x => x.id === id);
+      if (!r) return;
+      const v = inp.value.trim();
+      if (!v) { inp.value = isName ? r.name : r.icon; return; }
+      if (isName) r.name = v; else r.icon = v;
+      save(); queueOp({ table: "rewards", type: "upsert", row: toRow.rewards(r) });
+      render(); toast("Récompenses mises à jour");
+    });
+
+  // Installation PWA
+  const installBtn = $("#installBtn");
+  if (installBtn) installBtn.onclick = async () => {
+    if (!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    const choice = await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    render();
+    toast(choice.outcome === "accepted" ? "Installation en cours…" : "Installation annulée");
+  };
+
+  // Réglages
+  document.querySelectorAll("[data-pname], [data-pemoji]").forEach(inp =>
+    inp.onchange = () => {
+      const id = inp.dataset.pname || inp.dataset.pemoji;
+      const isName = !!inp.dataset.pname;
+      const p = S.players.find(x => x.id === id);
+      if (!p) return;
+      const v = inp.value.trim();
+      if (!v) { inp.value = isName ? p.name : p.emoji; return; }
+      if (isName) p.name = v; else { p.emoji = v; if (!p.characterId) localStorage.setItem(baseEmojiKey(p.id), v); }
+      save(); queueOp({ table: "players", type: "upsert", row: toRow.players(p) });
+      render(); toast("Chasseurs mis à jour");
+    });
+  document.querySelectorAll("[data-pcolor]").forEach(inp =>
+    inp.onchange = () => {
+      const p = S.players.find(x => x.id === inp.dataset.pcolor);
+      if (!p) return;
+      p.color = inp.value;
+      save(); queueOp({ table: "players", type: "upsert", row: toRow.players(p) });
+      render(); toast("Chasseurs mis à jour");
+    });
+  const tAdd = $("#tAdd");
+  if (tAdd) tAdd.onclick = () => {
+    const name = $("#tName").value.trim();
+    if (!name) { toast("Nom requis"); return; }
+    if (nameTaken(S.tasks, name)) { toast("Une quête porte déjà ce nom"); return; }
+    const t = { id: uid(), name, icon: $("#tIcon").value.trim() || "🧼", prio: $("#tPrio").value, createdAt: NOW() };
+    S.tasks.push(t);
+    save(); queueOp({ table: "tasks", type: "upsert", row: toRow.tasks(t) });
+    render(); toast("Quête ajoutée");
+  };
+  bindEnter(["#tName", "#tIcon"], tAdd);
+  document.querySelectorAll("[data-deltask]").forEach(b =>
+    b.onclick = () => deleteWithUndo("tasks", b.dataset.deltask, "Quête supprimée"));
+  document.querySelectorAll("[data-tprio]").forEach(sel =>
+    sel.onchange = () => {
+      const t = S.tasks.find(x => x.id === sel.dataset.tprio);
+      if (t) {
+        t.prio = sel.value;
+        save(); queueOp({ table: "tasks", type: "upsert", row: toRow.tasks(t) });
+        render(); toast("Quêtes mises à jour");
+      }
+    });
+  document.querySelectorAll("[data-tname], [data-ticon]").forEach(inp =>
+    inp.onchange = () => {
+      const id = inp.dataset.tname || inp.dataset.ticon;
+      const isName = !!inp.dataset.tname;
+      const t = S.tasks.find(x => x.id === id);
+      if (!t) return;
+      const v = inp.value.trim();
+      if (!v) { inp.value = isName ? t.name : t.icon; return; }
+      if (isName) {
+        if (v !== t.name && nameTaken(S.tasks, v, t.id)) { toast("Une quête porte déjà ce nom"); inp.value = t.name; return; }
+        const oldName = t.name;
+        t.name = v;
+        if (oldName !== v) {
+          S.log.filter(l => l.taskName === oldName).forEach(l => {
+            l.taskName = v;
+            queueOp({ table: "log", type: "upsert", row: toRow.log(l) });
+          });
+        }
+      } else t.icon = v;
+      save(); queueOp({ table: "tasks", type: "upsert", row: toRow.tasks(t) });
+      render(); toast("Quêtes mises à jour");
+    });
+
+  // Apparence
+  document.querySelectorAll("[data-theme]").forEach(b =>
+    b.onclick = () => { applyTheme(b.dataset.theme); render(); });
+  const soundToggle = $("#soundToggle");
+  if (soundToggle) soundToggle.onchange = () => {
+    localStorage.setItem("rangement-sound", soundToggle.checked ? "on" : "off");
+    if (soundToggle.checked) chime("feat");
+  };
+  const suggestToggle = $("#suggestToggle");
+  if (suggestToggle) suggestToggle.onchange = () => {
+    localStorage.setItem("rangement-suggest", suggestToggle.checked ? "on" : "off");
+  };
+
+  // Rappel du soir
+  const eveningToggle = $("#eveningToggle");
+  if (eveningToggle) eveningToggle.onchange = () => {
+    localStorage.setItem("rangement-evening", eveningToggle.checked ? "on" : "off");
+  };
+  const eveningHour = $("#eveningHour");
+  if (eveningHour) eveningHour.onchange = () => {
+    const v = Math.min(23, Math.max(0, parseInt(eveningHour.value, 10) || 20));
+    localStorage.setItem("rangement-evening-hour", String(v));
+    render();
+  };
+  const streakHour = $("#streakHour");
+  if (streakHour) streakHour.onchange = () => {
+    const raw = parseInt(streakHour.value, 10);
+    if (Number.isFinite(raw)) localStorage.setItem("rangement-streak-hour", String(Math.min(23, Math.max(0, raw))));
+    else localStorage.removeItem("rangement-streak-hour"); // champ vidé -> suit l'heure générique
+    render();
+  };
+  const recapToggle = $("#recapToggle");
+  if (recapToggle) recapToggle.onchange = () => {
+    localStorage.setItem("rangement-recap", recapToggle.checked ? "on" : "off");
+  };
+  const notifToggle = $("#notifToggle");
+  if (notifToggle) notifToggle.onchange = async () => {
+    if (!notifToggle.checked) { localStorage.setItem("rangement-notifs", "off"); return; }
+    if (!notifsSupported()) { toast("Notifications non disponibles sur cet appareil"); notifToggle.checked = false; return; }
+    const perm = await Notification.requestPermission();
+    if (perm !== "granted") {
+      toast("Permission refusée — activable dans les réglages du navigateur");
+      notifToggle.checked = false;
+      localStorage.setItem("rangement-notifs", "off");
+      return;
+    }
+    localStorage.setItem("rangement-notifs", "on");
+    toast("Notifications activées 🔔");
+  };
+  const clearNotifHist = $("#clearNotifHist");
+  if (clearNotifHist) clearNotifHist.onclick = () => {
+    localStorage.removeItem("rangement-notif-log");
+    render();
+  };
+  const testNotifBtn = $("#testNotifBtn");
+  if (testNotifBtn) testNotifBtn.onclick = () => sendTestNotification();
+
+  // Données
+  const ex = $("#exportBtn");
+  if (ex) ex.onclick = () => {
+    const blob = new Blob([JSON.stringify(S, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "rangement-sauvegarde-" + dayKey(NOW()) + ".json";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+  const im = $("#importBtn");
+  if (im) im.onclick = () => $("#importFile").click();
+  const imf = $("#importFile");
+  if (imf) imf.onchange = () => {
+    const f = imf.files[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => {
+      try {
+        const data = JSON.parse(r.result);
+        const src = data.S || data; // accepte les sauvegardes v1 et v2
+        if (!src.players || !src.log) throw new Error("format");
+        // Import = remplacement total pour les deux téléphones, plus destructeur encore que
+        // la remise à zéro (qui, elle, épargne tâches/récompenses) : même garde-fou en modale
+        // système, action sûre par défaut (Échap/retour tombent sur « Annuler »).
+        sysModal(`
+          <div class="big" style="color:var(--crit)">IMPORTER UNE SAUVEGARDE</div>
+          <div class="sub" style="text-align:left">Ce fichier contient <b>${(src.log || []).length} entrées de journal</b>. L'import remplacera <b>toutes les données actuelles pour vous deux</b> (journal, niveaux, héros incarnés, objectifs, paris, récompenses gagnées…).<br><br>Pensez à <b>Exporter</b> d'abord si vous voulez garder une trace de l'état actuel.</div>`,
+          null,
+          { label: "Importer quand même", danger: true, onclick: () => {
+              S = Object.assign(defaultState(), src);
+              TABLES.forEach(t => (S[t] || []).forEach(x => PENDING.push({ table: t, type: "upsert", row: toRow[t](x) })));
+              save(); flushOps(); render(); toast("Sauvegarde importée ✅");
+            } },
+          "Annuler");
+      } catch (e) { toast("Fichier invalide"); }
+      imf.value = "";
+    };
+    r.readAsText(f);
+  };
+  // Remise à zéro : modale système cohérente avec le reste de l'appli (plus de confirm()
+  // natif). Échap et le bouton retour tombent sur « Garder nos données » — jamais sur l'effacement.
+  const rst = $("#resetBtn");
+  if (rst) rst.onclick = () => {
+    sysModal(`
+      <div class="big" style="color:var(--crit)">REMISE À ZÉRO</div>
+      <div class="sub" style="text-align:left">Journal, niveaux, objectifs, paris, récompenses gagnées et héros incarnés seront <b>effacés pour vous deux</b>.<br><br>Les tâches et idées de récompenses sont conservées. Pensez à <b>Exporter</b> d'abord si vous voulez une sauvegarde.</div>`,
+      null,
+      { label: "Tout effacer", danger: true, onclick: () => {
+          S.log = []; S.won = []; S.objectives = []; S.bets = [];
+          ["log", "won", "objectives", "bets"].forEach(t => queueOp({ table: t, type: "clear" }));
+          S.players.forEach(p => {
+            if (p.characterId) {
+              unequipChar(p);
+              queueOp({ table: "players", type: "upsert", row: toRow.players(p) });
+            }
+          });
+          save(); render(); toast("L'aventure repart de zéro");
+        } },
+      "Garder nos données");
+  };
+
+  bindEnterCommit("[data-oname], [data-otarget], [data-pname], [data-pemoji], [data-tname], [data-ticon], [data-rwname], [data-rwicon], #eveningHour, #streakHour");
+}
+
+/* ---------- Thèmes (préférence propre à cet appareil) ---------- */
+const THEMES = {
+  systeme:  { label: "Système",  sys: "#4DC3FF", sysDim: "#2E7FB8", glow: "#2B5A8F", mana: "#8B7BFF" },
+  monarque: { label: "Monarque", sys: "#8B7BFF", sysDim: "#5E50C4", glow: "#4A3F9E", mana: "#4DC3FF" },
+  braise:   { label: "Braise",   sys: "#FF8A5C", sysDim: "#C05A32", glow: "#8F3A2B", mana: "#F0C550" },
+  guilde:   { label: "Guilde",   sys: "#5CE0A5", sysDim: "#2FA372", glow: "#22684D", mana: "#4DC3FF" },
+  aube:     { label: "Aube",     sys: "#0E7AC0", sysDim: "#0A5A8F", glow: "#9FC2E4", mana: "#6D5BD0",
+              light: { abyss: "#EAF0F9", panel: "#FFFFFF", panel2: "#F4F8FE", line: "#C9D8EE", ink: "#16263F", inkDim: "#54688A", field: "#FFFFFF",
+                       gold: "#9C7C0C", ok: "#1F8F5F", crit: "#CC3344", high: "#C2601A",
+                       prioBasse: "#4A6483", prioNormale: "#1471B0",
+                       navbg: "rgba(255,255,255,.92)", logoTop: "#33475F",
+                       modalBg: "linear-gradient(180deg, #FFFFFF, #F4F8FE)", toastBg: "#FFFFFF" } },
+};
+function curTheme() {
+  const stored = localStorage.getItem("rangement-theme");
+  if (stored) return stored;
+  // Jamais choisi : respecte la préférence système clair/sombre de l'appareil au premier lancement.
+  const prefersLight = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches;
+  return prefersLight ? "aube" : "systeme";
+}
+function applyTheme(id) {
+  const t = THEMES[id] || THEMES.systeme;
+  const r = document.documentElement.style;
+  r.setProperty("--sys", t.sys);
+  r.setProperty("--sys-dim", t.sysDim);
+  r.setProperty("--line-glow", t.glow);
+  r.setProperty("--mana", t.mana);
+  // Thème clair : bascule du fond, des panneaux et des encres (sinon retour aux défauts sombres)
+  const L = t.light;
+  const vars = { "--abyss": "abyss", "--panel": "panel", "--panel-2": "panel2", "--line": "line", "--ink": "ink", "--ink-dim": "inkDim", "--field": "field",
+                 "--gold": "gold", "--ok": "ok", "--crit": "crit", "--high": "high", "--prio-basse": "prioBasse", "--prio-normale": "prioNormale",
+                 "--navbg": "navbg", "--logo-top": "logoTop", "--modalbg": "modalBg", "--toastbg": "toastBg" };
+  for (const [cssVar, key] of Object.entries(vars)) {
+    if (L && L[key]) r.setProperty(cssVar, L[key]); else r.removeProperty(cssVar);
+  }
+  r.colorScheme = L ? "light" : "dark";
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = L ? L.abyss : "#060A13";
+  localStorage.setItem("rangement-theme", id);
+}
+
+/* ---------- Premier lancement : réveil du Système ---------- */
+function onboarding() {
+  if (localStorage.getItem("rangement-onboard-v1")) return;
+  let step = 0;
+  const stepHtml = () => {
+    if (step === 0) return `
+      <div class="big">RÉVEIL DU SYSTÈME</div>
+      <div class="sub" style="text-align:left">Chaque tâche ménagère est une <b>quête</b> qui rapporte de l'<b>XP</b> selon sa priorité (10 à 50).<br><br>Vous montez de <b>niveau</b> et de <b>rang</b> (E → S → Monarque). Jouez chaque jour pour le bonus de série 🔥, et guettez la quête dorée ×2.</div>`;
+    if (step === 1) return `
+      <div class="big">VOS CHASSEURS</div>
+      <div class="sub" style="text-align:left">Personnalisez vos profils (modifiables plus tard dans Réglages) :</div>
+      ${S.players.map(p => `
+      <div class="frow" style="margin-top:10px">
+        <input type="text" data-ob-emoji="${p.id}" value="${esc(p.emoji)}" maxlength="4" style="flex:0 0 56px" aria-label="Emoji">
+        <input type="text" data-ob-name="${p.id}" value="${esc(p.name)}" maxlength="20" aria-label="Nom">
+        <input type="color" data-ob-color="${p.id}" value="${esc(p.color || "#4DC3FF")}" style="flex:0 0 46px;height:42px;padding:2px;background:var(--field);border:1px solid var(--line);border-radius:3px" aria-label="Couleur">
+      </div>`).join("")}
+      <p class="hint warn" id="obColorClash" style="display:none;margin-top:6px">⚠️ Les deux chasseurs ont la même couleur — le duel devient difficile à lire. Change l'une des deux.</p>
+      <p class="hint warn" id="obEmojiClash" style="display:none;margin-top:6px">⚠️ Les deux chasseurs ont le même emoji — les boutons de quête deviennent difficiles à distinguer. Change l'un des deux.</p>
+      <p class="hint warn" id="obNameClash" style="display:none;margin-top:6px">⚠️ Les deux chasseurs ont le même nom — toasts, Journal et cartes deviennent ambigus. Change l'un des deux.</p>`;
+    return `
+      <div class="big gold">LA CHASSE</div>
+      <div class="sub" style="text-align:left">⚔️ Touchez <b>votre emoji</b> sur une quête accomplie.<br>👑 L'onglet <b>Duel</b> compare vos scores — un trophée par semaine gagnée.<br>🏆 Créez des <b>objectifs communs</b> : atteints, ils débloquent vos récompenses (ciné, resto, surprise 🎲…).<br><br>Que le meilleur chasseur gagne 💙</div>`;
+  };
+  const finish = () => {
+    localStorage.setItem("rangement-onboard-v1", "1");
+    $("#modal").innerHTML = "";
+    render();
+  };
+  const show = () => {
+    $("#modal").innerHTML = `
+    <div class="veil">
+      <div class="sysbox" role="dialog" aria-modal="true">
+        <div class="bang">Notification</div>
+        ${stepHtml()}
+        <div class="frow" style="margin-top:16px">
+          <button class="btn ghost" id="obSkip">Passer</button>
+          <button class="btn" id="obNext">${step === 2 ? "Commencer la chasse" : "Suivant"}</button>
+        </div>
+      </div>
+    </div>`;
+    labelModalBox();
+    trapModal();
+    $("#obSkip").onclick = finish;
+    $("#obNext").onclick = () => {
+      if (step === 1) {
+        S.players.forEach(p => {
+          const n = document.querySelector(`[data-ob-name="${p.id}"]`).value.trim();
+          const e = document.querySelector(`[data-ob-emoji="${p.id}"]`).value.trim();
+          const c = document.querySelector(`[data-ob-color="${p.id}"]`).value;
+          if (n) p.name = n;
+          if (e) p.emoji = e;
+          if (c) p.color = c;
+          queueOp({ table: "players", type: "upsert", row: toRow.players(p) });
+        });
+        save(); render();
+      }
+      if (step === 2) return finish();
+      step++; show();
+    };
+    if (step === 1) {
+      const colorInputs = S.players.map(p => document.querySelector(`[data-ob-color="${p.id}"]`));
+      const checkClash = () => {
+        const hint = $("#obColorClash");
+        if (!hint) return;
+        hint.style.display = colorInputs[0] && colorInputs[1] && colorInputs[0].value.toLowerCase() === colorInputs[1].value.toLowerCase() ? "" : "none";
+      };
+      colorInputs.forEach(inp => inp && (inp.oninput = checkClash));
+      checkClash();
+      const emojiInputs = S.players.map(p => document.querySelector(`[data-ob-emoji="${p.id}"]`));
+      const checkEmojiClash = () => {
+        const hint = $("#obEmojiClash");
+        if (!hint) return;
+        const a = emojiInputs[0] && emojiInputs[0].value.trim();
+        const b = emojiInputs[1] && emojiInputs[1].value.trim();
+        hint.style.display = a && b && a === b ? "" : "none";
+      };
+      emojiInputs.forEach(inp => inp && (inp.oninput = checkEmojiClash));
+      checkEmojiClash();
+      const nameInputs = S.players.map(p => document.querySelector(`[data-ob-name="${p.id}"]`));
+      const checkNameClash = () => {
+        const hint = $("#obNameClash");
+        if (!hint) return;
+        const a = nameInputs[0] && nameInputs[0].value.trim().toLowerCase();
+        const b = nameInputs[1] && nameInputs[1].value.trim().toLowerCase();
+        hint.style.display = a && b && a === b ? "" : "none";
+      };
+      nameInputs.forEach(inp => inp && (inp.oninput = checkNameClash));
+      checkNameClash();
+    }
+  };
+  show();
+}
+
+/* ---------- Sons (synthétisés, pas de fichier externe) ---------- */
+function soundsOn() { return localStorage.getItem("rangement-sound") !== "off"; }
+let audioCtx = null;
+function chime(kind) {
+  if (!soundsOn()) return;
+  try {
+    audioCtx ??= new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    const notes = kind === "level" ? [523.25, 659.25, 783.99, 1046.5] : [659.25, 987.77];
+    const t0 = audioCtx.currentTime;
+    notes.forEach((freq, i) => {
+      const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+      osc.type = "sine"; osc.frequency.value = freq;
+      const start = t0 + i * 0.09;
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(0.18, start + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.32);
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.start(start); osc.stop(start + 0.34);
+    });
+  } catch (e) { /* audio indisponible, tant pis */ }
+}
+
+/* ---------- Installation PWA ---------- */
+let deferredInstallPrompt = null;
+function isStandaloneApp() {
+  return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true;
+}
+function isIOSDevice() { return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream; }
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  if (TAB === "reglages") render();
+});
+window.addEventListener("appinstalled", () => { deferredInstallPrompt = null; if (TAB === "reglages") render(); });
+
+applyTheme(curTheme());
+render();
+loadRemote();
+flushOps();
+onboarding();
+if (!localStorage.getItem("rangement-onboard-v1")) {
+  // premier lancement : l'onboarding prime sur le récap, pas de double fenêtre
+} else if (shouldShowWeeklyRecap()) {
+  weeklyRecapModal();
+}
+maybeSendStreakNotification();
+LAST_REMIND_STATE = shouldShowEveningReminder(); // état de départ des rappels vivants
+setInterval(reminderTick, 60000);
+
+if ("serviceWorker" in navigator && location.protocol === "https:") {
+  navigator.serviceWorker.register("sw.js").then(reg => {
+    reg.addEventListener("updatefound", () => {
+      const nw = reg.installing;
+      if (!nw) return;
+      nw.addEventListener("statechange", () => {
+        // "installed" avec un contrôleur déjà actif = nouvelle version en attente
+        if (nw.state === "installed" && navigator.serviceWorker.controller) notifyUpdateAvailable();
+      });
+    });
+  }).catch(() => {});
+}
+</script>
+</body>
+</html>

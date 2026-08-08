@@ -1,0 +1,23 @@
+name: Tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Installer Playwright
+        run: |
+          npm install playwright
+          npx playwright install --with-deps chromium
+      - name: Test de fumée (mode local)
+        run: node tests/smoke.js
+      - name: Test de synchronisation (backend simulé)
+        run: node tests/sync-test.js
