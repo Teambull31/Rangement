@@ -1,5 +1,4 @@
 /* Test de synchronisation : la couche de données face à un faux backend Supabase. */
-const fs = require("fs");
 const path = require("path");
 const { APP_URL, launch, check, done } = require("./helpers");
 
@@ -10,11 +9,15 @@ const { APP_URL, launch, check, done } = require("./helpers");
     localStorage.setItem("rangement-onboard-v1", "1");
     localStorage.setItem("rangement-recap", "off"); // déterminisme : indépendant du jour/heure réels
   });
-  await page.route("**/supabase.js", route =>
-    route.fulfill({
-      contentType: "application/javascript",
-      body: fs.readFileSync(path.join(__dirname, "mock-supabase.js"), "utf8"),
-    }));
+  // Le vrai script CDN porte un hash d'intégrité (SRI) : le remplacer par le mock via
+  // route.fulfill() ferait échouer la vérification du navigateur et bloquerait le script
+  // en silence (contenu substitué = hash différent, par conception de SRI). À la place,
+  // on injecte le mock en tant que script de page (aucune vérification d'intégrité ne
+  // s'applique à du JS injecté, seulement aux ressources réseau) avant que quoi que ce
+  // soit d'autre ne s'exécute, puis on bloque le vrai script CDN pour qu'il n'écrase pas
+  // ensuite window.supabase avec le vrai client.
+  await page.addInitScript({ path: path.join(__dirname, "mock-supabase.js") });
+  await page.route("**/supabase.js", route => route.abort());
 
   await page.goto(APP_URL);
   await page.waitForSelector(".quest");
