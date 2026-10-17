@@ -81,6 +81,15 @@ const { APP_URL, launch, check, done } = require("./helpers");
   const logIds = await page.evaluate(() => window.__DB.log.map(l => l.id));
   check("après import, la base ne garde que le fichier (" + logIds.length + " ligne)", logIds.length === 1 && logIds[0] === "only-one");
 
+  // 8. Un id piégé inséré en base n'atteint jamais le HTML (base ouverte à tous)
+  await page.evaluate(() => {
+    window.__DB.tasks.push({ id: 'x" onmouseover="window.__xss=1', name: "Piège", icon: "💣", prio: "critique", created_at: 3 });
+    window.__notify();
+  });
+  await page.waitForTimeout(800);
+  check("id piégé rejeté (aucune quête « Piège », aucun attribut injecté)",
+    await page.evaluate(() => !S.tasks.some(t => t.name === "Piège") && !document.querySelector("[onmouseover]")));
+
   const realErrors = errors.filter(e => !e.includes("ERR_FILE_NOT_FOUND") && !e.includes("ERR_CONNECTION"));
   check("aucune erreur JavaScript", realErrors.length === 0);
   if (realErrors.length) console.error(realErrors);

@@ -680,6 +680,9 @@ async function fetchAll(query) {
     if (r.data.length < 1000) return { data, error: null };
   }
 }
+// Les id finissent dans des attributs HTML (data-do="…") : la base est ouverte, on rejette tout id suspect
+const ID_OK = /^[\w-]+$/;
+const cleanIds = list => (Array.isArray(list) ? list : []).filter(x => x && ID_OK.test(x.id));
 let SYNCED = false;
 async function loadRemote() {
   if (!sb) return;
@@ -688,7 +691,7 @@ async function loadRemote() {
       fetchAll(() => ORDER[t].reduce((q, c) => q.order(c), sb.from(t).select("*")))));
     for (const r of res) if (r.error) throw r.error;
     const fresh = { players: [], tasks: [], rewards: [], objectives: [], log: [], won: [], bets: [] };
-    TABLES.forEach((n, i) => { fresh[n] = res[i].data.map(fromRow[n]); });
+    TABLES.forEach((n, i) => { fresh[n] = cleanIds(res[i].data.map(fromRow[n])); });
     if (fresh.players.length < 2) fresh.players = defaultState().players;
     S = applyPending(fresh);
     SYNCED = true;
@@ -3252,6 +3255,7 @@ function bindView() {
           null,
           { label: "Importer quand même", danger: true, onclick: () => {
               S = Object.assign(defaultState(), src);
+              TABLES.forEach(t => { S[t] = cleanIds(S[t]); });
               TABLES.forEach(t => PENDING.push({ table: t, type: "clear" })); // sinon les lignes absentes du fichier reviennent
               TABLES.forEach(t => (S[t] || []).forEach(x => PENDING.push({ table: t, type: "upsert", row: toRow[t](x) })));
               save(); flushOps(); render(); toast("Sauvegarde importée ✅");
