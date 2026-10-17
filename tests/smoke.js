@@ -1732,6 +1732,16 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   await navPage.waitForSelector(".hunter");
   check("lien profond #duel ouvre l'onglet Duel",
     (await navPage.locator("#tabs button.on").getAttribute("data-tab")) === "duel");
+  // Vue mur (#mur) : plein écran sans barre d'onglets, quêtes critiques en tête
+  await navPage.goto(APP_URL + "#mur");
+  await navPage.reload();
+  await navPage.waitForSelector(".murtile");
+  check("#mur : barre d'onglets masquée", !(await navPage.locator("nav").isVisible()));
+  check("#mur : la quête critique passe avant les autres",
+    (await navPage.locator(".murtile .chip").first().innerText()).toLowerCase() === "critique");
+  await navPage.goto(APP_URL + "#duel");
+  await navPage.reload();
+  await navPage.waitForSelector(".hunter");
   await navPage.locator('[data-tab="journal"]').click();
   check("le changement d'onglet écrit le hash",
     (await navPage.evaluate(() => location.hash)) === "#journal");

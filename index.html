@@ -62,6 +62,21 @@
   :focus-visible { outline: 2px solid var(--sys); outline-offset: 2px; }
 
   .wrap { max-width: 640px; margin: 0 auto; padding: 14px 14px 0; }
+  body.mur header, body.mur .duo, body.mur nav { display: none; }
+  body.mur .wrap { max-width: none; padding: 10px 14px 0; }
+  .murhead { display: flex; align-items: baseline; gap: 16px; margin-bottom: 10px; }
+  .mclock { font-size: 40px; font-weight: 800; color: var(--sys); }
+  .mdate { font-size: 18px; color: var(--ink-dim); text-transform: capitalize; flex: 1; }
+  .msync { font-size: 13px; color: var(--ink-dim); }
+  .murgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .murtile { background: var(--panel); border: 2px solid var(--pcol); border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; min-height: 230px; }
+  .mt-top { display: flex; justify-content: space-between; align-items: center; }
+  .mt-ico { font-size: 38px; }
+  .mt-name { font-weight: 700; font-size: 20px; line-height: 1.2; flex: 1; }
+  .mt-since { font-size: 14px; color: var(--ink-dim); }
+  .mt-btns { display: flex; gap: 10px; }
+  .mt-btns .doer { flex: 1; min-height: 64px; font-size: 30px; }
+  @media (max-width: 700px) { .murgrid { grid-template-columns: repeat(2, 1fr); } .murtile { min-height: 190px; } .mclock { font-size: 30px; } }
 
   /* ---------- Header ---------- */
   header { text-align: center; padding: 10px 0 4px; }
@@ -590,7 +605,7 @@ let S, PENDING = [];
     });
   }
 })();
-function save() { localStorage.setItem(KEY, JSON.stringify({ S, pending: PENDING })); }
+function save() { try { localStorage.setItem(KEY, JSON.stringify({ S, pending: PENDING })); } catch (e) { /* stockage plein ou bloqué : la file reste en mémoire */ } }
 
 /* --- correspondance lignes SQL <-> état de l'appli --- */
 const fromRow = {
@@ -626,7 +641,11 @@ async function flushOps() {
       if (op.type === "upsert") res = await sb.from(op.table).upsert(op.row);
       else if (op.type === "delete") res = await sb.from(op.table).delete().eq("id", op.id);
       else if (op.type === "clear") res = await sb.from(op.table).delete().neq("id", "");
-      if (res && res.error) throw res.error;
+      if (res && res.error) {
+        // code présent = le serveur a répondu et refuse : on abandonne cette action, sinon elle bloque la file à vie
+        if (res.error.code) { PENDING.shift(); save(); toast("Une action a été refusée par le serveur"); continue; }
+        throw res.error;
+      }
       PENDING.shift(); save();
     } catch (e) { break; /* hors ligne : on réessaiera */ }
   }
@@ -650,19 +669,23 @@ function applyPending(state) {
   return state;
 }
 
+// Supabase renvoie au plus 1000 lignes par requête : on lit par pages (tri stable = id en dernier)
+const ORDER = { players: ["id"], tasks: ["created_at", "id"], rewards: ["id"], objectives: ["created_at", "id"], log: ["ts", "id"], won: ["ts", "id"], bets: ["created_at", "id"] };
+async function fetchAll(query) {
+  const data = [];
+  for (let i = 0; ; i += 1000) {
+    const r = await query().range(i, i + 999);
+    if (r.error) return r;
+    data.push(...r.data);
+    if (r.data.length < 1000) return { data, error: null };
+  }
+}
 let SYNCED = false;
 async function loadRemote() {
   if (!sb) return;
   try {
-    const res = await Promise.all([
-      sb.from("players").select("*").order("id"),
-      sb.from("tasks").select("*").order("created_at").order("id"),
-      sb.from("rewards").select("*").order("id"),
-      sb.from("objectives").select("*").order("created_at"),
-      sb.from("log").select("*").order("ts"),
-      sb.from("won").select("*").order("ts"),
-      sb.from("bets").select("*").order("created_at"),
-    ]);
+    const res = await Promise.all(TABLES.map(t =>
+      fetchAll(() => ORDER[t].reduce((q, c) => q.order(c), sb.from(t).select("*")))));
     for (const r of res) if (r.error) throw r.error;
     const fresh = { players: [], tasks: [], rewards: [], objectives: [], log: [], won: [], bets: [] };
     TABLES.forEach((n, i) => { fresh[n] = res[i].data.map(fromRow[n]); });
@@ -1092,7 +1115,8 @@ const TABS = [
   { id: "journal",   label: "Journal",   ico: "📜" },
   { id: "reglages",  label: "Réglages",  ico: "⚙️" },
 ];
-const validTab = id => TABS.some(t => t.id === id);
+// « mur » : vue plein écran pour écran fixe (Raspberry/Orange Pi), hors barre d'onglets
+const validTab = id => id === "mur" || TABS.some(t => t.id === id);
 // Lien profond : #duel, #heros… (raccourcis d'icône PWA, liens partagés)
 { const h0 = location.hash.slice(1); if (validTab(h0)) TAB = h0; }
 
@@ -1137,7 +1161,8 @@ function render() {
   renderDuo();
   renderTabs();
   const v = $("#view");
-  v.innerHTML = ({ quetes: vQuetes, duel: vDuel, heros: vHeros, objectifs: vObjectifs, journal: vJournal, reglages: vReglages })[TAB]();
+  document.body.classList.toggle("mur", TAB === "mur");
+  v.innerHTML = ({ quetes: vQuetes, duel: vDuel, heros: vHeros, objectifs: vObjectifs, journal: vJournal, reglages: vReglages, mur: vMur })[TAB]();
   bindView();
 }
 
@@ -1341,8 +1366,7 @@ function overdueTaskId() {
   if (!S.tasks.length) return null;
   let best = null, bestTs = Infinity;
   for (const t of S.tasks) {
-    const last = [...S.log].reverse().find(l => l.taskName === t.name);
-    const ts = last ? last.ts : -Infinity; // jamais faite = priorité maximale
+    const ts = lastDoneTs(t); // jamais faite = -Infinity = priorité maximale
     if (ts < bestTs) { bestTs = ts; best = t.id; }
   }
   return best;
@@ -1375,7 +1399,7 @@ function vQuetes() {
     : S.tasks;
   const rows = tasks.map(t => {
     const p = PRIOS[t.prio], isB = t.id === bId, isSuggest = t.id === suggestId && !isB;
-    const last = [...S.log].reverse().find(l => l.taskName === t.name);
+    const last = lastDone(t);
     const lastP = last && S.players.find(pl => pl.id === last.playerId);
     return `
     <div class="quest ${isB ? "bonus" : ""} ${isSuggest ? "suggested" : ""}" style="--pcol:${p.col}">
@@ -1412,6 +1436,45 @@ function vQuetes() {
   </section>
   ${shieldPanel()}`;
 }
+
+/* ---------- Mur (#mur) : écran fixe tactile, quêtes les plus urgentes d'abord ---------- */
+const MUR_MAX = 8;
+function lastDone(t) { return [...S.log].reverse().find(l => l.taskName === t.name); }
+function lastDoneTs(t) { const l = lastDone(t); return l ? l.ts : -Infinity; }
+function sinceLabel(ts) {
+  if (ts === -Infinity) return "jamais faite";
+  const h = Math.floor((NOW() - ts) / 36e5);
+  return h < 1 ? "à l'instant" : h < 24 ? "il y a " + h + " h" : "il y a " + Math.floor(h / 24) + " j";
+}
+function vMur() {
+  // urgence = priorité, puis tâche faite il y a le plus longtemps (jamais faite en tête)
+  const sorted = S.tasks.slice().sort((x, y) => PRIO_ORDER[x.prio] - PRIO_ORDER[y.prio] || lastDoneTs(x) - lastDoneTs(y));
+  const tiles = sorted.slice(0, MUR_MAX).map(t => {
+    const p = PRIOS[t.prio];
+    return `
+    <div class="murtile" style="--pcol:${p.col}">
+      <div class="mt-top"><span class="mt-ico">${esc(t.icon)}</span><span class="chip">${p.label}</span></div>
+      <div class="mt-name">${esc(t.name)}</div>
+      <div class="mt-since">${sinceLabel(lastDoneTs(t))}</div>
+      <div class="mt-btns">
+        ${S.players.map(pl => `<button class="doer" style="border-color:${esc(pl.color)}" data-do="${t.id}" data-p="${pl.id}" aria-label="${esc(t.name)} — fait par ${esc(pl.name)}">${esc(pl.emoji)}</button>`).join("")}
+      </div>
+    </div>`;
+  }).join("");
+  const more = sorted.length - MUR_MAX;
+  const d = new Date();
+  return `
+  <div class="murhead">
+    <span class="mclock">${d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</span>
+    <span class="mdate">${d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}</span>
+    <span class="msync">${$("#sync") ? $("#sync").textContent : ""}</span>
+  </div>
+  <div class="murgrid">${tiles || '<p class="hint">Aucune quête. Ajoute des tâches dans Réglages.</p>'}</div>
+  ${more > 0 ? `<p class="hint" style="text-align:center">+ ${more} autre${more > 1 ? "s" : ""} quête${more > 1 ? "s" : ""}</p>` : ""}`;
+}
+// Écran fixe : horloge et « il y a… » à jour, et rattrapage si le temps réel a décroché
+setInterval(() => { if (TAB === "mur") scheduleRender(); }, 30000);
+setInterval(() => { if (TAB === "mur") loadRemote(); }, 300000);
 
 /* ---------- Boucliers de série : le bonus qui absorbe un jour manqué ---------- */
 function shieldPanel() {
@@ -3189,6 +3252,7 @@ function bindView() {
           null,
           { label: "Importer quand même", danger: true, onclick: () => {
               S = Object.assign(defaultState(), src);
+              TABLES.forEach(t => PENDING.push({ table: t, type: "clear" })); // sinon les lignes absentes du fichier reviennent
               TABLES.forEach(t => (S[t] || []).forEach(x => PENDING.push({ table: t, type: "upsert", row: toRow[t](x) })));
               save(); flushOps(); render(); toast("Sauvegarde importée ✅");
             } },

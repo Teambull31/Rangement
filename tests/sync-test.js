@@ -52,6 +52,35 @@ const { APP_URL, launch, check, done } = require("./helpers");
   const ids = await page.evaluate(() => window.__DB.log.map(l => l.id));
   check("suppression propagée (reste : " + ids.join(",") + ")", ids.length === 1 && ids[0] !== "autre-tel");
 
+  // 5. Plus de 1000 lignes : la lecture est paginée (sinon les plus récentes disparaissent)
+  await page.evaluate(() => {
+    window.__DB.log = Array.from({ length: 1250 }, (_, i) => ({ id: "bulk-" + i, ts: 1e12 + i, player_id: "p1", task_name: "Tâche Sync A", icon: "🧪", xp: 1, note: "" }));
+    window.__notify();
+  });
+  await page.waitForTimeout(800);
+  check("1250 entrées de journal toutes chargées", (await page.evaluate(() => S.log.length)) === 1250);
+
+  // 6. Une écriture refusée par le serveur ne bloque pas les suivantes
+  await page.evaluate(() => { window.__reject = "rewards"; });
+  await page.evaluate(() => {
+    queueOp({ table: "rewards", type: "upsert", row: { id: "bad", name: "x", icon: "x" } });
+    queueOp({ table: "won", type: "upsert", row: { id: "after-bad", name: "y", icon: "y", ts: 1 } });
+  });
+  await page.waitForTimeout(500);
+  check("action refusée abandonnée, la suivante part", await page.evaluate(() => PENDING.length === 0 && window.__DB.won.some(w => w.id === "after-bad")));
+  await page.evaluate(() => { window.__reject = null; });
+
+  // 7. Import = remplacement total : les lignes absentes du fichier disparaissent aussi de la base
+  await page.locator('[data-tab="reglages"]').click();
+  await page.locator("#importFile").setInputFiles({
+    name: "sauvegarde.json", mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify({ S: { players: [{ id: "p1", name: "A", emoji: "🗡️" }, { id: "p2", name: "B", emoji: "🛡️" }], log: [{ id: "only-one", ts: Date.now(), playerId: "p1", taskName: "Tâche Sync A", icon: "🧪", xp: 5, note: "" }] } })),
+  });
+  await page.getByText("Importer quand même").click();
+  await page.waitForTimeout(600);
+  const logIds = await page.evaluate(() => window.__DB.log.map(l => l.id));
+  check("après import, la base ne garde que le fichier (" + logIds.length + " ligne)", logIds.length === 1 && logIds[0] === "only-one");
+
   const realErrors = errors.filter(e => !e.includes("ERR_FILE_NOT_FOUND") && !e.includes("ERR_CONNECTION"));
   check("aucune erreur JavaScript", realErrors.length === 0);
   if (realErrors.length) console.error(realErrors);
