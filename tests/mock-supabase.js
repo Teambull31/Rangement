@@ -20,10 +20,13 @@
   window.__rtCallbacks = [];
   window.__notify = () => window.__rtCallbacks.forEach(cb => cb({}));
 
+  // comme PostgREST : 1000 lignes max par requête, pagination par .range()
   function thenableSelect(table) {
+    let from = 0, to = 999;
     const obj = {
       order() { return obj; },
-      then(resolve) { resolve({ data: JSON.parse(JSON.stringify(DB[table])), error: null }); },
+      range(a, b) { from = a; to = Math.min(b, a + 999); return obj; },
+      then(resolve) { resolve({ data: JSON.parse(JSON.stringify(DB[table].slice(from, to + 1))), error: null }); },
     };
     return obj;
   }
@@ -35,6 +38,8 @@
           return {
             select() { return thenableSelect(table); },
             async upsert(row) {
+              // window.__reject = nom de table : le serveur refuse l'écriture (comme une règle RLS)
+              if (window.__reject === table) return { error: { code: "42501", message: "refusé" } };
               const i = DB[table].findIndex(x => x.id === row.id);
               if (i >= 0) DB[table][i] = row; else DB[table].push(row);
               setTimeout(window.__notify, 10);

@@ -21,9 +21,8 @@ Elle s'ouvre ensuite en plein écran avec sa propre icône, et fonctionne même 
 
 ### Déploiement (Vercel)
 
-Le projet Vercel récupère les fichiers depuis ce dépôt GitHub au moment du build
-(`build.sh`). Après un push, relancez un déploiement (bouton *Redeploy* dans le
-tableau de bord Vercel, ou demandez à Claude de redéployer).
+Le déploiement se fait en ligne de commande, depuis ce dépôt : `vercel --prod`.
+Un push sur GitHub ne met pas le site à jour tout seul.
 
 En local, il suffit d'ouvrir **`index.html`** dans un navigateur.
 
