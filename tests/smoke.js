@@ -1,6 +1,13 @@
 /* Test de fumée : parcours complet de l'appli en mode local (sans Supabase). */
 const { APP_URL, launch, check, done, closeModals } = require("./helpers");
 
+// Chromium arrondit les canaux oklab différemment d'une version à l'autre : on compare à 1e-3 près
+function sameColor(a, b) {
+  const n = x => (x.match(/-?[\d.]+/g) || []).map(Number);
+  const [u, v] = [n(a), n(b)];
+  return u.length === v.length && u.every((x, k) => Math.abs(x - v[k]) < 1e-3);
+}
+
 (async () => {
   const { browser, page, errors } = await launch();
   await page.goto(APP_URL);
@@ -742,7 +749,7 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   // .btn.danger : bordure/fond codés en dur avant l'it. 42, jamais convertis en color-mix
   // sur --crit contrairement au reste des boutons (it. 36) -> devaient rester figés en Aube.
   const dangerBgAube = await page.locator("#resetBtn").evaluate(el => getComputedStyle(el).backgroundColor);
-  check("bouton danger suit --crit en Aube (" + dangerBgAube + ")", dangerBgAube === "oklab(0.561911 0.177069 0.064578 / 0.08)");
+  check("bouton danger suit --crit en Aube (" + dangerBgAube + ")", sameColor(dangerBgAube, "oklab(0.561911 0.177069 0.064578 / 0.08)"));
 
   // Bouton de thème actif : fond codé en rgba(255,255,255,.04) avant l'it. 43, quasi invisible
   // sur les panneaux presque blancs d'Aube -> passé en color-mix sur --sys, comme .btn.danger.
@@ -782,7 +789,7 @@ const { APP_URL, launch, check, done, closeModals } = require("./helpers");
   const prioBasseDark = (await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--prio-basse").trim())).toLowerCase();
   check("chip « basse » revient à la teinte sombre par défaut (" + prioBasseDark + ")", prioBasseDark === "#8aa3c2");
   const dangerBgDark = await page.locator("#resetBtn").evaluate(el => getComputedStyle(el).backgroundColor);
-  check("bouton danger revient à --crit sombre par défaut (" + dangerBgDark + ")", dangerBgDark === "oklab(0.69422 0.188363 0.0594485 / 0.08)");
+  check("bouton danger revient à --crit sombre par défaut (" + dangerBgDark + ")", sameColor(dangerBgDark, "oklab(0.69422 0.188363 0.0594485 / 0.08)"));
   const panel2Dark = (await page.evaluate(() => cardColors().panel2)).toLowerCase();
   check("cardColors().panel2 revient au navy sombre par défaut, pas de régression (" + panel2Dark + ")", panel2Dark === "#101d33");
   await page.evaluate(() => toast("Test contraste sombre"));
