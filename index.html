@@ -76,6 +76,10 @@
   .mt-since { font-size: 14px; color: var(--ink-dim); }
   .mt-btns { display: flex; gap: 10px; }
   .mt-btns .doer { flex: 1; min-height: 64px; font-size: 30px; }
+  .murtile.late { border-color: var(--crit); box-shadow: 0 0 0 2px color-mix(in srgb, var(--crit) 35%, transparent); }
+  .murtile.late .mt-since { color: var(--crit); font-weight: 700; }
+  .murtile.notdue { opacity: .5; border-width: 1px; border-style: dashed; }
+  #night { position: fixed; inset: 0; background: #000; z-index: 45; cursor: none; }
   @media (max-width: 700px) { .murgrid { grid-template-columns: repeat(2, 1fr); } .murtile { min-height: 190px; } .mclock { font-size: 30px; } }
 
   /* ---------- Header ---------- */
@@ -610,7 +614,7 @@ function save() { try { localStorage.setItem(KEY, JSON.stringify({ S, pending: P
 /* --- correspondance lignes SQL <-> état de l'appli --- */
 const fromRow = {
   players: r => ({ id: r.id, name: r.name, emoji: r.emoji, color: r.color || "#4DC3FF", characterId: r.character_id || null }),
-  tasks: r => ({ id: r.id, name: r.name, icon: r.icon, prio: r.prio, createdAt: Number(r.created_at) }),
+  tasks: r => ({ id: r.id, name: r.name, icon: r.icon, prio: r.prio, every: r.every_days || null, createdAt: Number(r.created_at) }),
   rewards: r => ({ id: r.id, name: r.name, icon: r.icon }),
   objectives: r => ({ id: r.id, name: r.name, type: r.type, target: r.target, rewardId: r.reward_id, createdAt: Number(r.created_at), claimed: r.claimed }),
   log: r => ({ id: r.id, ts: Number(r.ts), playerId: r.player_id, taskName: r.task_name, icon: r.icon, xp: r.xp, note: r.note || "" }),
@@ -619,7 +623,7 @@ const fromRow = {
 };
 const toRow = {
   players: p => ({ id: p.id, name: p.name, emoji: p.emoji, color: p.color || "#4DC3FF", character_id: p.characterId || null }),
-  tasks: t => ({ id: t.id, name: t.name, icon: t.icon, prio: t.prio, created_at: t.createdAt || Date.now() }),
+  tasks: t => ({ id: t.id, name: t.name, icon: t.icon, prio: t.prio, every_days: t.every || null, created_at: t.createdAt || Date.now() }),
   rewards: r => ({ id: r.id, name: r.name, icon: r.icon }),
   objectives: o => ({ id: o.id, name: o.name, type: o.type, target: o.target, reward_id: o.rewardId, created_at: o.createdAt, claimed: o.claimed }),
   log: l => ({ id: l.id, ts: l.ts, player_id: l.playerId, task_name: l.taskName, icon: l.icon, xp: l.xp, note: l.note || "" }),
@@ -1449,16 +1453,35 @@ function sinceLabel(ts) {
   const h = Math.floor((NOW() - ts) / 36e5);
   return h < 1 ? "à l'instant" : h < 24 ? "il y a " + h + " h" : "il y a " + Math.floor(h / 24) + " j";
 }
+// Rythme « à refaire tous les N jours » : en retard une fois le délai dépassé (depuis la dernière fois, sinon la création)
+function dueInfo(t) {
+  if (!t.every) return null;
+  const last = lastDoneTs(t);
+  const ref = last === -Infinity ? (t.createdAt || 0) : last;
+  const span = t.every * 864e5, left = ref + span - NOW();
+  return { late: left <= 0, days: Math.floor(Math.abs(left) / 864e5), daysLeft: Math.ceil(left / 864e5), ratio: (NOW() - ref) / span };
+}
+function dueLabel(d) {
+  if (!d) return "";
+  if (!d.late) return " · dans " + d.daysLeft + " j";
+  return d.days >= 1 ? " · en retard de " + d.days + " j" : " · en retard";
+}
+// Mode nuit : écran noir de 23 h à 7 h, un tap le rallume 2 min (le tap est avalé, il ne coche rien)
+const NIGHT_FROM = 23, NIGHT_TO = 7, WAKE_MS = 120000;
+let WAKE_UNTIL = 0;
+function nightOn() { const h = new Date(NOW()).getHours(); return (h >= NIGHT_FROM || h < NIGHT_TO) && NOW() >= WAKE_UNTIL; }
 function vMur() {
-  // urgence = priorité, puis tâche faite il y a le plus longtemps (jamais faite en tête)
-  const sorted = S.tasks.slice().sort((x, y) => PRIO_ORDER[x.prio] - PRIO_ORDER[y.prio] || lastDoneTs(x) - lastDoneTs(y));
+  // 1) en retard sur son rythme, 2) sans rythme (priorité puis la plus ancienne), 3) pas encore due (discrète)
+  const tier = t => { const d = dueInfo(t); return !d ? 1 : d.late ? 0 : 2; };
+  const sorted = S.tasks.slice().sort((x, y) => tier(x) - tier(y) || PRIO_ORDER[x.prio] - PRIO_ORDER[y.prio]
+    || (tier(x) === 1 ? lastDoneTs(x) - lastDoneTs(y) : dueInfo(y).ratio - dueInfo(x).ratio));
   const tiles = sorted.slice(0, MUR_MAX).map(t => {
-    const p = PRIOS[t.prio];
+    const p = PRIOS[t.prio], d = dueInfo(t);
     return `
-    <div class="murtile" style="--pcol:${p.col}">
+    <div class="murtile${d ? (d.late ? " late" : " notdue") : ""}" style="--pcol:${p.col}">
       <div class="mt-top"><span class="mt-ico">${esc(t.icon)}</span><span class="chip">${p.label}</span></div>
       <div class="mt-name">${esc(t.name)}</div>
-      <div class="mt-since">${sinceLabel(lastDoneTs(t))}</div>
+      <div class="mt-since">${sinceLabel(lastDoneTs(t))}${dueLabel(d)}</div>
       <div class="mt-btns">
         ${S.players.map(pl => `<button class="doer" style="border-color:${esc(pl.color)}" data-do="${t.id}" data-p="${pl.id}" aria-label="${esc(t.name)} — fait par ${esc(pl.name)}">${esc(pl.emoji)}</button>`).join("")}
       </div>
@@ -1473,7 +1496,8 @@ function vMur() {
     <span class="msync">${$("#sync") ? $("#sync").textContent : ""}</span>
   </div>
   <div class="murgrid">${tiles || '<p class="hint">Aucune quête. Ajoute des tâches dans Réglages.</p>'}</div>
-  ${more > 0 ? `<p class="hint" style="text-align:center">+ ${more} autre${more > 1 ? "s" : ""} quête${more > 1 ? "s" : ""}</p>` : ""}`;
+  ${more > 0 ? `<p class="hint" style="text-align:center">+ ${more} autre${more > 1 ? "s" : ""} quête${more > 1 ? "s" : ""}</p>` : ""}
+  ${nightOn() ? '<div id="night" role="button" aria-label="Toucher pour réveiller l\'écran"></div>' : ""}`;
 }
 // Écran fixe : horloge et « il y a… » à jour, et rattrapage si le temps réel a décroché
 setInterval(() => { if (TAB === "mur") scheduleRender(); }, 30000);
@@ -2157,8 +2181,10 @@ function vReglages() {
       <select data-tprio="${t.id}" style="flex:0 0 auto" aria-label="Priorité">
         ${Object.entries(PRIOS).map(([k, v]) => `<option value="${k}" ${t.prio === k ? "selected" : ""}>${v.label}</option>`).join("")}
       </select>
+      <input type="number" data-tevery="${t.id}" min="1" max="365" placeholder="—" value="${t.every || ""}" style="flex:0 0 58px" title="À refaire tous les … jours" aria-label="À refaire tous les combien de jours">
       <button class="x" data-deltask="${t.id}" aria-label="Supprimer ${esc(t.name)}">✕</button>
     </div>`).join("")}
+    <p class="hint">Le nombre à droite de la priorité : <b>à refaire tous les … jours</b>. Passé ce délai, la quête passe en retard sur le mur. Vide = pas de rythme.</p>
     <div class="frow" style="margin-top:10px">
       <input type="text" id="tIcon" placeholder="🧼" maxlength="4" style="flex:0 0 64px" aria-label="Icône de la quête">
       <input type="text" id="tName" placeholder="Nouvelle tâche" maxlength="50" aria-label="Nom de la quête">
@@ -2802,7 +2828,25 @@ function doTask(taskId, playerId, retroDay) {
 function bindView() {
   // Quêtes
   document.querySelectorAll("[data-do]").forEach(b =>
-    b.onclick = () => doTask(b.dataset.do, b.dataset.p));
+    b.onclick = () => {
+      const n = S.log.length;
+      doTask(b.dataset.do, b.dataset.p);
+      if (TAB === "mur" && S.log.length > n) {
+        const e = S.log[S.log.length - 1]; // sur un écran partagé, un faux appui doit se défaire d'un geste
+        toast("Quête enregistrée", "Annuler", () => {
+          S.log = S.log.filter(l => l.id !== e.id);
+          save(); queueOp({ table: "log", type: "delete", id: e.id });
+          render(); toast("Action annulée");
+        });
+      }
+    });
+
+  const night = $("#night");
+  if (night) night.onclick = () => {
+    WAKE_UNTIL = NOW() + WAKE_MS;
+    setTimeout(() => { if (TAB === "mur") render(); }, WAKE_MS + 100);
+    render();
+  };
 
   const evRemindOk = $("#evRemindOk");
   if (evRemindOk) evRemindOk.onclick = () => { dismissEveningReminder(); render(); };
@@ -3144,6 +3188,15 @@ function bindView() {
         render(); toast("Quêtes mises à jour");
       }
     });
+  document.querySelectorAll("[data-tevery]").forEach(inp =>
+    inp.onchange = () => {
+      const t = S.tasks.find(x => x.id === inp.dataset.tevery);
+      if (!t) return;
+      const n = Math.round(Number(inp.value));
+      t.every = n >= 1 ? Math.min(n, 365) : null;
+      save(); queueOp({ table: "tasks", type: "upsert", row: toRow.tasks(t) });
+      render(); toast("Rythme mis à jour");
+    });
   document.querySelectorAll("[data-tname], [data-ticon]").forEach(inp =>
     inp.onchange = () => {
       const id = inp.dataset.tname || inp.dataset.ticon;
@@ -3288,7 +3341,7 @@ function bindView() {
       "Garder nos données");
   };
 
-  bindEnterCommit("[data-oname], [data-otarget], [data-pname], [data-pemoji], [data-tname], [data-ticon], [data-rwname], [data-rwicon], #eveningHour, #streakHour");
+  bindEnterCommit("[data-oname], [data-otarget], [data-pname], [data-pemoji], [data-tname], [data-ticon], [data-tevery], [data-rwname], [data-rwicon], #eveningHour, #streakHour");
 }
 
 /* ---------- Thèmes (préférence propre à cet appareil) ---------- */

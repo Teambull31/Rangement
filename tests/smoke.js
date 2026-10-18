@@ -1746,6 +1746,46 @@ function sameColor(a, b) {
   check("#mur : barre d'onglets masquée", !(await navPage.locator("nav").isVisible()));
   check("#mur : la quête critique passe avant les autres",
     (await navPage.locator(".murtile .chip").first().innerText()).toLowerCase() === "critique");
+  // Mur : rythme « tous les N jours », annulation d'un tap, mode nuit (heure figée : indépendant de la CI)
+  const murContext = await browser.newContext({ viewport: { width: 1024, height: 600 } });
+  const murPage = await murContext.newPage();
+  await murPage.addInitScript(() => {
+    localStorage.setItem("rangement-onboard-v1", "1");
+    localStorage.setItem("rangement-recap", "off");
+    localStorage.setItem("rangement-evening", "off");
+  });
+  await murPage.clock.setFixedTime(new Date(2026, 9, 18, 12, 0));
+  await murPage.goto(APP_URL + "#mur");
+  await murPage.waitForSelector(".murtile");
+  const day = 864e5, now0 = new Date(2026, 9, 18, 12, 0).getTime();
+  await murPage.evaluate(([now0, day]) => {
+    S.tasks = [
+      { id: "t-calme", name: "CalmeTest", icon: "🧘", prio: "critique", every: 30, createdAt: now0 },
+      { id: "t-libre", name: "LibreTest", icon: "🧹", prio: "normale", createdAt: now0 },
+      { id: "t-late", name: "RetardTest", icon: "⏰", prio: "basse", every: 1, createdAt: now0 - 5 * day },
+    ];
+    render();
+  }, [now0, day]);
+  const names = await murPage.locator(".mt-name").allInnerTexts();
+  check("#mur : en retard d'abord, puis sans rythme, puis pas encore due (" + names.join(" > ") + ")",
+    names.join(",") === "RetardTest,LibreTest,CalmeTest");
+  check("#mur : la quête en retard est signalée (« en retard de 4 j »)",
+    (await murPage.locator(".murtile.late .mt-since").innerText()).includes("en retard de 4 j"));
+  check("#mur : la quête pas encore due est discrète", (await murPage.locator(".murtile.notdue").count()) === 1);
+  const logBefore = await murPage.evaluate(() => S.log.length);
+  await murPage.locator(".murtile .doer").first().click();
+  check("#mur : un tap enregistre la quête", (await murPage.evaluate(() => S.log.length)) === logBefore + 1);
+  await murPage.locator(".toast-action").click();
+  check("#mur : « Annuler » défait le tap", (await murPage.evaluate(() => S.log.length)) === logBefore);
+  await closeModals(murPage);
+  await murPage.clock.setFixedTime(new Date(2026, 9, 19, 1, 0));
+  await murPage.evaluate(() => render());
+  check("#mur : écran noir la nuit", (await murPage.locator("#night").count()) === 1);
+  await murPage.locator("#night").click();
+  check("#mur : un tap rallume l'écran sans cocher de quête",
+    (await murPage.locator("#night").count()) === 0 && (await murPage.evaluate(() => S.log.length)) === logBefore);
+  await murContext.close();
+
   await navPage.goto(APP_URL + "#duel");
   await navPage.reload();
   await navPage.waitForSelector(".hunter");

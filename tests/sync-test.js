@@ -90,6 +90,16 @@ const { APP_URL, launch, check, done } = require("./helpers");
   check("id piégé rejeté (aucune quête « Piège », aucun attribut injecté)",
     await page.evaluate(() => !S.tasks.some(t => t.name === "Piège") && !document.querySelector("[onmouseover]")));
 
+  // 9. Rythme d'une quête : lu depuis la base, et écrit quand on le règle dans Réglages
+  await page.evaluate(() => { window.__DB.tasks.push({ id: "rythme-1", name: "RythmeTest", icon: "⏱️", prio: "normale", created_at: 9, every_days: 7 }); window.__notify(); });
+  await page.waitForTimeout(800);
+  check("rythme lu depuis la base (every_days → every)", await page.evaluate(() => S.tasks.find(t => t.id === "rythme-1").every === 7));
+  await page.locator('[data-tab="reglages"]').click();
+  await page.locator('[data-tevery="rythme-1"]').fill("3");
+  await page.locator('[data-tevery="rythme-1"]').blur();
+  await page.waitForTimeout(600);
+  check("rythme écrit en base (every_days = 3)", await page.evaluate(() => window.__DB.tasks.find(t => t.id === "rythme-1").every_days === 3));
+
   const realErrors = errors.filter(e => !e.includes("ERR_FILE_NOT_FOUND") && !e.includes("ERR_CONNECTION"));
   check("aucune erreur JavaScript", realErrors.length === 0);
   if (realErrors.length) console.error(realErrors);
