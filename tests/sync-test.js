@@ -74,10 +74,15 @@ const { APP_URL, launch, check, done } = require("./helpers");
   await page.locator('[data-tab="reglages"]').click();
   await page.locator("#importFile").setInputFiles({
     name: "sauvegarde.json", mimeType: "application/json",
-    buffer: Buffer.from(JSON.stringify({ S: { players: [{ id: "p1", name: "A", emoji: "🗡️" }, { id: "p2", name: "B", emoji: "🛡️" }], log: [{ id: "only-one", ts: Date.now(), playerId: "p1", taskName: "Tâche Sync A", icon: "🧪", xp: 5, note: "" }] } })),
+    buffer: Buffer.from(JSON.stringify({ S: { players: [{ id: "p1", name: "A", emoji: "🗡️" }, { id: "p2", name: "B", emoji: "🛡️" }], log: [{ id: "only-one", ts: Date.now(), playerId: "p1", taskName: "Tâche Sync A", icon: "🧪", xp: 5, note: "" }],
+      tasks: [{ id: "imp-1", name: "Imp", icon: "i", prio: "basse", every: '"><i id="xss"></i>' }] } })),
   });
   await page.getByText("Importer quand même").click();
+  // tout de suite après l'import, avant que la relecture de la base ne nettoie quoi que ce soit
+  const injected = await page.evaluate(() => !!document.querySelector("#xss"));
   await page.waitForTimeout(600);
+  check("import : un rythme piégé est neutralisé (aucun élément injecté)",
+    !injected);
   const logIds = await page.evaluate(() => window.__DB.log.map(l => l.id));
   check("après import, la base ne garde que le fichier (" + logIds.length + " ligne)", logIds.length === 1 && logIds[0] === "only-one");
 
@@ -89,6 +94,16 @@ const { APP_URL, launch, check, done } = require("./helpers");
   await page.waitForTimeout(800);
   check("id piégé rejeté (aucune quête « Piège », aucun attribut injecté)",
     await page.evaluate(() => !S.tasks.some(t => t.name === "Piège") && !document.querySelector("[onmouseover]")));
+
+  // 9. Rythme d'une quête : lu depuis la base, et écrit quand on le règle dans Réglages
+  await page.evaluate(() => { window.__DB.tasks.push({ id: "rythme-1", name: "RythmeTest", icon: "⏱️", prio: "normale", created_at: 9, every_days: 7 }); window.__notify(); });
+  await page.waitForTimeout(800);
+  check("rythme lu depuis la base (every_days → every)", await page.evaluate(() => S.tasks.find(t => t.id === "rythme-1").every === 7));
+  await page.locator('[data-tab="reglages"]').click();
+  await page.locator('[data-tevery="rythme-1"]').fill("3");
+  await page.locator('[data-tevery="rythme-1"]').blur();
+  await page.waitForTimeout(600);
+  check("rythme écrit en base (every_days = 3)", await page.evaluate(() => window.__DB.tasks.find(t => t.id === "rythme-1").every_days === 3));
 
   const realErrors = errors.filter(e => !e.includes("ERR_FILE_NOT_FOUND") && !e.includes("ERR_CONNECTION"));
   check("aucune erreur JavaScript", realErrors.length === 0);
