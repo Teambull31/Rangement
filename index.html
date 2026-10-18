@@ -614,7 +614,7 @@ function save() { try { localStorage.setItem(KEY, JSON.stringify({ S, pending: P
 /* --- correspondance lignes SQL <-> état de l'appli --- */
 const fromRow = {
   players: r => ({ id: r.id, name: r.name, emoji: r.emoji, color: r.color || "#4DC3FF", characterId: r.character_id || null }),
-  tasks: r => ({ id: r.id, name: r.name, icon: r.icon, prio: r.prio, every: r.every_days || null, createdAt: Number(r.created_at) }),
+  tasks: r => ({ id: r.id, name: r.name, icon: r.icon, prio: r.prio, every: cleanEvery(r.every_days), createdAt: Number(r.created_at) }),
   rewards: r => ({ id: r.id, name: r.name, icon: r.icon }),
   objectives: r => ({ id: r.id, name: r.name, type: r.type, target: r.target, rewardId: r.reward_id, createdAt: Number(r.created_at), claimed: r.claimed }),
   log: r => ({ id: r.id, ts: Number(r.ts), playerId: r.player_id, taskName: r.task_name, icon: r.icon, xp: r.xp, note: r.note || "" }),
@@ -686,6 +686,7 @@ async function fetchAll(query) {
 }
 // Les id finissent dans des attributs HTML (data-do="…") : la base est ouverte, on rejette tout id suspect
 const ID_OK = /^[\w-]+$/;
+const cleanEvery = n => (Number.isInteger(Number(n)) && n >= 1 && n <= 365 ? Number(n) : null); // rythme : entier 1–365, sinon aucun
 const cleanIds = list => (Array.isArray(list) ? list : []).filter(x => x && ID_OK.test(x.id));
 let SYNCED = false;
 async function loadRemote() {
@@ -2181,7 +2182,7 @@ function vReglages() {
       <select data-tprio="${t.id}" style="flex:0 0 auto" aria-label="Priorité">
         ${Object.entries(PRIOS).map(([k, v]) => `<option value="${k}" ${t.prio === k ? "selected" : ""}>${v.label}</option>`).join("")}
       </select>
-      <input type="number" data-tevery="${t.id}" min="1" max="365" placeholder="—" value="${t.every || ""}" style="flex:0 0 58px" title="À refaire tous les … jours" aria-label="À refaire tous les combien de jours">
+      <input type="number" data-tevery="${t.id}" min="1" max="365" placeholder="—" value="${esc(t.every || "")}" style="flex:0 0 58px" title="À refaire tous les … jours" aria-label="À refaire tous les combien de jours">
       <button class="x" data-deltask="${t.id}" aria-label="Supprimer ${esc(t.name)}">✕</button>
     </div>`).join("")}
     <p class="hint">Le nombre à droite de la priorité : <b>à refaire tous les … jours</b>. Passé ce délai, la quête passe en retard sur le mur. Vide = pas de rythme.</p>
@@ -3309,6 +3310,7 @@ function bindView() {
           { label: "Importer quand même", danger: true, onclick: () => {
               S = Object.assign(defaultState(), src);
               TABLES.forEach(t => { S[t] = cleanIds(S[t]); });
+              S.tasks.forEach(t => { t.every = cleanEvery(t.every); });
               TABLES.forEach(t => PENDING.push({ table: t, type: "clear" })); // sinon les lignes absentes du fichier reviennent
               TABLES.forEach(t => (S[t] || []).forEach(x => PENDING.push({ table: t, type: "upsert", row: toRow[t](x) })));
               save(); flushOps(); render(); toast("Sauvegarde importée ✅");

@@ -74,10 +74,15 @@ const { APP_URL, launch, check, done } = require("./helpers");
   await page.locator('[data-tab="reglages"]').click();
   await page.locator("#importFile").setInputFiles({
     name: "sauvegarde.json", mimeType: "application/json",
-    buffer: Buffer.from(JSON.stringify({ S: { players: [{ id: "p1", name: "A", emoji: "🗡️" }, { id: "p2", name: "B", emoji: "🛡️" }], log: [{ id: "only-one", ts: Date.now(), playerId: "p1", taskName: "Tâche Sync A", icon: "🧪", xp: 5, note: "" }] } })),
+    buffer: Buffer.from(JSON.stringify({ S: { players: [{ id: "p1", name: "A", emoji: "🗡️" }, { id: "p2", name: "B", emoji: "🛡️" }], log: [{ id: "only-one", ts: Date.now(), playerId: "p1", taskName: "Tâche Sync A", icon: "🧪", xp: 5, note: "" }],
+      tasks: [{ id: "imp-1", name: "Imp", icon: "i", prio: "basse", every: '"><i id="xss"></i>' }] } })),
   });
   await page.getByText("Importer quand même").click();
+  // tout de suite après l'import, avant que la relecture de la base ne nettoie quoi que ce soit
+  const injected = await page.evaluate(() => !!document.querySelector("#xss"));
   await page.waitForTimeout(600);
+  check("import : un rythme piégé est neutralisé (aucun élément injecté)",
+    !injected);
   const logIds = await page.evaluate(() => window.__DB.log.map(l => l.id));
   check("après import, la base ne garde que le fichier (" + logIds.length + " ligne)", logIds.length === 1 && logIds[0] === "only-one");
 
